@@ -764,7 +764,45 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
     }
 
     const bell = objective.bell;
-    if (bell) {
+    if (!bell?.restored) {
+      for (const chime of bell?.puzzle?.chimes || []) {
+        const x = chime.tx * TILE;
+        const baseY = chime.baseTy * TILE;
+        const lit = chime.struck;
+        const swing = lit ? Math.sin(time * 5.2 + chime.tx) * .08 : 0;
+        ctx.save();
+        ctx.translate(x, baseY - 8);
+        ctx.rotate(swing);
+        ctx.strokeStyle = lit ? '#9cecff' : '#8a7c70';
+        ctx.fillStyle = lit ? 'rgba(212,174,81,.94)' : 'rgba(60,55,66,.94)';
+        ctx.shadowColor = lit ? '#8cecff' : 'transparent';
+        ctx.shadowBlur = lit ? 22 : 0;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -108);
+        ctx.lineTo(0, -78);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-28, -30);
+        ctx.quadraticCurveTo(-23, -70, 0, -78);
+        ctx.quadraticCurveTo(23, -70, 28, -30);
+        ctx.quadraticCurveTo(0, -19, -28, -30);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -21, 6, 0, Math.PI * 2);
+        ctx.fillStyle = lit ? '#fff0b6' : '#9b929b';
+        ctx.fill();
+        ctx.fillStyle = lit ? '#dffcff' : '#f0dfbf';
+        ctx.font = "800 13px 'Outfit'";
+        ctx.textAlign = 'center';
+        ctx.fillText(chime.label.toUpperCase(), 0, -2);
+        ctx.restore();
+      }
+    }
+
+    if (bell && (!bell.puzzle?.chimes?.length || bell.restored)) {
       const x = bell.tx * TILE;
       const baseY = bell.baseTy * TILE;
       const restored = bell.restored;

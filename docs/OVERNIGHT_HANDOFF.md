@@ -441,3 +441,51 @@ Scope: the user requested one narrow Level 4 change; all other levels, geometry,
 ## Exact next milestone
 
 Begin the bounded natural-input quality pass for Chapter 5, **Teeth Beneath Dust**. Verify its warning rhythm, Oathbind shelter, recovery fairness, fatal reset, Chapter 6 transition, and desktop/landscape/portrait presentation. Preserve the completed Civic Promise behavior and all Chapter 1-4 routes. Do not publish or author Inner Kingdom content.
+
+---
+
+# Reviewed continuation — Chapter 5 integrity and Chapter 6 bell puzzle
+
+Updated: 2026-08-31 23:14 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Corrected Chapter 5's authored mastery wave so its active warning travels west-to-east as instructed rather than east-to-west.
+- Closed the Chapter 5 lower-road bypass. The final restoration now requires both the bound shelter and a real high-line crossing; merely walking east under the mastery teeth cannot open the gate.
+- Replaced Chapter 6's traversal-only summit action with a finite three-chime memory puzzle. Carving the cut rope reveals the pilgrim vow, and the summit asks the player to map that journey onto **Dawn**, **Veil**, and **Shelter**.
+- Scrambled the physical chime order to **Veil · Shelter · Dawn**, so walking left-to-right is wrong. The solution remains the remembered narrative order **Dawn → Veil → Shelter**.
+- A wrong strike gives readable red feedback, clears only the current chime sequence, and leaves the climb safely playable. Correct strikes persist with cyan feedback and a `CHIME ORDER n/3` objective counter.
+- Completing the sequence replaces the three trial chimes with the restored pilgrim bell, lights the tower, restores spent collapse ledges, and opens the gate exactly once.
+- Extended authored-level validation to reject duplicate, missing, off-summit, pre-struck, or non-pristine bell sequences.
+- Strengthened objective cloning so chime progress, mistakes, and struck flags cannot leak into replay, validation, or a future reset path.
+
+## Validation evidence
+
+- Focused Chapter 5, Chapter 6, and rendering suite: **24 tests across 3 files passed**.
+- Complete automated suite: **172 tests across 23 files passed**.
+- Production build: **54 modules transformed**; Chapter 6 remains an independent lazy-loaded production chunk.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Regression coverage proves a wrong first chime fully resets, the scrambled correct sequence restores once, repeated STRIKE cannot reopen the gate, mutated puzzle state is cleared by direct cloning, and life-over restoration returns all chimes, collapse sections, lights, brace, gate, and hero state to pristine defaults.
+- Rendering coverage proves all three named chimes are present before completion and disappear when the single restored bell takes their place.
+- Fresh Chapter 6 loading remained readable at 1280×720 desktop, 844×390 landscape phone, and 390×844 portrait phone. Chapter card, HUD, controls, and starting route remained visible, and the temporary viewport override was reset.
+- A clean hard reload after all edits produced no new browser errors. Earlier render-cache errors in the retained log were limited to source hot replacement and did not recur on the verified fresh load.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: the first three-chime draft was still cosmetic reasoning because its correct sequence matched left-to-right placement and the persistent hint repeated the answer. The final authored positions are deliberately scrambled, and the summit hint gives semantic concepts rather than the named sequence.
+- Accepted: `cloneObjective` needed an explicit bell-puzzle reset even though the current repository-backed fatal reset already creates a pristine runtime.
+- Accepted: the restored large bell must replace the three trial chimes rather than overlap the center chime.
+- Accepted: chime labels needed stronger phone-scale contrast and size.
+- Rejected: treating wall jumps or collapsing ledges as the Level 6 puzzle. They remain traversal pressure; the reasoning challenge is now the clue-backed summit sequence.
+
+## Remaining quality gaps
+
+- Browser automation cannot reliably hold multiple simultaneous touch controls for the complete Chapter 6 wall-climb route. Engine regressions prove the puzzle and reset logic, while a full natural-input human replay of the climb and summit remains the next acceptance step.
+- Chapter 5 still lacks the stronger real-loader fatal-reset/save-non-advancement regression and the full real Chapter 5 → Chapter 6 transition integration test identified by audit.
+- The uninterrupted natural-input Chapters 1-10 journey, Continue across later completions, realm Replay, final ending, music, cinematics, accessibility, and Inner Kingdom remain outstanding.
+
+## Exact next milestone
+
+Have a human replay Chapter 6 from a fresh start, carve and read the rope vow, intentionally strike one wrong chime, then solve **Dawn → Veil → Shelter** and enter Chapter 7. Fix only a reproduced interaction or readability failure. After acceptance, add the deferred Chapter 5 real-loader and transition proofs, then begin the bounded Chapter 7 quality pass. Do not publish or author Inner Kingdom content.

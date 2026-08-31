@@ -50,9 +50,9 @@ export function createTeethBeneathDust() {
     teethBank('controlled-east', 'controlled-test', 32, 35, 27, 2),
     teethBank('shelter-entry', 'combination-entry', 42, 45, 27, .4),
     teethBank('shelter-exit', 'oathbind-target', 48, 51, 27, 2.4),
-    teethBank('mastery-west', 'mastery-wave', 60, 62, 25, 0),
+    teethBank('mastery-west', 'mastery-wave', 60, 62, 25, 1.6),
     teethBank('mastery-heart', 'mastery-wave', 66, 68, 23, .8),
-    teethBank('mastery-east', 'mastery-wave', 72, 74, 25, 1.6),
+    teethBank('mastery-east', 'mastery-wave', 72, 74, 25, 0),
   ];
 
   return {

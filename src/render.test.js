@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { drawLevelMechanics } from './render.js';
 import { TILE } from './levels/constants.js';
+import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
 
 function recordingContext() {
   const calls = [];
@@ -70,5 +71,26 @@ describe('Civic Promise restoration rendering', () => {
     expect(Math.abs(midwayRotation)).toBeLessThan(.34);
     expect(Math.abs(midwayRotation)).toBeGreaterThan(0);
     expect(settledRotation).toBeCloseTo(0, 5);
+  });
+});
+
+describe('Pilgrim bell puzzle rendering', () => {
+  it('renders three distinct clue-labelled chimes before the tower is restored', () => {
+    const level = createPilgrimsClimb();
+    const ctx = recordingContext();
+    drawLevelMechanics(ctx, level, 8, false);
+
+    const labels = ctx.calls
+      .filter((call) => call[0] === 'fillText')
+      .map((call) => call[1]);
+    expect(labels).toEqual(expect.arrayContaining(['DAWN', 'VEIL', 'SHELTER']));
+
+    level.objective.bell.restored = true;
+    const restoredCtx = recordingContext();
+    drawLevelMechanics(restoredCtx, level, 9, true);
+    const restoredLabels = restoredCtx.calls
+      .filter((call) => call[0] === 'fillText')
+      .map((call) => call[1]);
+    expect(restoredLabels).not.toEqual(expect.arrayContaining(['DAWN', 'VEIL', 'SHELTER']));
   });
 });

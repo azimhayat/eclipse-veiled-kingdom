@@ -57,6 +57,11 @@ export function cloneObjective(objective) {
       clone.bell.awakened = false;
       clone.bell.restored = false;
       clone.bell.ringStartedAt = null;
+      if (clone.bell.puzzle) {
+        clone.bell.puzzle.progress = [];
+        clone.bell.puzzle.mistakes = 0;
+        for (const chime of clone.bell.puzzle.chimes || []) chime.struck = false;
+      }
     }
     for (const window of clone.lightWindows || []) window.lit = false;
   }

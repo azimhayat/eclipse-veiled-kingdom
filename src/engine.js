@@ -198,6 +198,8 @@ export class GameEngine {
         braceCarved: Boolean(this.level.objective.memoryBrace?.revealed),
         masteryReached: this.level.objective.masteryReached,
         bellAwakened: Boolean(this.level.objective.bell?.awakened),
+        chimeProgress: [...(this.level.objective.bell?.puzzle?.progress || [])],
+        chimeMistakes: this.level.objective.bell?.puzzle?.mistakes || 0,
         collapseSections: (this.level.objective.collapse?.sections || []).map((section) => ({
           id: section.id,
           state: section.state,
@@ -1244,16 +1246,20 @@ export class GameEngine {
         alternate: 'CHANGE WALLS',
         carve: 'FREE THE BELL ROPE',
         collapse: 'OUTCLIMB THE FALL',
-        ring: 'RING THE PILGRIM BELL',
+        ring: 'REMEMBER THE BELL HYMN',
         complete: 'THE TOWER FINDS ITS VOICE',
       };
+      const puzzle = objective.bell?.puzzle;
+      const ringProgress = objective.phase === 'ring' && puzzle
+        ? `CHIME ORDER ${puzzle.progress.length}/${puzzle.sequence.length}`
+        : null;
       return {
         type: 'bell-tower-restoration',
         label: objective.hudLabel || 'ASCENT',
         title: objective.title || 'Wake the pilgrim bell',
         current: objective.complete ? 1 : 0,
         target: 1,
-        progressText: phaseText[objective.phase] || phaseText.learn,
+        progressText: ringProgress || phaseText[objective.phase] || phaseText.learn,
         complete: Boolean(objective.complete),
       };
     }
@@ -2459,8 +2465,10 @@ export class GameEngine {
     }
 
     const landing = objective.thresholds.masteryLanding;
+    const reachedHighLine = this.player.y + this.player.h <= landing.feetTy * TILE + 12;
     const mastered = objective.oathShelter?.boundOnce
-      && centerTx >= landing.minTx;
+      && centerTx >= landing.minTx
+      && reachedHighLine;
     if (!mastered) return;
 
     objective.masteryComplete = true;
@@ -2658,7 +2666,7 @@ export class GameEngine {
       && feetTy <= exit.maxFeetTy) {
       objective.masteryReached = true;
       objective.phase = 'ring';
-      this.setHint('AREN · The rope was cut from inside. Let it remember why it rang. · Press STRIKE.', 5.5);
+      this.setHint('THE THREE CHIMES WAIT · use the carved pilgrim vow to choose their order, then press STRIKE.', 5.5);
       this.pushHud(true);
     }
   }
@@ -2666,12 +2674,42 @@ export class GameEngine {
   strikePilgrimBell() {
     const objective = this.level.objective;
     if (objective?.type !== 'bell-tower-restoration' || objective.complete || objective.phase !== 'ring') return false;
-    const bellX = objective.bell.tx * TILE;
-    const bellY = objective.bell.baseTy * TILE;
+    const bell = objective.bell;
+    const puzzle = bell.puzzle;
     const playerX = this.player.x + this.player.w / 2;
     const playerY = this.player.y + this.player.h / 2;
-    if (Math.hypot(playerX - bellX, playerY - bellY) > objective.bell.strikeRadius) {
-      this.setHint('STAND BENEATH THE PILGRIM BELL · then press STRIKE.', 2.8);
+    const chime = puzzle?.chimes
+      ?.map((candidate) => ({
+        ...candidate,
+        distance: Math.hypot(playerX - candidate.tx * TILE, playerY - candidate.baseTy * TILE),
+      }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (!chime || chime.distance > bell.strikeRadius) {
+      this.setHint('STAND BENEATH ONE OF THE THREE PILGRIM CHIMES · then press STRIKE.', 2.8);
+      return true;
+    }
+
+    const expectedId = puzzle.sequence[puzzle.progress.length];
+    if (chime.id !== expectedId) {
+      puzzle.progress = [];
+      puzzle.mistakes += 1;
+      for (const candidate of puzzle.chimes) candidate.struck = false;
+      this.burst(chime.tx * TILE, chime.baseTy * TILE - 64, '#d87862', 18, 160);
+      this.audio.play('dig');
+      this.setHint('THE HYMN BREAKS · read the carved journey: departure, eclipse, shelter.', 4.2);
+      this.pushHud(true);
+      return true;
+    }
+
+    const authoredChime = puzzle.chimes.find((candidate) => candidate.id === chime.id);
+    authoredChime.struck = true;
+    puzzle.progress.push(chime.id);
+    this.burst(chime.tx * TILE, chime.baseTy * TILE - 64, '#8ce8ff', 22, 180);
+    this.audio.play('relic');
+    if (puzzle.progress.length < puzzle.sequence.length) {
+      const remaining = puzzle.sequence.length - puzzle.progress.length;
+      this.setHint(`${chime.label.toUpperCase()} ANSWERS · ${remaining} vow${remaining === 1 ? '' : 's'} remain in the remembered journey.`, 3.4);
+      this.pushHud(true);
       return true;
     }
 
@@ -2679,15 +2717,15 @@ export class GameEngine {
     objective.restored = true;
     objective.phase = 'complete';
     objective.completedAt = this.totalTime;
-    objective.bell.awakened = true;
-    objective.bell.restored = true;
-    objective.bell.ringStartedAt = this.totalTime;
+    bell.awakened = true;
+    bell.restored = true;
+    bell.ringStartedAt = this.totalTime;
     for (const section of objective.collapse?.sections || []) {
       section.state = 'restored';
       section.timer = 0;
     }
     for (const window of objective.lightWindows || []) window.lit = true;
-    this.burst(bellX, bellY, '#8ce8ff', 42, 240);
+    this.burst(bell.tx * TILE, bell.baseTy * TILE, '#8ce8ff', 42, 240);
     this.audio.play('gate');
     this.openGate({ hint: objective.completionHint, holdSeconds: 6 });
     this.pushHud(true);

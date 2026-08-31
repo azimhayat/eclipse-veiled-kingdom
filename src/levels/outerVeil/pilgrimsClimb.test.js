@@ -113,6 +113,15 @@ function carveBrace(engine) {
   GameEngine.prototype.dig.call(engine);
 }
 
+function standByChime(engine, id) {
+  const chime = engine.level.objective.bell.puzzle.chimes.find((candidate) => candidate.id === id);
+  engine.player.x = chime.tx * TILE - engine.player.w / 2;
+  engine.player.y = chime.baseTy * TILE - engine.player.h;
+  engine.player.vx = 0;
+  engine.player.vy = 0;
+  engine.player.grounded = true;
+}
+
 describe("Outer Veil Level 6 production preview", () => {
   it("authors Pilgrim's Grip as a finite, non-combat bell-tower climb", () => {
     const level = assertValidAuthoredLevel(createPilgrimsClimb(), identity);
@@ -123,6 +132,13 @@ describe("Outer Veil Level 6 production preview", () => {
       objective: {
         type: 'bell-tower-restoration', requiresAbility: 'memory-carve', phase: 'learn',
         lessonComplete: false, alternatingComplete: false, complete: false, restored: false,
+        bell: {
+          puzzle: {
+            sequence: ['dawn', 'veil', 'shelter'],
+            progress: [],
+            mistakes: 0,
+          },
+        },
       },
       targetTime: { parSeconds: 240, masterySeconds: 150 },
     });
@@ -232,7 +248,7 @@ describe("Outer Veil Level 6 production preview", () => {
     expect(section.state).toBe('spent');
   });
 
-  it('accepts a broad summit crossing, rings once, restores the tower, and emits exact completion identity', () => {
+  it('reveals a fair three-chime puzzle, resets a wrong answer, and restores on the remembered order', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createPilgrimsClimb(), identity));
     const engine = engineHarness(level);
     completeToCarve(engine);
@@ -243,11 +259,23 @@ describe("Outer Veil Level 6 production preview", () => {
     GameEngine.prototype.updateBellTowerObjective.call(engine);
     expect(level.objective).toMatchObject({ masteryReached: true, phase: 'ring', complete: false });
 
-    engine.player.x = 77.5 * TILE;
-    engine.player.y = 3 * TILE - engine.player.h;
-    engine.player.grounded = true;
+    standByChime(engine, 'veil');
     expect(GameEngine.prototype.strikePilgrimBell.call(engine)).toBe(true);
+    expect(level.objective).toMatchObject({
+      phase: 'ring',
+      complete: false,
+      bell: { puzzle: { progress: [], mistakes: 1 } },
+    });
+    expect(level.objective.bell.puzzle.chimes.every((chime) => !chime.struck)).toBe(true);
+    expect(engine.callbacks.gate).not.toHaveBeenCalled();
+
+    for (const id of level.objective.bell.puzzle.sequence) {
+      standByChime(engine, id);
+      expect(GameEngine.prototype.strikePilgrimBell.call(engine)).toBe(true);
+    }
     expect(level.objective).toMatchObject({ phase: 'complete', complete: true, restored: true, bell: { awakened: true, restored: true } });
+    expect(level.objective.bell.puzzle.progress).toEqual(['dawn', 'veil', 'shelter']);
+    expect(level.objective.bell.puzzle.chimes.every((chime) => chime.struck)).toBe(true);
     expect(level.objective.collapse.sections.every((section) => section.state === 'restored')).toBe(true);
     expect(level.objective.lightWindows.every((window) => window.lit)).toBe(true);
     expect(engine.callbacks.gate).toHaveBeenCalledOnce();
@@ -271,6 +299,20 @@ describe("Outer Veil Level 6 production preview", () => {
     });
   });
 
+  it('scrambles physical placement and clears all bell-puzzle runtime state when cloned', () => {
+    const authored = createPilgrimsClimb();
+    expect(authored.objective.bell.puzzle.chimes.map((chime) => chime.id)).toEqual(['veil', 'shelter', 'dawn']);
+    expect(authored.objective.bell.puzzle.sequence).toEqual(['dawn', 'veil', 'shelter']);
+
+    authored.objective.bell.puzzle.progress.push('dawn', 'veil');
+    authored.objective.bell.puzzle.mistakes = 3;
+    authored.objective.bell.puzzle.chimes.forEach((chime) => { chime.struck = true; });
+    const clone = cloneLevel(authored);
+
+    expect(clone.objective.bell.puzzle).toMatchObject({ progress: [], mistakes: 0 });
+    expect(clone.objective.bell.puzzle.chimes.every((chime) => !chime.struck)).toBe(true);
+  });
+
   it('deep-resets grip, sequence, brace, grouped collapse, bell, lights, gate, and hero state after life ends', () => {
     const template = assertValidAuthoredLevel(createPilgrimsClimb(), identity);
     const runtime = cloneLevel(template);
@@ -283,6 +325,9 @@ describe("Outer Veil Level 6 production preview", () => {
     runtime.objective.collapse.sections.forEach((section) => { section.state = 'gone'; section.timer = 2; });
     runtime.objective.bell.awakened = true;
     runtime.objective.bell.restored = true;
+    runtime.objective.bell.puzzle.progress.push('dawn', 'veil');
+    runtime.objective.bell.puzzle.mistakes = 2;
+    runtime.objective.bell.puzzle.chimes.slice(0, 2).forEach((chime) => { chime.struck = true; });
     runtime.objective.lightWindows.forEach((window) => { window.lit = true; });
     runtime.objective.phase = 'complete';
     runtime.objective.complete = true;
@@ -305,8 +350,10 @@ describe("Outer Veil Level 6 production preview", () => {
     expect(engine.level.objective).toMatchObject({
       phase: 'learn', gripSeconds: 0, wallJumps: [], lessonComplete: false,
       alternatingComplete: false, masteryReached: false, complete: false, restored: false,
-      memoryBrace: { revealed: false }, bell: { awakened: false, restored: false },
+      memoryBrace: { revealed: false },
+      bell: { awakened: false, restored: false, puzzle: { progress: [], mistakes: 0 } },
     });
+    expect(engine.level.objective.bell.puzzle.chimes.every((chime) => !chime.struck)).toBe(true);
     expect(engine.level.objective.collapse.sections.every((section) => section.state === 'stable' && section.timer === 0)).toBe(true);
     expect(engine.level.objective.lightWindows.every((window) => !window.lit)).toBe(true);
     expect(engine.level.map[engine.level.objective.memoryBrace.ty][engine.level.objective.memoryBrace.tx]).toBe(Tile.SAND);
@@ -339,6 +386,7 @@ describe("Outer Veil Level 6 production preview", () => {
     broken.map[broken.objective.collapse.sections[0].ty][broken.objective.collapse.sections[0].tx] = Tile.STONE;
     broken.map[broken.objective.masteryExit.maxFeetTy][broken.gateColumn] = Tile.AIR;
     broken.objective.collapse.warningSeconds = .2;
+    broken.objective.bell.puzzle.sequence = ['dawn', 'dawn', 'shelter'];
     broken.targetTime.masterySeconds = broken.targetTime.parSeconds;
     broken.gameplay.enemyRoster = ['grunt'];
     const result = validateAuthoredLevel(broken, identity);
@@ -351,6 +399,7 @@ describe("Outer Veil Level 6 production preview", () => {
       'structural_collapse',
       'unsafe_summit',
       'unsafe_grouped_collapse',
+      'invalid_bell_sequence',
       'invalid_target_time',
       'bell_route_contamination',
     ]));

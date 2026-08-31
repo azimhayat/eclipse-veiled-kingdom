@@ -816,6 +816,25 @@ function validateBellTower(level, issues) {
     || bell.strikeRadius < TILE || bell.strikeRadius > TILE * 4) {
     addIssue(issues, 'objective.bell', 'invalid_bell_chamber', 'must define a reachable broad summit and named strikeable bell');
   }
+  const puzzle = bell?.puzzle;
+  const chimes = puzzle?.chimes;
+  const chimeIds = Array.isArray(chimes) ? chimes.map((chime) => chime?.id) : [];
+  const sequence = puzzle?.sequence;
+  const uniqueChimeIds = new Set(chimeIds);
+  if (!puzzle || typeof puzzle.clue !== 'string' || puzzle.clue.trim() === ''
+    || !Array.isArray(chimes) || chimes.length !== 3 || uniqueChimeIds.size !== chimes.length
+    || chimes.some((chime) => !chime || typeof chime.id !== 'string' || chime.id.trim() === ''
+      || typeof chime.label !== 'string' || chime.label.trim() === ''
+      || !Number.isFinite(chime.tx) || !Number.isInteger(chime.baseTy)
+      || chime.tx < exit?.minCenterTx || chime.tx >= level.gateColumn
+      || chime.baseTy !== exit?.maxFeetTy || chime.struck !== false)
+    || !Array.isArray(sequence) || sequence.length !== chimes?.length
+    || new Set(sequence).size !== sequence.length
+    || sequence.some((id) => !uniqueChimeIds.has(id))
+    || !Array.isArray(puzzle.progress) || puzzle.progress.length !== 0
+    || puzzle.mistakes !== 0) {
+    addIssue(issues, 'objective.bell.puzzle', 'invalid_bell_sequence', 'must define three pristine summit chimes and one clue-backed permutation');
+  }
   if (exit && Number.isFinite(exit.minCenterTx) && Number.isInteger(exit.maxFeetTy)
     && Number.isInteger(level.gateColumn)) {
     const summitStart = Math.ceil(exit.minCenterTx);

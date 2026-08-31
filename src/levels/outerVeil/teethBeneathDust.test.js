@@ -109,6 +109,21 @@ describe('Outer Veil Level 5 production preview', () => {
     expect(getTimedTeethState(timing, { ...hazard, bound: true }, 2.9)).toMatchObject({ state: 'bound', active: false });
   });
 
+  it('sends the mastery warning wave west to east as instructed', () => {
+    const level = createTeethBeneathDust();
+    const { timing, hazards } = level.objective;
+    const mastery = Object.fromEntries(
+      hazards.filter((hazard) => hazard.role === 'mastery-wave')
+        .map((hazard) => [hazard.id, hazard]),
+    );
+
+    expect(getTimedTeethState(timing, mastery['mastery-west'], 1.2).state).toBe('active');
+    expect(getTimedTeethState(timing, mastery['mastery-heart'], 1.2).state).not.toBe('active');
+    expect(getTimedTeethState(timing, mastery['mastery-east'], 1.2).state).not.toBe('active');
+    expect(getTimedTeethState(timing, mastery['mastery-heart'], 2).state).toBe('active');
+    expect(getTimedTeethState(timing, mastery['mastery-east'], 2.8).state).toBe('active');
+  });
+
   it('starts one local hazard clock at the observation threshold and never uses global run time', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createTeethBeneathDust(), identity));
     const engine = engineHarness(level);
@@ -186,6 +201,13 @@ describe('Outer Veil Level 5 production preview', () => {
     expect(level.objective.phase).toBe('mastery');
 
     const landing = thresholds.masteryLanding;
+    engine.player.x = landing.minTx * TILE;
+    engine.player.y = 27 * TILE - engine.player.h;
+    engine.player.grounded = true;
+    GameEngine.prototype.updateTimedTeethObjective.call(engine);
+    expect(level.objective).toMatchObject({ phase: 'mastery', complete: false, restored: false });
+    expect(engine.callbacks.gate).not.toHaveBeenCalled();
+
     engine.player.x = (landing.maxTx + 1) * TILE;
     engine.player.y = landing.feetTy * TILE - engine.player.h - 80;
     engine.player.grounded = false;
