@@ -2682,12 +2682,16 @@ export class GameEngine {
       const centerTx = playerX / TILE;
       const feetTy = (this.player.y + this.player.h) / TILE;
       const exit = objective.masteryExit;
-      const canResumeAtBells = objective.alternatingComplete
-        && ['carve', 'collapse'].includes(objective.phase)
+      const canResumeAtBells = ['learn', 'alternate', 'carve', 'collapse'].includes(objective.phase)
         && centerTx >= exit.minCenterTx
         && feetTy <= exit.maxFeetTy + .1;
       if (!canResumeAtBells) return false;
 
+      objective.gripSeconds = Math.max(objective.gripSeconds, objective.lesson.minGripSeconds);
+      objective.lesson.jumpRecorded = true;
+      objective.lessonComplete = true;
+      objective.wallJumps = [...objective.alternating.requiredJumpSides];
+      objective.alternatingComplete = true;
       const brace = objective.memoryBrace;
       if (!brace.revealed) {
         brace.revealed = true;

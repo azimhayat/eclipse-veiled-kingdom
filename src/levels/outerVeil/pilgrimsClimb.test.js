@@ -299,12 +299,13 @@ describe("Outer Veil Level 6 production preview", () => {
     });
   });
 
-  it('lets STRIKE at the bells resume the puzzle immediately when the earlier rope brace was missed', () => {
+  it('lets STRIKE at the bells work even when every earlier objective tracker was missed', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createPilgrimsClimb(), identity));
     const engine = engineHarness(level);
-    completeToCarve(engine);
     const brace = level.objective.memoryBrace;
-    expect(level.objective).toMatchObject({ phase: 'carve', alternatingComplete: true, masteryReached: false });
+    expect(level.objective).toMatchObject({
+      phase: 'learn', lessonComplete: false, alternatingComplete: false, masteryReached: false,
+    });
     expect(brace.revealed).toBe(false);
     expect(level.map[brace.ty][brace.tx]).toBe(Tile.SAND);
 
@@ -313,10 +314,15 @@ describe("Outer Veil Level 6 production preview", () => {
 
     expect(level.objective).toMatchObject({
       phase: 'ring',
+      lessonComplete: true,
+      alternatingComplete: true,
       masteryReached: true,
       memoryBrace: { revealed: true },
       bell: { puzzle: { progress: ['dawn'], mistakes: 0 } },
     });
+    expect(level.objective.gripSeconds).toBeGreaterThanOrEqual(level.objective.lesson.minGripSeconds);
+    expect(level.objective.lesson.jumpRecorded).toBe(true);
+    expect(level.objective.wallJumps).toEqual(level.objective.alternating.requiredJumpSides);
     expect(level.map[brace.ty][brace.tx]).toBe(Tile.AIR);
     expect(level.objective.bell.puzzle.chimes.find((chime) => chime.id === 'dawn').struck).toBe(true);
     expect(engine.callbacks.gate).not.toHaveBeenCalled();
