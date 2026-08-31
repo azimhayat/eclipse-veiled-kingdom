@@ -722,7 +722,10 @@ export class GameEngine {
 
   armBellTowerCollapseLedge() {
     const objective = this.level.objective;
-    if (objective?.type !== 'bell-tower-restoration' || objective.phase !== 'collapse' || !this.player.grounded) return;
+    const climbingMastery = objective?.type === 'bell-tower-restoration'
+      && objective.alternatingComplete
+      && ['carve', 'collapse'].includes(objective.phase);
+    if (!climbingMastery || !this.player.grounded) return;
     const feet = this.player.y + this.player.h;
     for (const section of objective.collapse?.sections || []) {
       if (section.state !== 'stable') continue;
@@ -1383,7 +1386,7 @@ export class GameEngine {
       objective.phase = 'collapse';
       this.burst(tx * TILE + TILE / 2, ty * TILE + TILE / 2, '#80e7ff', 24, 170);
       this.audio.play('relic');
-      this.setHint(`${brace.revealText} · descend the broken spiral to the final climb`, 5.5);
+      this.setHint(`${brace.revealText} · the summit chimes now remember`, 5.5);
       this.pushHud(true);
       return true;
     }

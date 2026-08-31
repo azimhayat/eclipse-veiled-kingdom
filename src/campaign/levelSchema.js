@@ -759,8 +759,10 @@ function validateBellTower(level, issues) {
     || level.map?.[brace.ty]?.[brace.tx] !== Tile.SAND
     || !brace.safeLanding || !Number.isFinite(brace.safeLanding.minTx)
     || !Number.isFinite(brace.safeLanding.maxTx) || !Number.isInteger(brace.safeLanding.feetTy)
+    || brace.tx < objective.masteryExit?.minCenterTx || brace.tx >= level.gateColumn
+    || brace.safeLanding.feetTy !== objective.masteryExit?.maxFeetTy
     || typeof brace.revealText !== 'string' || brace.revealText.trim() === '') {
-    addIssue(issues, 'objective.memoryBrace', 'invalid_memory_brace', 'must define one non-structural body-height SAND brace with a safe landing');
+    addIssue(issues, 'objective.memoryBrace', 'invalid_memory_brace', 'must define one non-structural body-height SAND brace on the safe summit before the sealed gate');
   }
   if (level.map?.flat?.().filter((tile) => tile === Tile.SAND).length !== 1) {
     addIssue(issues, 'map', 'ambiguous_memory_brace', 'must contain exactly one SAND cell for the authored combination');

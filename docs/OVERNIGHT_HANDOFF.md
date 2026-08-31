@@ -489,3 +489,37 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Have a human replay Chapter 6 from a fresh start, carve and read the rope vow, intentionally strike one wrong chime, then solve **Dawn → Veil → Shelter** and enter Chapter 7. Fix only a reproduced interaction or readability failure. After acceptance, add the deferred Chapter 5 real-loader and transition proofs, then begin the bounded Chapter 7 quality pass. Do not publish or author Inner Kingdom content.
+
+---
+
+# Reviewed continuation — Chapter 6 no-backtrack rope fix
+
+Updated: 2026-08-31 23:34 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Reproduced the human-play failure: Aren could reach the three labelled chimes while the objective still required the earlier rope brace, leaving STRIKE inactive and demanding a long, unclear backtrack.
+- Moved the single non-structural sand rope brace into the summit chamber immediately beside Dawn and shifted the still-solid gate one tile east. Reaching the bells now always presents the missing Memory Carve interaction in the same screen.
+- Kept the final chamber causally ordered: DIG the gold brace, read the vow, reveal the three chimes, solve the sequence, restore the great bell, then cross the separately sealed gate.
+- Hid the named chimes until the summit brace is carved, so the player no longer mistakes an inactive future puzzle for the current objective.
+- Preserved the mastery climb by allowing optional collapse ledges to arm during the summit-bound carve phase. Moving the brace no longer disables the final climbing hazard.
+- Updated route data, tutorial copy, completion hinting, validation, and tests to make summit placement a protected authored contract rather than an accidental coordinate.
+
+## Validation evidence
+
+- Focused Chapter 6, schema, and rendering suites: **21 tests across 3 files passed**.
+- Complete automated suite: **172 tests across 23 files passed**.
+- Production build: **54 modules transformed**; Chapter 6 remains independently lazy-loaded.
+- Regressions prove the brace is on the safe summit before the still-sealed gate, DIG immediately advances to the ring phase, collapse ledges arm before the carve, chimes remain hidden before the vow, and reset restores the summit brace and gate.
+- Fresh Level 6 loaded without browser errors at default desktop, 844×390 landscape phone, and 390×844 portrait phone; the temporary viewport override was reset.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Remaining quality gaps
+
+- The repaired summit interaction still needs the user's fresh natural-input replay through DIG, one intentional wrong strike, the correct sequence, and the Chapter 7 door.
+- Chapter 5 real-loader fatal reset and Chapter 5 → Chapter 6 transition proofs remain the next non-visual test milestone.
+
+## Exact next milestone
+
+Accept or repair the user's fresh Chapter 6 replay. If the summit now reads cleanly, add the deferred Chapter 5 integration proofs, then begin the bounded Chapter 7 quality pass. Keep all work local.
