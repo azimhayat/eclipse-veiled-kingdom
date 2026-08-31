@@ -1696,13 +1696,24 @@ export class GameEngine {
     const objective = this.level.objective;
     const skycut = objective?.type === 'parachute-choir-restoration' ? objective.skycut : null;
     const tether = skycut?.tether;
-    if (objective?.phase !== 'flank' || !skycut?.landed || !tether || tether.cut) return false;
+    if (objective?.phase !== 'flank' || !skycut?.seesaw?.balanced || !tether || tether.cut) return false;
+    const landing = skycut.landing;
+    const centerTx = (this.player.x + this.player.w / 2) / TILE;
+    const feetTy = (this.player.y + this.player.h) / TILE;
+    const onTetherPlatform = this.player.grounded
+      && centerTx >= landing.minTx && centerTx <= landing.maxTx
+      && Math.abs(feetTy - landing.feetTy) <= .08;
+    if (!skycut.landed && onTetherPlatform) skycut.landed = true;
+    if (!skycut.landed) {
+      this.setHint('SKYCUT · balance the board, stand beneath the gold command tether, then STRIKE.', 2.8);
+      return false;
+    }
     const playerX = this.player.x + this.player.w / 2;
     const playerY = this.player.y + this.player.h / 2;
     const tetherX = tether.tx * TILE;
     const tetherY = tether.baseTy * TILE - 78;
     if (Math.hypot(playerX - tetherX, playerY - tetherY) > tether.strikeRadius) {
-      this.setHint('SKYCUT · land beside the glowing command tether, then STRIKE.', 2.5);
+      this.setHint('SKYCUT · stand beneath the glowing command tether, then STRIKE.', 2.5);
       return false;
     }
     tether.cut = true;
@@ -2126,11 +2137,11 @@ export class GameEngine {
       const zone = objective.skycut.landing;
       const centerTx = (this.player.x + this.player.w / 2) / TILE;
       const feetTy = (this.player.y + this.player.h) / TILE;
-      if (objective.skycut.gripJumpRecorded && this.player.grounded
+      if (this.player.grounded && objective.skycut.seesaw.balanced
         && centerTx >= zone.minTx && centerTx <= zone.maxTx
         && Math.abs(feetTy - zone.feetTy) <= .08 && !objective.skycut.landed) {
         objective.skycut.landed = true;
-        this.setHint('HIGH LINE HELD · STRIKE the glowing command tether before descending east.', 4);
+        this.setHint('TETHER IN REACH · STRIKE the glowing command line, then use Pilgrim’s Grip to cross east.', 4);
         this.pushHud(true);
       }
       return;
@@ -2246,7 +2257,7 @@ export class GameEngine {
     seesaw.angle = 0;
     this.audio.play('relic');
     this.burst(seesaw.pivotX, seesaw.pivotY - 4, '#8ce8ff', 20, 150);
-    this.setHint("SKYBOARD BALANCED · hold RIGHT + UP and JUMP from the pillar, then land beneath the tether.", 5);
+    this.setHint('SKYBOARD BALANCED · stand beneath the gold tether and STRIKE; Pilgrim’s Grip carries you east after the cut.', 5);
     this.pushHud(true);
     return true;
   }

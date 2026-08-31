@@ -214,7 +214,7 @@ export function createParachuteChoir() {
       skyRestored: false,
       phaseHints: {
         lesson: 'OPENING DUET · defeat both paratroopers; STRIKE only after each amber tell turns blue',
-        flank: "SKYBOARD · counter the wind, hold the gold centre steady, then spring and STRIKE the tether",
+        flank: 'SKYBOARD · counter the wind, hold the gold centre steady, then STRIKE the tether beneath you',
         chorus: 'HIGH ANSWER · cross with RIGHT + UP + JUMP and break the lone travelling voice',
         finale: 'FALLING CADENCE · two final voices descend once; break the formation, not your rhythm',
         updraft: 'LIVING WIND · stand beneath the sky-ring; when the column turns cyan, hold UP and press JUMP',
@@ -232,7 +232,7 @@ export function createParachuteChoir() {
       cameraHorizontalLead: 70,
       tutorialCues: [
         { minX: 10, maxX: 27, text: 'OPENING DUET · two finite paratroopers, clear amber tells, safe blue recoveries' },
-        { minX: 27, maxX: 43, text: "COMBINATION · counter the swinging seesaw, wall spring, then STRIKE the tether" },
+        { minX: 27, maxX: 43, text: 'COMBINATION · balance the swinging seesaw, STRIKE the tether, then use Grip to cross east' },
         { minX: 43, maxX: 63, text: 'HIGH ANSWER · break the lone travelling voice while crossing east' },
         { minX: 63, maxX: 85, text: 'MASTERY · read the staggered descent and break its voices in your own order' },
         { minX: 75, maxX: 84, text: 'LIVING WIND · wait for cyan, then hold UP and press JUMP through the sky-ring' },

@@ -684,3 +684,26 @@ Scope: the user reported that the third paratrooper could not be killed with STR
 ## Exact next milestone
 
 Reload Level 8 from a pristine 4/4 start and have the user confirm that two ordinary STRIKE presses defeat High Answer on the terrace. Then clear the final pair and accept the Living Wind ring through natural controls before declaring Level 8 complete.
+
+---
+
+# Reviewed continuation — Level 8 touch-safe tether cut
+
+Updated: 2026-09-01 01:32 Asia/Dubai
+Scope: the user reproduced a solved skyboard that could not cut the command tether because the hidden wall-spring flag had not registered.
+
+## Completed milestone
+
+- Inspected the live browser state and confirmed the seesaw was fully balanced at 1.1 seconds, Aren was grounded directly beneath the tether with 4/4 health, but `gripJumpRecorded` and `landed` remained false.
+- Removed the fragile three-button wall-spring prerequisite from the tether cut. The fair touch route is now: balance the seesaw, stand on its broad platform beneath the gold tether, and press STRIKE.
+- Pilgrim's Grip and the real pillar wall-spring remain available for crossing east after the cut; no geometry, artwork, enemy count, or later puzzle changed.
+- Updated the HUD and tutorial guidance to state the actual order: balance, STRIKE, then Grip east.
+- Restored the user's solved-seesaw position after hot reload and verified the tether cut immediately with no Grip flag. The live HUD advanced to **BREAK THE HIGH ANSWER** at 4/4 health.
+
+## Validation evidence
+
+- Focused Level 8 suite: **16 tests passed**, including the new touch-only balanced tether cut and the retained optional wall-spring route.
+- Complete automated suite: **182 tests across 23 files passed**.
+- Production build: **54 modules transformed**; Level 8 remains independently lazy-loaded.
+- `git diff --check` passed with only expected Windows line-ending notices.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.

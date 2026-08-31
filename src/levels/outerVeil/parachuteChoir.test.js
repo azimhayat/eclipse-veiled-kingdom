@@ -284,7 +284,7 @@ describe('Outer Veil Level 8 production preview', () => {
     expect(engine.setHint).toHaveBeenCalledWith(expect.stringContaining('SKYBOARD BALANCED'), 5);
   });
 
-  it('requires the balanced seesaw, real right-wall spring, broad high landing, and a nearby tether strike', () => {
+  it('keeps the real right-wall spring available for crossing after the nearby tether strike', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
     const engine = engineHarness(level);
     level.objective.phase = 'flank';
@@ -332,6 +332,25 @@ describe('Outer Veil Level 8 production preview', () => {
       GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
     }
     expect(engine.player.x).toBeGreaterThan(37 * TILE);
+  });
+
+  it('lets touch players cut the tether directly after balancing beneath it', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    const skycut = level.objective.skycut;
+    const landing = skycut.landing;
+    level.objective.phase = 'flank';
+    engine.player.x = skycut.tether.tx * TILE - engine.player.w / 2;
+    engine.player.y = landing.feetTy * TILE - engine.player.h;
+    engine.player.grounded = true;
+
+    expect(GameEngine.prototype.strikeParachuteTether.call(engine)).toBe(false);
+    expect(skycut).toMatchObject({ landed: false, completed: false, tether: { cut: false } });
+
+    skycut.seesaw.balanced = true;
+    expect(GameEngine.prototype.strikeParachuteTether.call(engine)).toBe(true);
+    expect(skycut).toMatchObject({ gripJumpRecorded: false, landed: true, completed: true, tether: { cut: true } });
+    expect(level.objective.phase).toBe('chorus');
   });
 
   it('deploys all five stable voices, then requires the harmless cyan updraft before restoration', () => {
