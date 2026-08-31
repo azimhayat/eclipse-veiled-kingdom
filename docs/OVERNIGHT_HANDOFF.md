@@ -523,3 +523,42 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Accept or repair the user's fresh Chapter 6 replay. If the summit now reads cleanly, add the deferred Chapter 5 integration proofs, then begin the bounded Chapter 7 quality pass. Keep all work local.
+
+---
+
+# Reviewed continuation — Chapter 5 fatal-reset integration
+
+Updated: 2026-08-31 23:37 Asia/Dubai
+Scope: local test and evidence milestone only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Added the deferred Chapter 5 fatal-damage regression using the real ten-chapter Outer Veil repository, real dynamic Chapter 5 loader, real runtime clone, real engine damage path, real reset loader, and real save reducer.
+- Dirtied every mutable Teeth Beneath Dust system before death: local hazard clock, lesson/control/mastery phases, shelter bind, all teeth, restoration tiles, block motion/bind, gate, checkpoint, actors, particles, crumble state, and completion latch.
+- Proved fatal damage emits death once but never emits level completion; reform creates a distinct pristine runtime while leaving the repository template untouched.
+- Proved campaign and level time follow the existing retention policy, the death count increments once, and Continue remains on stable key `outer-veil-05-teeth-beneath-dust` with campaign order 5.
+- Proved the entire versioned save remains byte-equivalent across death and reform, so Chapter 5 cannot be skipped by life-over handling.
+
+## Validation evidence
+
+- Focused Chapter 5 suite: **11 tests passed**.
+- Complete automated suite: **173 tests across 23 files passed**.
+- Production build: **54 modules transformed**; all production chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- No browser pass was needed because this milestone changes tests and evidence only.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: mirror the proven Chapter 4 integrated death pattern rather than extending the earlier mocked-loader Level 5 reset test.
+- Accepted: exercise real stable identity, save non-advancement, cache rebake, transient cleanup, and repository-template integrity in one bounded regression.
+- Deferred: the separate real Chapter 5 → Chapter 6 completion/transition proof remains valuable but is not required to establish this fatal-reset contract.
+
+## Remaining quality gaps
+
+- The user's repaired Chapter 6 summit still needs fresh natural-input acceptance through DIG and all three chimes.
+- The real Chapter 5 → Chapter 6 lazy completion transition remains the next test-only integration gap.
+
+## Exact next milestone
+
+If the user reports Chapter 6 summit success, add the real Chapter 5 → Chapter 6 completion and lazy-transition proof, then begin the bounded Chapter 7 quality pass. Keep all work local and leave the public build untouched.
