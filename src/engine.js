@@ -58,6 +58,10 @@ export const PHYSICS = Object.freeze({
 const FIXED_DT = 1 / 60;
 const SUBSTEPS = 3;
 const EPS = .01;
+const AUDIO_TENSION_PHASES = new Set([
+  'alternate', 'collapse', 'ring', 'bind', 'mastery', 'counterweight',
+  'ascent', 'chorus', 'flank', 'finale', 'relay', 'keystone', 'duel',
+]);
 
 const approach = (value, target, amount) => value < target ? Math.min(value + amount, target) : Math.max(value - amount, target);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -148,11 +152,13 @@ export class GameEngine {
     this.transitionTargetIndex = null;
     this.transitionRetryBlocked = false;
 
+    this.audioUnlock = () => { void this.audio.unlock(); };
+
     this.keyDown = this.keyDown.bind(this);
     this.keyUp = this.keyUp.bind(this);
     window.addEventListener('keydown', this.keyDown, { passive: false });
     window.addEventListener('keyup', this.keyUp, { passive: false });
-    window.addEventListener('pointerdown', () => this.audio.unlock(), { once: true });
+    window.addEventListener('pointerdown', this.audioUnlock, { passive: true });
     this.loop = this.loop.bind(this);
     this.animationId = requestAnimationFrame(this.loop);
     this.publishDebugApi();
@@ -346,11 +352,14 @@ export class GameEngine {
     cancelAnimationFrame(this.animationId);
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
+    window.removeEventListener('pointerdown', this.audioUnlock);
+    void this.audio.destroy();
     if (window.__EOTVK__?.engine === this) delete window.__EOTVK__;
     this.bank.dispose();
   }
 
   keyDown(event) {
+    void this.audio.unlock();
     if (event.code === 'Escape' || event.code === 'KeyP') {
       event.preventDefault();
       if (!event.repeat && (this.mode === 'play' || this.mode === 'paused')) this.callbacks.pause?.();
@@ -530,6 +539,7 @@ export class GameEngine {
   start(demo = false) {
     if (this.mode === 'win' || this.mode === 'dead' || this.levelIndex !== 0 || this.totalTime > 0) this.resetCampaign();
     this.demo = demo;
+    this.audio?.play('menu');
     this.mode = 'play';
     this.clearInputs();
     this.callbacks.mode?.('play');
@@ -557,6 +567,7 @@ export class GameEngine {
 
   pause(paused) {
     if (this.mode !== 'play' && this.mode !== 'paused') return;
+    this.audio?.play('menu');
     this.mode = paused ? 'paused' : 'play';
     this.clearInputs();
   }
@@ -690,6 +701,7 @@ export class GameEngine {
   }
 
   returnToTitle() {
+    this.audio?.play('menu');
     this.resetCampaign();
     this.mode = 'title';
     this.clearInputs();
@@ -697,7 +709,47 @@ export class GameEngine {
   }
 
   toggleMute() {
-    return this.audio.toggle();
+    const muted = this.audio.toggle();
+    this.callbacks.audioSettings?.(this.getAudioSettings());
+    return muted;
+  }
+
+  getAudioSettings() {
+    return this.audio.getSettings();
+  }
+
+  setMusicVolume(value) {
+    this.audio.setMusicVolume(value);
+    this.callbacks.audioSettings?.(this.getAudioSettings());
+    return this.getAudioSettings();
+  }
+
+  setEffectsVolume(value) {
+    this.audio.setEffectsVolume(value);
+    this.callbacks.audioSettings?.(this.getAudioSettings());
+    return this.getAudioSettings();
+  }
+
+  audioScene() {
+    const objective = this.level?.objective || null;
+    const duel = objective?.type === 'warden-restoration' ? objective.duel : null;
+    const tenseObjective = AUDIO_TENSION_PHASES.has(objective?.phase) && !objective?.complete;
+    return {
+      mode: this.mode,
+      levelKey: this.level ? levelCacheKey(this.level) : 'outer-veil',
+      healthRatio: this.player?.hp > 0 ? this.player.hp / PHYSICS.MAX_HP : 0,
+      grounded: Boolean(this.player?.grounded),
+      speed: this.player?.vx || 0,
+      objectiveType: tenseObjective ? objective?.type : null,
+      objectiveActive: tenseObjective,
+      restored: Boolean(objective?.restored),
+      completed: Boolean(objective?.complete),
+      warden: duel ? {
+        active: Boolean(duel.active && !duel.complete),
+        phase: duel.boss?.phase || duel.phase,
+        action: duel.boss?.action || 'idle',
+      } : null,
+    };
   }
 
   loop(now) {
@@ -708,6 +760,7 @@ export class GameEngine {
       if (this.mode === 'play') this.update(FIXED_DT);
       this.accumulator -= FIXED_DT;
     }
+    this.audio.update(this.audioScene(), frame);
     this.render(now / 1000);
     this.animationId = requestAnimationFrame(this.loop);
   }
@@ -2247,6 +2300,7 @@ export class GameEngine {
       boss.actionClock = this.wardenDuelTelegraphSeconds(duel);
       boss.attackConsumed = true;
       boss.invulnerable = true;
+      this.audio.play(boss.attackKind === 'sand-wave' ? 'wave' : 'enemy');
       const warning = boss.attackKind === 'high'
         ? 'AMBER HIGH CUT · hold DOWN to guard; tap it late to parry.'
         : boss.attackKind === 'sweep'
@@ -2285,9 +2339,12 @@ export class GameEngine {
           boss.actionClock = this.wardenDuelRecoverySeconds(duel) + .24;
           boss.invulnerable = false;
           boss.hitstun = .18;
-          this.audio.play('hit');
+          this.audio.play('parry');
           this.setHint('PERFECT GUARD · cyan counter window extended.', 1.8);
-        } else this.setHint('GUARD HELD · wait for cyan, then counter.', 1.4);
+        } else {
+          this.audio.play('block');
+          this.setHint('GUARD HELD · wait for cyan, then counter.', 1.4);
+        }
       } else if (this.mode === 'play' && this.player.hp > 0) {
         boss.attackConsumed = true;
         const before = this.player.hp;
@@ -2336,13 +2393,13 @@ export class GameEngine {
       duel.player.comboStep = 0;
       duel.player.comboClock = 0;
       this.burst(target.x, target.y, '#f1cf72', 18, 170);
-      this.audio.play('hit');
+      this.audio.play('heavy');
       this.setHint('HEAVY BREAK · the amber guard cracks cyan.', 1.8);
       this.pushHud(true);
       return true;
     }
     if (boss.action !== 'recovery' || boss.invulnerable) {
-      this.audio.play('dig');
+      this.audio.play('block');
       this.setHint('THE WARDEN BRACES · defend the attack and answer during cyan recovery.', 1.8);
       return false;
     }
@@ -2726,6 +2783,7 @@ export class GameEngine {
           if (soldier.shotClock <= 0 && distance < 430) {
             soldier.shotClock = 1.8;
             this.projectiles.push({ x: soldier.x + soldier.w / 2, y: soldier.y + 15, vx: soldier.facing * 285, w: 18, h: 5 });
+            this.audio.play('enemy');
           }
         }
       }
@@ -2847,7 +2905,7 @@ export class GameEngine {
     }
     player.digTimer = .22;
     this.burst(block.x + block.w / 2, block.y + block.h / 2, block.bound ? '#80e7ff' : '#d69a54', 20, 150);
-    this.audio.play(block.bound ? 'relic' : 'dig');
+    this.audio.play(block.bound ? 'oathbind' : 'oath-release');
     if (block.bound) {
       this.setHint('OATHBOUND · the rune block is now an immovable foothold.', 3.5);
     } else {

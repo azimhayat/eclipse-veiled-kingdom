@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { DEFAULT_AUDIO_SETTINGS } from './audio-settings.js';
 import { GameEngine } from './engine.js';
 import { buildLevelPresentation, detectPresentationInput } from './level-presentation.js';
 import { TILE, VIEW_H, VIEW_W } from './levels/constants.js';
@@ -81,6 +82,45 @@ function TouchButton({ action, label, className = '', engineRef }) {
   );
 }
 
+function AudioControls({ settings, onToggleMute, onMusicVolume, onEffectsVolume, compact = false }) {
+  const musicPercent = Math.round(settings.musicVolume * 100);
+  const effectsPercent = Math.round(settings.effectsVolume * 100);
+  return (
+    <section className={`audio-controls${compact ? ' audio-controls-compact' : ''}`} aria-label="Audio settings">
+      <div className="audio-controls-heading">
+        <span>Soundscape</span>
+        <button className="audio-mute" type="button" onClick={onToggleMute} aria-pressed={settings.muted}>
+          {settings.muted ? 'Unmute' : 'Mute all'}
+        </button>
+      </div>
+      <label>
+        <span>Music <output>{musicPercent}%</output></span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={settings.musicVolume}
+          onInput={(event) => onMusicVolume(Number(event.currentTarget.value))}
+          aria-label="Music volume"
+        />
+      </label>
+      <label>
+        <span>Effects <output>{effectsPercent}%</output></span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={settings.effectsVolume}
+          onInput={(event) => onEffectsVolume(Number(event.currentTarget.value))}
+          aria-label="Effects volume"
+        />
+      </label>
+    </section>
+  );
+}
+
 export default function App() {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
@@ -91,7 +131,7 @@ export default function App() {
   const [bootLabel, setBootLabel] = useState('Loading the veil');
   const [progress, setProgress] = useState(0);
   const [hint, setHint] = useState('');
-  const [muted, setMuted] = useState(true);
+  const [audioSettings, setAudioSettings] = useState(DEFAULT_AUDIO_SETTINGS);
   const [bestTime, setBestTime] = useState(null);
   const [saveWarning, setSaveWarning] = useState('');
   const [sessionKind, setSessionKind] = useState('prototype-campaign');
@@ -271,8 +311,10 @@ export default function App() {
       transition: (level, name) => {
         if (activeSessionKind !== 'production-campaign') setHint(`LEVEL ${level} · ${name.toUpperCase()}`);
       },
+      audioSettings: setAudioSettings,
     }, repository);
     engineRef.current = engine;
+    setAudioSettings(engine.getAudioSettings());
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(window.location.search);
       const demoLevel = Number(params.get('demoLevel'));
@@ -341,7 +383,20 @@ export default function App() {
     setScreen('title');
   };
 
-  const toggleMute = () => setMuted(engineRef.current?.toggleMute() ?? true);
+  const toggleMute = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.toggleMute();
+    setAudioSettings(engine.getAudioSettings());
+  };
+  const setMusicVolume = (value) => {
+    const next = engineRef.current?.setMusicVolume(value);
+    if (next) setAudioSettings(next);
+  };
+  const setEffectsVolume = (value) => {
+    const next = engineRef.current?.setEffectsVolume(value);
+    if (next) setAudioSettings(next);
+  };
   const productionCampaign = sessionKind === 'production-campaign';
   const outerContinueTarget = productionCampaign && saveRef.current
     ? getOuterVeilContinueTarget(saveRef.current)
@@ -398,6 +453,12 @@ export default function App() {
                 )}
                 <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
               </div>
+              <AudioControls
+                settings={audioSettings}
+                onToggleMute={toggleMute}
+                onMusicVolume={setMusicVolume}
+                onEffectsVolume={setEffectsVolume}
+              />
               <div className="best-time">{productionCampaign
                 ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${bestTime === null ? '' : ` · best realm ${formatTime(bestTime)}`}`
                 : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
@@ -424,7 +485,7 @@ export default function App() {
               <span className="timer">{formatTime(hud.time)}</span>
             </div>
             <div className="hud-right">
-              <button className="icon-button" aria-label={muted ? 'Unmute audio' : 'Mute audio'} onClick={toggleMute}>{muted ? '◇' : '◆'}</button>
+              <button className="icon-button" aria-label={audioSettings.muted ? 'Unmute audio' : 'Mute audio'} aria-pressed={audioSettings.muted} onClick={toggleMute}>{audioSettings.muted ? '◇' : '◆'}</button>
               <button
                 className="icon-button"
                 aria-label="Pause"
@@ -506,6 +567,13 @@ export default function App() {
             <div className="eyebrow">The veil is still</div>
             <h2>Journey paused</h2>
             <p>Your place in the kingdom is held.</p>
+            <AudioControls
+              compact
+              settings={audioSettings}
+              onToggleMute={toggleMute}
+              onMusicVolume={setMusicVolume}
+              onEffectsVolume={setEffectsVolume}
+            />
             <div className="overlay-actions">
               <button className="primary" onClick={resume}>Continue</button>
               <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Title screen'}</button>

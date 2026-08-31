@@ -785,3 +785,44 @@ Scope: second bounded overnight milestone; local Level 10 duel integration only.
 ## Exact next milestone
 
 Implement the original adaptive audio foundation and defensive browser-unlock lifecycle as an isolated local milestone: separate persistent Music and Effects settings, deterministic procedural exploration/puzzle/Warden/victory score states, voice-limited SFX buses, and tests. Preserve the newly verified duel logic and postpone Chronicle/save v5 presentation until the audio foundation is independently green.
+
+---
+
+# Stage I finale — original adaptive audio first pass
+
+Updated: 2026-09-01 03:18 Asia/Dubai
+Scope: third bounded overnight milestone; local audio foundation and controls only. Levels 1-10, campaign save v4, and the public GitHub Pages game remain untouched.
+
+## Completed milestone
+
+- Replaced the single master tone output with independently controlled Music and Effects buses, a conservative master level, dynamics limiting, bounded active voices, smooth parameter changes, and defensive context creation, resume, teardown, and failure handling.
+- Added dedicated versioned local audio preferences under `eotvk-audio-v1`. First run stays muted; mute, Music level, and Effects level survive reload; corrupt or unavailable storage fails safely without changing campaign progress.
+- Added an original deterministic procedural score authored entirely in local code. Stable level identity seeds distinct title, exploration, puzzle-tension, low-health danger, three Warden phases, restoration/victory, and death profiles. Pause, loading, and error states fade and stop active music rather than leaving old motifs sounding.
+- Expanded the local synthesized effects vocabulary for footsteps, jumps, landings, sword swings, impacts, blocks, parries, heavy breaks, digging, Oathbind and release, enemy warnings, sand waves, damage, death, gates, restoration, completion, and menus. Existing gameplay geometry and mechanics were not changed.
+- Added persistent Soundscape controls to the title and pause screens while retaining the HUD mute control. Both sliders expose visible percentages and accessible names; mute exposes pressed state; phone targets are enlarged without obscuring the approved artwork or game controls.
+- Replaced the anonymous one-shot unlock with removable pointer and keyboard gesture handling, updates the adaptive score from the established animation loop in every presentation state, and closes all voices and the audio context when the engine is destroyed.
+
+## Validation evidence
+
+- Complete automated suite: **208 tests across 27 files passed**. New deterministic coverage includes settings corruption and storage failure, finite clamping and round trips, score-state selection and stable note generation, unavailable Web Audio, separate bus changes, muted-first scheduling, voice bounds, pause fade/stop, resume, and cleanup.
+- Production build: **57 modules transformed**; all ten production chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Browser proof covered 1440x900 desktop, 844x390 landscape phone, and 390x844 portrait phone. Title and pause Soundscape panels remained readable; gameplay HUD, canvas, and touch controls stayed visible.
+- A real browser gesture changed Music from 55% to 25% and Effects from 70% to 40%; reload restored those exact independent values. Mute also survived reload. The preview was returned to muted 55% / 70% defaults afterward.
+- A final fresh isolated load reported no browser errors or warnings and displayed muted-first state. This confirms the browser autoplay boundary without forcing sound before a user gesture.
+- Audio provenance: every note and effect is synthesized locally through the Web Audio API from original source code in this repository. No audio files, samples, downloads, external generators, paid APIs, or third-party copyrighted assets were used.
+
+## Agent findings accepted or rejected
+
+- Accepted the settings agent's isolated v1 persistence module and its eight focused tests after reviewing every branch and failure path.
+- Accepted the presentation auditor's four findings: active motifs originally survived silent profile changes; coarse touch targets were too small; the HUD mute lacked pressed state; and the audio-scene phase set was recreated every frame. All four were corrected and the silence transition gained a direct regression.
+- Rejected no audit finding in this milestone.
+
+## Remaining quality gaps
+
+- This is a professional synthesized first pass, not final studio recording, orchestration, or mastering. Automated output, routing, persistence, and state transitions are verified; final tonal taste, fatigue, device-speaker balance, and the 90-120 second duel mix still require a deliberate human listening and balance session.
+- The Stage I Chronicle, player-name capture, truthful cross-session statistics, rank policy, and final cinematic completion sequence remain intentionally separate from this audio milestone.
+
+## Exact next milestone
+
+Extend the versioned campaign save with truthful Stage I run and Warden statistics, including explicit unknowns for migrated saves. Then build the local Chronicle completion sequence, validated player-name prompt, transparent rank calculation, and non-functional Stage II indication without changing Levels 1-9 or publishing anything.
