@@ -23,9 +23,9 @@ describe('Eclipse of the Veiled Kingdom', () => {
     });
   });
 
-  it('maps both Space and Up to jump, while W remains climb', () => {
+  it('maps Space to jump, while W and Up both climb', () => {
     expect(KEY_ACTIONS.Space).toBe('jump');
-    expect(KEY_ACTIONS.ArrowUp).toBe('jump');
+    expect(KEY_ACTIONS.ArrowUp).toBe('climb');
     expect(KEY_ACTIONS.KeyW).toBe('climb');
   });
 

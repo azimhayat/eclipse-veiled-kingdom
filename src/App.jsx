@@ -485,8 +485,8 @@ export default function App() {
             <h2>How to play</h2>
             <div className="help-grid">
               <div><span>Move</span><kbd>A / D · ← / →</kbd></div>
-              <div><span>Jump</span><kbd>SPACE · ↑</kbd></div>
-              <div><span>Climb wall</span><kbd>W + toward</kbd></div>
+              <div><span>Jump</span><kbd>SPACE</kbd></div>
+              <div><span>Climb wall</span><kbd>W / ↑ + toward</kbd></div>
               <div><span>Drop through</span><kbd>S · ↓</kbd></div>
               <div><span>Strike</span><kbd>J · X</kbd></div>
               <div><span>Dig sand</span><kbd>K · SHIFT</kbd></div>

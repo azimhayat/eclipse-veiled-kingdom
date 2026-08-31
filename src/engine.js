@@ -80,9 +80,9 @@ class ArrayLevelRepository {
 export const KEY_ACTIONS = {
   KeyA: 'left', ArrowLeft: 'left',
   KeyD: 'right', ArrowRight: 'right',
-  KeyW: 'climb',
+  KeyW: 'climb', ArrowUp: 'climb',
   KeyS: 'down', ArrowDown: 'down',
-  Space: 'jump', ArrowUp: 'jump',
+  Space: 'jump',
   KeyJ: 'attack', KeyX: 'attack',
   KeyK: 'dig', ShiftLeft: 'dig', ShiftRight: 'dig',
 };
@@ -149,7 +149,7 @@ export class GameEngine {
     this.loop = this.loop.bind(this);
     this.animationId = requestAnimationFrame(this.loop);
     this.publishDebugApi();
-    this.setHint('Move with A / D · Jump with SPACE or ↑');
+    this.setHint('Move with A / D · Jump with SPACE · Climb with W or ↑');
     this.scheduleNextLevel();
   }
 

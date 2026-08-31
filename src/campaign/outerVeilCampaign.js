@@ -54,7 +54,7 @@ const levelLoaders = Object.freeze({
       mechanic: 'Recover the three buried memories and reopen the first Crown Path.',
       targetTime: { parSeconds: 240, masterySeconds: 150 },
       gameplay: {
-        openingHint: 'Move with A / D · Jump with SPACE or ↑',
+        openingHint: 'Move with A / D · Jump with SPACE · Climb with W or ↑',
         enemyRoster: ['grunt'],
         tutorialCues: [
           { minX: 9, maxX: 14, text: 'SAFE LESSON · hold jump for height; release for a short hop' },

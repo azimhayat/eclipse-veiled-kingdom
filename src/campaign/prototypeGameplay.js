@@ -1,6 +1,6 @@
 const PROTOTYPE_GAMEPLAY = Object.freeze({
   'outer-veil': Object.freeze({
-    openingHint: 'Move with A / D · Jump with SPACE or ↑',
+    openingHint: 'Move with A / D · Jump with SPACE · Climb with W or ↑',
     enemyRoster: Object.freeze(['grunt']),
     tutorialCues: Object.freeze([
       Object.freeze({ minX: 9, maxX: 14, text: 'Hold jump for height · release for a short hop' }),
@@ -34,4 +34,3 @@ export function attachPrototypeGameplay(level) {
   if (!gameplay) throw new Error(`Missing prototype gameplay metadata for ${level?.levelKey || 'unknown level'}`);
   return { ...level, gameplay };
 }
-
