@@ -107,6 +107,11 @@ export function cloneObjective(objective) {
       clone.skycut.gripJumpRecorded = false;
       clone.skycut.landed = false;
       clone.skycut.completed = false;
+      if (clone.skycut.seesaw) {
+        clone.skycut.seesaw.angle = 0;
+        clone.skycut.seesaw.balanceSeconds = 0;
+        clone.skycut.seesaw.balanced = false;
+      }
       if (clone.skycut.tether) clone.skycut.tether.cut = false;
     }
     for (const sail of clone.windSails || []) sail.unfurled = false;

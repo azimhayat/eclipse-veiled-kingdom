@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { drawLevelMechanics } from './render.js';
 import { TILE } from './levels/constants.js';
 import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
+import { createParachuteChoir } from './levels/outerVeil/parachuteChoir.js';
 
 function recordingContext() {
   const calls = [];
@@ -92,5 +93,25 @@ describe('Pilgrim bell puzzle rendering', () => {
       .filter((call) => call[0] === 'fillText')
       .map((call) => call[1]);
     expect(restoredLabels).not.toEqual(expect.arrayContaining(['DAWN', 'VEIL', 'SHELTER']));
+  });
+});
+
+describe('Parachute Choir skyboard rendering', () => {
+  it('rotates the six-tile beam around its fixed support and shows the balance marks', () => {
+    const level = createParachuteChoir();
+    level.objective.skycut.seesaw.angle = .1;
+    level.objective.skycut.seesaw.balanceSeconds = .4;
+    const ctx = recordingContext();
+
+    drawLevelMechanics(ctx, level, 8, false);
+
+    const seesaw = level.objective.skycut.seesaw;
+    const pivotIndex = ctx.calls.findIndex((call) => call[0] === 'translate'
+      && call[1] === seesaw.pivotX && call[2] === seesaw.pivotY);
+    const rotationIndex = ctx.calls.findIndex((call, index) => index > pivotIndex
+      && call[0] === 'rotate' && call[1] === seesaw.angle);
+    expect(pivotIndex).toBeGreaterThan(-1);
+    expect(rotationIndex).toBeGreaterThan(pivotIndex);
+    expect(ctx.calls.filter((call) => call[0] === 'fillRect' && call[3] === 8 && call[4] === 8)).toHaveLength(3);
   });
 });

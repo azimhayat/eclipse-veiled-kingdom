@@ -1113,6 +1113,7 @@ function validateParachuteChoir(level, issues) {
 
   const skycut = objective.skycut;
   const tether = skycut?.tether;
+  const seesaw = skycut?.seesaw;
   if (!skycut || ![-1, 1].includes(skycut.requiredWallSide)
     || skycut.gripJumpRecorded !== false || skycut.landed !== false || skycut.completed !== false
     || !skycut.landing || !Number.isFinite(skycut.landing.minTx) || !Number.isFinite(skycut.landing.maxTx)
@@ -1121,6 +1122,25 @@ function validateParachuteChoir(level, issues) {
     || !Number.isFinite(tether.baseTy) || !Number.isFinite(tether.strikeRadius)
     || tether.strikeRadius < TILE || tether.strikeRadius > TILE * 3 || tether.cut !== false) {
     addIssue(issues, 'objective.skycut', 'invalid_raid_skycut', 'must define one pristine, broad Grip landing and strikeable command tether');
+  }
+  if (!seesaw || seesaw.id !== 'cantor-skyboard'
+    || !Number.isFinite(seesaw.x) || !Number.isFinite(seesaw.y)
+    || !Number.isFinite(seesaw.w) || !Number.isFinite(seesaw.h)
+    || seesaw.w !== 6 * TILE || seesaw.h < 10 || seesaw.h > 20
+    || seesaw.pivotX !== seesaw.x + seesaw.w / 2 || seesaw.pivotY !== seesaw.y
+    || seesaw.angle !== 0 || !Number.isFinite(seesaw.maxAngle)
+    || seesaw.maxAngle < .16 || seesaw.maxAngle > .26
+    || !Number.isFinite(seesaw.windAmplitude) || seesaw.windAmplitude < .02 || seesaw.windAmplitude > .06
+    || !Number.isFinite(seesaw.windSpeed) || seesaw.windSpeed < 1.5 || seesaw.windSpeed > 3.5
+    || !Number.isFinite(seesaw.stabilityAngle)
+    || seesaw.stabilityAngle < .015 || seesaw.stabilityAngle > .04
+    || seesaw.balanceSeconds !== 0 || seesaw.balanced !== false
+    || !Number.isFinite(seesaw.requiredBalanceSeconds)
+    || seesaw.requiredBalanceSeconds < .8 || seesaw.requiredBalanceSeconds > 1.5
+    || !Number.isFinite(seesaw.centerTolerance)
+    || seesaw.centerTolerance < TILE * .4 || seesaw.centerTolerance > TILE
+    || level.map?.[24]?.slice(30, 36).some((tile) => tile !== Tile.AIR)) {
+    addIssue(issues, 'objective.skycut.seesaw', 'invalid_raid_seesaw', 'must define one pristine six-tile walkable balance board over clear authored cells');
   }
 
   const formationKeys = ['lesson', 'flank', 'chorus', 'finale', 'complete'];

@@ -1065,6 +1065,56 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
     }
 
     const skycut = objective.skycut;
+    const seesaw = skycut?.seesaw;
+    if (seesaw) {
+      const progress = Math.max(0, Math.min(1, seesaw.balanceSeconds / seesaw.requiredBalanceSeconds));
+      ctx.save();
+      ctx.translate(seesaw.pivotX, seesaw.pivotY);
+
+      // Keep the old gold-and-dark platform language while allowing the whole
+      // familiar beam to rotate around one small, readable fulcrum.
+      ctx.fillStyle = '#20283a';
+      ctx.strokeStyle = seesaw.balanced ? '#8ce8ff' : '#8c6e3d';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = seesaw.balanced ? '#8ce8ff' : '#dfbd69';
+      ctx.shadowBlur = seesaw.balanced ? 16 : 8;
+      ctx.beginPath();
+      ctx.moveTo(0, 8);
+      ctx.lineTo(-24, 42);
+      ctx.lineTo(24, 42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.rotate(seesaw.angle || 0);
+      for (let segment = 0; segment < seesaw.w / TILE; segment += 1) {
+        const x = -seesaw.w / 2 + segment * TILE;
+        ctx.fillStyle = '#34405b';
+        roundRect(ctx, x, 4, TILE, 13, 5);
+        ctx.fill();
+        ctx.fillStyle = seesaw.balanced ? '#8ce8ff' : '#dfbd69';
+        roundRect(ctx, x, 3, TILE, 4, 3);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(3,6,14,.55)';
+        ctx.fillRect(x + 4, 12, TILE - 8, 5);
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = seesaw.balanced ? '#e5feff' : '#fff0b1';
+      for (const offset of [-18, 0, 18]) {
+        ctx.save();
+        ctx.translate(offset, -seesaw.h / 2 - 5);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-4, -4, 8, 8);
+        ctx.restore();
+      }
+      if (!seesaw.balanced && progress > 0) {
+        ctx.fillStyle = 'rgba(140,232,255,.9)';
+        ctx.fillRect(-seesaw.w * .16, -seesaw.h / 2 - 15, seesaw.w * .32 * progress, 4);
+      }
+      ctx.restore();
+    }
+
     if (skycut?.tether) {
       const tetherX = skycut.tether.tx * TILE;
       const tetherY = skycut.tether.baseTy * TILE - 78;

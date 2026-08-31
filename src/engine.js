@@ -229,6 +229,9 @@ export class GameEngine {
         activeIds: this.level.objective.roster.filter((entry) => entry.status === 'active').map((entry) => entry.id),
         defeatedIds: this.level.objective.roster.filter((entry) => entry.status === 'defeated').map((entry) => entry.id),
         gripJumpRecorded: Boolean(this.level.objective.skycut?.gripJumpRecorded),
+        seesawBalanced: Boolean(this.level.objective.skycut?.seesaw?.balanced),
+        seesawBalanceSeconds: this.level.objective.skycut?.seesaw?.balanceSeconds || 0,
+        seesawAngle: this.level.objective.skycut?.seesaw?.angle || 0,
         tetherCut: Boolean(this.level.objective.skycut?.tether?.cut),
         skyRestored: Boolean(this.level.objective.skyRestored),
         soldierStates: this.soldiers.map((soldier) => ({
@@ -665,6 +668,7 @@ export class GameEngine {
 
   updateLevelMechanics(dt) {
     if (this.level.objective?.type === 'warden-restoration') this.updateWardenObjective(dt);
+    if (this.level.objective?.type === 'parachute-choir-restoration') this.updateParachuteSeesaw(dt);
     const timedTeeth = this.level.objective?.type === 'timed-teeth-restoration'
       ? this.level.objective
       : null;
@@ -760,7 +764,8 @@ export class GameEngine {
       return;
     }
     if (objective?.type === 'parachute-choir-restoration') {
-      if (objective.phase === 'flank' && wallSide === objective.skycut?.requiredWallSide) {
+      if (objective.phase === 'flank' && objective.skycut?.seesaw?.balanced
+        && wallSide === objective.skycut?.requiredWallSide) {
         objective.skycut.gripJumpRecorded = true;
       }
       return;
@@ -1013,6 +1018,23 @@ export class GameEngine {
           p.grounded = true;
           groundCell = { tx: -1, ty: -1, tile: Tile.ONEWAY };
           break;
+        }
+      }
+
+      const seesaw = this.level.objective?.type === 'parachute-choir-restoration'
+        ? this.level.objective.skycut?.seesaw
+        : null;
+      if (!p.grounded && seesaw && p.dropTimer <= 0) {
+        const playerCenterX = p.x + p.w / 2;
+        const horizontal = p.x + p.w > seesaw.x + 2 && p.x < seesaw.x + seesaw.w - 2;
+        const sampleX = clamp(playerCenterX, seesaw.x, seesaw.x + seesaw.w);
+        const surfaceY = seesaw.pivotY + Math.tan(seesaw.angle || 0) * (sampleX - seesaw.pivotX);
+        const crossedTop = oldBottom <= surfaceY + 12 && p.y + p.h >= surfaceY;
+        if (horizontal && crossedTop) {
+          p.y = surfaceY - p.h;
+          p.vy = 0;
+          p.grounded = true;
+          groundCell = { tx: -1, ty: -1, tile: Tile.ONEWAY };
         }
       }
     }
@@ -1285,9 +1307,9 @@ export class GameEngine {
     if (this.level.objective?.type === 'parachute-choir-restoration') {
       const objective = this.level.objective;
       const phaseText = {
-        lesson: 'READ THE FIRST VOICE',
-        flank: 'CUT THE COMMAND TETHER',
-        chorus: 'BREAK THE MOVING PAIR',
+        lesson: 'BREAK THE OPENING DUET',
+        flank: objective.skycut?.seesaw?.balanced ? 'CUT THE COMMAND TETHER' : 'BALANCE THE SKYBOARD',
+        chorus: 'BREAK THE HIGH ANSWER',
         finale: 'SILENCE THE FALLING CADENCE',
         complete: 'THE SKY SINGS FOR THE LIVING',
       };
@@ -2080,6 +2102,53 @@ export class GameEngine {
       const entry = objective.roster.find((item) => item.id === rosterId);
       if (entry?.status === 'queued' && elapsed >= entry.delay) this.spawnParachuteRaider(entry);
     }
+  }
+
+  updateParachuteSeesaw(dt = 0) {
+    const objective = this.level.objective;
+    const seesaw = objective?.type === 'parachute-choir-restoration'
+      ? objective.skycut?.seesaw
+      : null;
+    if (!seesaw) return false;
+
+    if (seesaw.balanced) {
+      seesaw.angle = approach(seesaw.angle || 0, 0, 1.8 * dt);
+      return true;
+    }
+
+    const playerCenterX = this.player.x + this.player.w / 2;
+    const feetY = this.player.y + this.player.h;
+    const sampleX = clamp(playerCenterX, seesaw.x, seesaw.x + seesaw.w);
+    const surfaceY = seesaw.pivotY + Math.tan(seesaw.angle || 0) * (sampleX - seesaw.pivotX);
+    const onBoard = this.player.grounded
+      && playerCenterX >= seesaw.x && playerCenterX <= seesaw.x + seesaw.w
+      && Math.abs(feetY - surfaceY) <= 14;
+    const offset = onBoard ? (playerCenterX - seesaw.pivotX) / (seesaw.w / 2) : 0;
+    const windAngle = objective.phase === 'flank'
+      ? Math.sin(objective.encounterClock * seesaw.windSpeed) * seesaw.windAmplitude
+      : 0;
+    const targetAngle = clamp(
+      clamp(offset, -1, 1) * seesaw.maxAngle + windAngle,
+      -seesaw.maxAngle,
+      seesaw.maxAngle,
+    );
+    seesaw.angle = approach(seesaw.angle || 0, targetAngle, .92 * dt);
+
+    const centred = objective.phase === 'flank' && onBoard
+      && Math.abs(playerCenterX - seesaw.pivotX) <= seesaw.centerTolerance
+      && Math.abs(seesaw.angle) <= seesaw.stabilityAngle;
+    seesaw.balanceSeconds = centred
+      ? Math.min(seesaw.requiredBalanceSeconds, seesaw.balanceSeconds + dt)
+      : Math.max(0, seesaw.balanceSeconds - dt * 2.2);
+    if (seesaw.balanceSeconds < seesaw.requiredBalanceSeconds) return false;
+
+    seesaw.balanced = true;
+    seesaw.angle = 0;
+    this.audio.play('relic');
+    this.burst(seesaw.pivotX, seesaw.pivotY - 4, '#8ce8ff', 20, 150);
+    this.setHint("SKYBOARD BALANCED · hold RIGHT + UP and JUMP from the pillar, then land beneath the tether.", 5);
+    this.pushHud(true);
+    return true;
   }
 
   raidAttackBox(soldier) {

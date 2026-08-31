@@ -39,9 +39,11 @@ export function createParachuteChoir() {
   // The first lesson remains deliberately flat and retreatable. The raid then
   // travels east across one uninterrupted recovery road.
 
-  // The single combination pillar turns Pilgrim's Grip into the safe setup
-  // for Dawnstroke: spring west, land broadly, then sever the command line.
-  fill(map, 30, 24, 6, 1, Tile.ONEWAY);
+  // Aren's weight now wakes a six-tile skyboard. He must steady its gold
+  // centre before the single combination pillar can turn Pilgrim's Grip into
+  // the safe setup for Dawnstroke: spring west, land broadly, then sever the
+  // command line. The skyboard itself is resolved as a sloped one-way surface
+  // by the engine, so these cells deliberately remain air.
   fill(map, 36, 23, 1, 3, Tile.STONE);
   fill(map, 37, 24, 7, 1, Tile.ONEWAY);
 
@@ -68,12 +70,12 @@ export function createParachuteChoir() {
       dropTx: 20, shipId: 'low-cantor', delay: .9, telegraphSeconds: 1.08, recoverySeconds: 1.05,
     }),
     raider({
-      id: 'low-tenor', label: 'Low Tenor', stageId: 'chorus', kind: 'spear', hp: 2,
-      dropTx: 51, shipId: 'low-cantor', delay: .9, telegraphSeconds: .88, recoverySeconds: .96,
+      id: 'low-tenor', label: 'Low Tenor', stageId: 'lesson', kind: 'spear', hp: 2,
+      dropTx: 24, shipId: 'high-cantor', delay: 1.8, telegraphSeconds: .88, recoverySeconds: .96,
     }),
     raider({
       id: 'high-answer', label: 'High Answer', stageId: 'chorus', kind: 'grunt', hp: 2,
-      dropTx: 61, shipId: 'far-cantor', delay: 1.8, telegraphSeconds: .82, recoverySeconds: .9,
+      dropTx: 61, shipId: 'far-cantor', delay: .9, telegraphSeconds: .82, recoverySeconds: .9,
     }),
     raider({
       id: 'ground-bass', label: 'Ground Bass', stageId: 'finale', kind: 'shield',
@@ -124,8 +126,8 @@ export function createParachuteChoir() {
       phase: 'lesson',
       encounterClock: 0,
       stages: [
-        stage('lesson', 'The First Voice', 13, ['first-voice']),
-        stage('chorus', 'The Moving Pair', 44, ['low-tenor', 'high-answer']),
+        stage('lesson', 'The Opening Duet', 13, ['first-voice', 'low-tenor']),
+        stage('chorus', 'The High Answer', 44, ['high-answer']),
         stage('finale', 'The Falling Cadence', 63, ['ground-bass', 'falling-cadence']),
       ],
       roster,
@@ -136,6 +138,24 @@ export function createParachuteChoir() {
         gripJumpRecorded: false,
         landed: false,
         landing: { minTx: 30, maxTx: 36, feetTy: 24 },
+        seesaw: {
+          id: 'cantor-skyboard',
+          x: 30 * TILE,
+          y: 24 * TILE,
+          w: 6 * TILE,
+          h: 14,
+          pivotX: 33 * TILE,
+          pivotY: 24 * TILE,
+          angle: 0,
+          maxAngle: .22,
+          windAmplitude: .035,
+          windSpeed: 2.4,
+          stabilityAngle: .026,
+          balanceSeconds: 0,
+          requiredBalanceSeconds: 1.1,
+          centerTolerance: .55 * TILE,
+          balanced: false,
+        },
         tether: { id: 'cantor-command-line', tx: 33, baseTy: 24, strikeRadius: 2.5 * TILE, cut: false },
         completed: false,
       },
@@ -175,9 +195,9 @@ export function createParachuteChoir() {
       })),
       skyRestored: false,
       phaseHints: {
-        lesson: 'SAFE LESSON · let the amber tell finish, then STRIKE during blue recovery',
-        flank: "SKYCUT · spring from the gold pillar with Pilgrim's Grip, then STRIKE the command tether",
-        chorus: 'MOVING PAIR · cross with RIGHT + UP + JUMP, then answer each landing while travelling east',
+        lesson: 'OPENING DUET · defeat both paratroopers; STRIKE only after each amber tell turns blue',
+        flank: "SKYBOARD · counter the wind, hold the gold centre steady, then spring and STRIKE the tether",
+        chorus: 'HIGH ANSWER · cross with RIGHT + UP + JUMP and break the lone travelling voice',
         finale: 'FALLING CADENCE · two final voices descend once; break the formation, not your rhythm',
         complete: 'THE SKY-SAILS SING · follow the restored wind through the eastern gate',
       },
@@ -192,9 +212,9 @@ export function createParachuteChoir() {
       enemyRoster: ['grunt', 'spear', 'shield'],
       cameraHorizontalLead: 70,
       tutorialCues: [
-        { minX: 10, maxX: 27, text: 'SAFE LESSON · one slow attacker, one clear amber tell, one blue recovery' },
-        { minX: 27, maxX: 43, text: "COMBINATION · wall spring from the gold pillar, land high, then STRIKE the tether" },
-        { minX: 43, maxX: 63, text: 'DEVELOPMENT · fight while travelling; every raider is authored and finite' },
+        { minX: 10, maxX: 27, text: 'OPENING DUET · two finite paratroopers, clear amber tells, safe blue recoveries' },
+        { minX: 27, maxX: 43, text: "COMBINATION · counter the swinging seesaw, wall spring, then STRIKE the tether" },
+        { minX: 43, maxX: 63, text: 'HIGH ANSWER · break the lone travelling voice while crossing east' },
         { minX: 63, maxX: 85, text: 'MASTERY · read the staggered descent and break its voices in your own order' },
       ],
       deterministicRoute: [
