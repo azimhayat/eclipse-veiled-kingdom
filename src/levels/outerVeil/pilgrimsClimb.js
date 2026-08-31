@@ -35,11 +35,11 @@ export function createPilgrimsClimb() {
   fill(map, 26, 11, 2, 1, Tile.ONEWAY);
   fill(map, 28, 9, 14, 1, Tile.ONEWAY);
 
-  // The old rope gallery remains a safe transition landing. The actual rope
-  // brace now waits at the summit, where it cannot be skipped and never asks
-  // a player who reached the bells to backtrack through the full climb.
+  // Memory Carve is used once from a safe upper perch. The sand plug is not
+  // load-bearing; opening it cannot remove the catch beneath Aren.
   fill(map, 40, 3, 1, 6, Tile.STONE);
   fill(map, 44, 3, 1, 3, Tile.STONE);
+  put(map, 44, 6, Tile.SAND);
   fill(map, 44, 7, 1, 2, Tile.STONE);
   fill(map, 41, 7, 3, 1, Tile.ONEWAY);
   fill(map, 45, 7, 6, 1, Tile.ONEWAY);
@@ -59,8 +59,7 @@ export function createPilgrimsClimb() {
   fill(map, 73, 5, 1, 10, Tile.STONE);
   fill(map, 73, 4, 10, 1, Tile.ONEWAY);
   fill(map, 83, 4, 6, 1, Tile.ONEWAY);
-  put(map, 82, 3, Tile.SAND);
-  fill(map, 83, 1, 1, 3, Tile.GATE);
+  fill(map, 82, 1, 1, 3, Tile.GATE);
 
   const collapseSections = [
     collapseLedge('lower-breath', 69, 13),
@@ -83,7 +82,7 @@ export function createPilgrimsClimb() {
     relics: [],
     block: { x: 6 * TILE, y: 26 * TILE - 40, w: 40, h: 40, disabled: true },
     plate: { x: 7 * TILE, y: 26 * TILE - 10, w: TILE, h: 10, disabled: true },
-    gateColumn: 83,
+    gateColumn: 82,
     door: { x: 85 * TILE, y: TILE, w: 96, h: 160 },
     ships: [],
     movers: [],
@@ -124,11 +123,11 @@ export function createPilgrimsClimb() {
       },
       memoryBrace: {
         id: 'silenced-bell-rope',
-        tx: 82,
-        ty: 3,
+        tx: 44,
+        ty: 6,
         role: 'wall-cling-carve',
         revealed: false,
-        safeLanding: { minTx: 73, maxTx: 82, feetTy: 4 },
+        safeLanding: { minTx: 41, maxTx: 50, feetTy: 7 },
         revealText: 'The cut rope remembers the pilgrim vow: leave at DAWN, cross beneath the VEIL, return to SHELTER.',
       },
       collapse: {
@@ -166,7 +165,7 @@ export function createPilgrimsClimb() {
       phaseHints: {
         learn: "PILGRIM'S GRIP · jump into the right wall · hold RIGHT + UP to climb · release UP and hold JUMP",
         alternate: 'CHANGE WALLS · the stone ends on purpose; spring right, then left',
-        carve: 'FREE THE BELL ROPE · finish the ascent, then DIG the gold sand brace beside Dawn',
+        carve: 'FREE THE BELL ROPE · climb the short chimney and Memory Carve its only sand brace',
         collapse: 'OUTCLIMB THE FALL · gold cracks warn each optional rest before it drops',
         ring: 'REMEMBER THE JOURNEY · the carved vow moves from departure, through eclipse, to refuge — position is a false guide',
         complete: 'THE BELL ANSWERS · cross the opened chamber while its light holds',
@@ -184,18 +183,18 @@ export function createPilgrimsClimb() {
       tutorialCues: [
         { minX: 10, maxX: 24, text: 'SAFE LESSON · jump into wall; hold toward + UP; release UP and hold JUMP' },
         { minX: 24, maxX: 41, text: 'CONTROLLED TEST · alternate walls; every permanent ledge catches a miss' },
-        { minX: 41, maxX: 73, text: 'MASTERY · optional rests crack for 1.1 seconds; the tower walls never fall' },
-        { minX: 73, maxX: 83, text: 'COMBINATION · DIG the gold rope brace beside Dawn; its vow gives the chime order' },
+        { minX: 39, maxX: 51, text: 'COMBINATION · climb to the lone sand brace, then press DIG from the safe perch' },
+        { minX: 61, maxX: 82, text: 'MASTERY · optional rests crack for 1.1 seconds; the tower walls never fall' },
       ],
       deterministicRoute: [
         'lesson-right-wall',
         'controlled-right-wall',
         'controlled-left-wall',
+        'silenced-bell-rope',
         'lower-breath',
         'second-breath',
         'third-breath',
         'last-breath',
-        'silenced-bell-rope',
         'dawn',
         'veil',
         'shelter',

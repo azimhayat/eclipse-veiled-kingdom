@@ -722,10 +722,7 @@ export class GameEngine {
 
   armBellTowerCollapseLedge() {
     const objective = this.level.objective;
-    const climbingMastery = objective?.type === 'bell-tower-restoration'
-      && objective.alternatingComplete
-      && ['carve', 'collapse'].includes(objective.phase);
-    if (!climbingMastery || !this.player.grounded) return;
+    if (objective?.type !== 'bell-tower-restoration' || objective.phase !== 'collapse' || !this.player.grounded) return;
     const feet = this.player.y + this.player.h;
     for (const section of objective.collapse?.sections || []) {
       if (section.state !== 'stable') continue;
@@ -1386,7 +1383,7 @@ export class GameEngine {
       objective.phase = 'collapse';
       this.burst(tx * TILE + TILE / 2, ty * TILE + TILE / 2, '#80e7ff', 24, 170);
       this.audio.play('relic');
-      this.setHint(`${brace.revealText} · the summit chimes now remember`, 5.5);
+      this.setHint(`${brace.revealText} · descend the broken spiral to the final climb`, 5.5);
       this.pushHud(true);
       return true;
     }
@@ -2676,11 +2673,33 @@ export class GameEngine {
 
   strikePilgrimBell() {
     const objective = this.level.objective;
-    if (objective?.type !== 'bell-tower-restoration' || objective.complete || objective.phase !== 'ring') return false;
+    if (objective?.type !== 'bell-tower-restoration' || objective.complete) return false;
     const bell = objective.bell;
     const puzzle = bell.puzzle;
     const playerX = this.player.x + this.player.w / 2;
     const playerY = this.player.y + this.player.h / 2;
+    if (objective.phase !== 'ring') {
+      const centerTx = playerX / TILE;
+      const feetTy = (this.player.y + this.player.h) / TILE;
+      const exit = objective.masteryExit;
+      const canResumeAtBells = objective.alternatingComplete
+        && ['carve', 'collapse'].includes(objective.phase)
+        && centerTx >= exit.minCenterTx
+        && feetTy <= exit.maxFeetTy + .1;
+      if (!canResumeAtBells) return false;
+
+      const brace = objective.memoryBrace;
+      if (!brace.revealed) {
+        brace.revealed = true;
+        if (this.level.map[brace.ty][brace.tx] === Tile.SAND) {
+          this.level.map[brace.ty][brace.tx] = Tile.AIR;
+          restampCell(this.level, this.bank.get(levelCacheKey(this.level)), brace.tx, brace.ty);
+        }
+      }
+      objective.masteryReached = true;
+      objective.phase = 'ring';
+      this.pushHud(true);
+    }
     const chime = puzzle?.chimes
       ?.map((candidate) => ({
         ...candidate,

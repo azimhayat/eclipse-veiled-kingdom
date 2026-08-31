@@ -77,11 +77,6 @@ describe('Civic Promise restoration rendering', () => {
 describe('Pilgrim bell puzzle rendering', () => {
   it('renders three distinct clue-labelled chimes before the tower is restored', () => {
     const level = createPilgrimsClimb();
-    const sealedCtx = recordingContext();
-    drawLevelMechanics(sealedCtx, level, 7, false);
-    expect(sealedCtx.calls.filter((call) => call[0] === 'fillText')).toHaveLength(0);
-
-    level.objective.memoryBrace.revealed = true;
     const ctx = recordingContext();
     drawLevelMechanics(ctx, level, 8, false);
 

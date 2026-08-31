@@ -562,3 +562,35 @@ Scope: local test and evidence milestone only; public GitHub Pages remains untou
 ## Exact next milestone
 
 If the user reports Chapter 6 summit success, add the real Chapter 5 → Chapter 6 completion and lazy-transition proof, then begin the bounded Chapter 7 quality pass. Keep all work local and leave the public build untouched.
+
+---
+
+# Reviewed correction — restore Level 6 layout, fix STRIKE only
+
+Updated: 2026-08-31 23:45 Asia/Dubai
+Scope: user explicitly preferred the prior Chapter 6 layout and requested only the broken bell STRIKE interaction be changed.
+
+## Completed milestone
+
+- Reverted the rejected summit-brace redesign completely: original geometry, gate column, rope-gallery sand brace, climb phases, collapse timing, route data, tutorial copy, and always-visible three-chime presentation are restored.
+- Kept one narrow behavioral fix. If Aren reaches the summit chimes while the objective still says **FREE THE BELL ROPE**, STRIKE now resumes the bell puzzle immediately instead of doing nothing or demanding a long backtrack.
+- The same first STRIKE counts against the chime beneath Aren. Standing under Dawn and pressing STRIKE therefore records **Dawn 1/3** immediately; the player does not need to press twice.
+- The fallback is tightly gated to a completed alternating-wall lesson and the authored summit zone. STRIKE cannot skip the climb, activate from an earlier platform, or open the gate.
+- The optional earlier Memory Carve route remains valid and unchanged for players who follow the original clue path.
+
+## Validation evidence
+
+- Focused Chapter 6, schema, and rendering suites: **22 tests across 3 files passed**.
+- Complete automated suite: **174 tests across 23 files passed**.
+- Production build: **54 modules transformed**; Chapter 6 remains independently lazy-loaded.
+- The new regression reproduces the exact reported state—`phase: carve`, rope brace missed, Aren under Dawn—and proves one STRIKE activates the ring phase, records Dawn, leaves the gate closed, and keeps the remaining sequence playable.
+- Fresh default, 844×390 landscape, and 390×844 portrait loads remained readable; the viewport override was reset and the final hard reload produced no browser errors.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## User finding accepted
+
+- Accepted: the previous level presentation and geometry were better. Moving the rope brace into the summit solved the symptom by redesigning too much. The final correction preserves that preferred level and repairs only STRIKE at the bells.
+
+## Exact next milestone
+
+Have the user replay to the bells and press STRIKE under Dawn. If it records `CHIME ORDER 1/3`, complete Veil then Shelter and accept Chapter 6. Otherwise fix only the newly reproduced STRIKE behavior. Keep all work local.

@@ -215,29 +215,22 @@ describe("Outer Veil Level 6 production preview", () => {
     expect(level.objective).toMatchObject({ alternatingComplete: true, phase: 'carve', wallJumps: [1, -1] });
   });
 
-  it('puts the one non-structural brace at the summit so the bell chamber never requires backtracking', () => {
+  it('opens the one non-structural brace and starts the finite mastery climb', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createPilgrimsClimb(), identity));
     const engine = engineHarness(level);
     completeToCarve(engine);
     carveBrace(engine);
     const brace = level.objective.memoryBrace;
-    expect(brace).toMatchObject({ tx: 82, ty: 3, safeLanding: { minTx: 73, maxTx: 82, feetTy: 4 } });
-    expect(brace.tx).toBeGreaterThanOrEqual(level.objective.masteryExit.minCenterTx);
-    expect(brace.tx).toBeLessThan(level.gateColumn);
     expect(brace.revealed).toBe(true);
     expect(level.map[brace.ty][brace.tx]).toBe(Tile.AIR);
     expect(level.objective.phase).toBe('collapse');
-    expect(engine.setHint).toHaveBeenCalledWith(expect.stringContaining('summit chimes now remember'), 5.5);
-
-    GameEngine.prototype.updateBellTowerObjective.call(engine);
-    expect(level.objective).toMatchObject({ masteryReached: true, phase: 'ring' });
+    expect(engine.setHint).toHaveBeenCalledWith(expect.stringContaining('descend the broken spiral'), 5.5);
   });
 
-  it('arms mastery ledges before the summit carve, keeps warning collidable, then reforms once', () => {
+  it('arms one grouped ledge, keeps it collidable through warning, then reforms it once', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createPilgrimsClimb(), identity));
     const engine = engineHarness(level);
-    level.objective.alternatingComplete = true;
-    level.objective.phase = 'carve';
+    level.objective.phase = 'collapse';
     const section = level.objective.collapse.sections[0];
     engine.player.x = section.x + 8;
     engine.player.y = section.y - engine.player.h;
@@ -260,6 +253,9 @@ describe("Outer Veil Level 6 production preview", () => {
     const engine = engineHarness(level);
     completeToCarve(engine);
     carveBrace(engine);
+    engine.player.x = 74 * TILE;
+    engine.player.y = 3 * TILE - engine.player.h - 40;
+    engine.player.grounded = false;
     GameEngine.prototype.updateBellTowerObjective.call(engine);
     expect(level.objective).toMatchObject({ masteryReached: true, phase: 'ring', complete: false });
 
@@ -301,6 +297,29 @@ describe("Outer Veil Level 6 production preview", () => {
       campaignOrder: 6,
       objectiveType: 'bell-tower-restoration',
     });
+  });
+
+  it('lets STRIKE at the bells resume the puzzle immediately when the earlier rope brace was missed', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createPilgrimsClimb(), identity));
+    const engine = engineHarness(level);
+    completeToCarve(engine);
+    const brace = level.objective.memoryBrace;
+    expect(level.objective).toMatchObject({ phase: 'carve', alternatingComplete: true, masteryReached: false });
+    expect(brace.revealed).toBe(false);
+    expect(level.map[brace.ty][brace.tx]).toBe(Tile.SAND);
+
+    standByChime(engine, 'dawn');
+    expect(GameEngine.prototype.strikePilgrimBell.call(engine)).toBe(true);
+
+    expect(level.objective).toMatchObject({
+      phase: 'ring',
+      masteryReached: true,
+      memoryBrace: { revealed: true },
+      bell: { puzzle: { progress: ['dawn'], mistakes: 0 } },
+    });
+    expect(level.map[brace.ty][brace.tx]).toBe(Tile.AIR);
+    expect(level.objective.bell.puzzle.chimes.find((chime) => chime.id === 'dawn').struck).toBe(true);
+    expect(engine.callbacks.gate).not.toHaveBeenCalled();
   });
 
   it('scrambles physical placement and clears all bell-puzzle runtime state when cloned', () => {
@@ -386,11 +405,6 @@ describe("Outer Veil Level 6 production preview", () => {
     broken.abilityUnlock.key = 'ordinary-climb';
     broken.objective.lesson.minGripSeconds = .1;
     broken.objective.alternating.requiredJumpSides = [1, 1];
-    broken.map[3][82] = Tile.AIR;
-    broken.map[6][44] = Tile.SAND;
-    broken.objective.memoryBrace.tx = 44;
-    broken.objective.memoryBrace.ty = 6;
-    broken.objective.memoryBrace.safeLanding = { minTx: 41, maxTx: 50, feetTy: 7 };
     broken.map[6][43] = Tile.SAND;
     broken.map[broken.objective.collapse.sections[0].ty][broken.objective.collapse.sections[0].tx] = Tile.STONE;
     broken.map[broken.objective.masteryExit.maxFeetTy][broken.gateColumn] = Tile.AIR;
@@ -404,7 +418,6 @@ describe("Outer Veil Level 6 production preview", () => {
       'invalid_pilgrims_grip',
       'unsafe_grip_lesson',
       'invalid_wall_sequence',
-      'invalid_memory_brace',
       'ambiguous_memory_brace',
       'structural_collapse',
       'unsafe_summit',

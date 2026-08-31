@@ -764,7 +764,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
     }
 
     const bell = objective.bell;
-    if (!bell?.restored && objective.memoryBrace?.revealed) {
+    if (!bell?.restored) {
       for (const chime of bell?.puzzle?.chimes || []) {
         const x = chime.tx * TILE;
         const baseY = chime.baseTy * TILE;
