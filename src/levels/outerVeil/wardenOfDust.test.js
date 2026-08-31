@@ -9,6 +9,7 @@ import { GameEngine } from '../../engine.js';
 import { createLevels } from '../../levels.js';
 import { cloneLevel } from '../cloneLevel.js';
 import { TILE, Tile, VIEW_H, WORLD_H } from '../constants.js';
+import { completeWardenDuel, damageWardenDuelBoss } from '../../warden-duel-state.js';
 import { createWardenOfDust } from './wardenOfDust.js';
 
 const identity = {
@@ -58,11 +59,15 @@ function engineHarness(level) {
     audio: { play: vi.fn() },
     callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), death: vi.fn(), mode: vi.fn() },
     setHint: vi.fn(), pushHud: vi.fn(), burst: vi.fn(),
+    setInput: GameEngine.prototype.setInput,
     clearInputs: GameEngine.prototype.clearInputs,
     makePlayer: GameEngine.prototype.makePlayer,
+    restartWardenDuelAttempt: GameEngine.prototype.restartWardenDuelAttempt,
+    cancelLevelTransition: vi.fn(),
     tileAt: GameEngine.prototype.tileAt,
     isSolidTile: GameEngine.prototype.isSolidTile,
     solidProbe: GameEngine.prototype.solidProbe,
+    updatePlayer: GameEngine.prototype.updatePlayer,
     movePlayerHorizontal: GameEngine.prototype.movePlayerHorizontal,
     movePlayerVertical: GameEngine.prototype.movePlayerVertical,
     canMoveBlock: GameEngine.prototype.canMoveBlock,
@@ -77,14 +82,40 @@ function engineHarness(level) {
     toggleOathbind: GameEngine.prototype.toggleOathbind,
     applyWardenHand: GameEngine.prototype.applyWardenHand,
     updateWardenObjective: GameEngine.prototype.updateWardenObjective,
+    beginWardenDuel: GameEngine.prototype.beginWardenDuel,
+    updateWardenDuel: GameEngine.prototype.updateWardenDuel,
+    wardenDuelRecoverySeconds: GameEngine.prototype.wardenDuelRecoverySeconds,
+    wardenDuelTelegraphSeconds: GameEngine.prototype.wardenDuelTelegraphSeconds,
+    setWardenDuelSeal: GameEngine.prototype.setWardenDuelSeal,
+    resolveWardenDuelStrike: GameEngine.prototype.resolveWardenDuelStrike,
     strikeWardenBridle: GameEngine.prototype.strikeWardenBridle,
     completeWarden: GameEngine.prototype.completeWarden,
     damagePlayer: GameEngine.prototype.damagePlayer,
+    checkHazards: GameEngine.prototype.checkHazards,
+    resolveAttackHits: GameEngine.prototype.resolveAttackHits,
     strikePilgrimBell: vi.fn(),
     checkSanctumReturnFields: vi.fn(() => false),
     armCrumble: vi.fn(),
     armBellTowerCollapseLedge: vi.fn(),
   };
+}
+
+function beginDuelHarness() {
+  const level = cloneLevel(assertValidAuthoredLevel(createWardenOfDust(), identity));
+  const engine = engineHarness(level);
+  const objective = level.objective;
+  objective.phase = 'unbind';
+  objective.breath.firstBreathComplete = true;
+  objective.memorySeam.revealed = true;
+  objective.heartstone.bound = true;
+  objective.heartstone.locked = true;
+  objective.rememberedHand.raised = true;
+  objective.rememberedHand.reached = true;
+  objective.bridle.exposed = true;
+  objective.bridle.struck = true;
+  level.block.bound = true;
+  expect(GameEngine.prototype.beginWardenDuel.call(engine)).toBe(true);
+  return { level, engine, objective, duel: objective.duel };
 }
 
 describe('Outer Veil Level 10 production preview', () => {
@@ -110,7 +141,11 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(level.objective.warden).not.toHaveProperty('hp');
     expect(level.objective.duel).toMatchObject({
       phase: 'sealed', active: false, complete: false,
-      arena: { minTx: 46, maxTx: 67, feetTy: 20, checkpoint: { tx: 48, feetTy: 20, facing: 1 } },
+      arena: {
+        minTx: 46, maxTx: 67, feetTy: 20,
+        seal: { leftTx: 45, topTy: 12, bottomTy: 19 },
+        checkpoint: { tx: 48, feetTy: 20, facing: 1 },
+      },
       boss: { maxHp: 18, hp: 18, phase: 'guardian', action: 'idle' },
       player: { comboStep: 0, comboClock: 0, guarding: false, parryClock: 0 },
       attempt: { count: 0, elapsed: 0, damageTaken: 0 },
@@ -214,18 +249,26 @@ describe('Outer Veil Level 10 production preview', () => {
     objective.bridle.clock = objective.bridle.guardSeconds;
     expect(GameEngine.prototype.strikeWardenBridle.call(engine)).toBe(true);
     expect(objective).toMatchObject({
-      phase: 'first-path', complete: true, restored: true, completedAt: 132,
+      phase: 'duel', complete: false, restored: false,
       rememberedHand: { restored: true },
       bridle: { struck: true },
-      warden: { state: 'kneeling', kneeling: true, commandBroken: true },
+      warden: { state: 'commanded', kneeling: false, commandBroken: false },
       crownPath: { restored: true },
+      duel: {
+        phase: 'guardian', active: true, complete: false,
+        boss: { hp: 18, action: 'intro', invulnerable: true },
+        attempt: { count: 1, elapsed: 0, damageTaken: 0 },
+      },
     });
     expect(objective.restorationTiles.every(({ tx, ty }) => level.map[ty][tx] === Tile.GLOW)).toBe(true);
     for (let ty = objective.rememberedHand.rib.topTy + 1; ty <= objective.rememberedHand.rib.bottomTy; ty += 1) {
       expect(level.map[ty][objective.rememberedHand.rib.tx]).toBe(Tile.GLOW);
     }
-    expect(engine.gateOpen).toBe(true);
-    expect(engine.callbacks.gate).toHaveBeenCalledOnce();
+    expect(engine.checkpoint).toMatchObject({ kind: 'warden-duel', id: 'warden-duel', facing: 1 });
+    expect(engine.player).toMatchObject({ hp: 4, facing: 1, grounded: true });
+    expect(level.map.slice(12, 20).every((row) => row[45] === Tile.GATE)).toBe(true);
+    expect(engine.gateOpen).toBe(false);
+    expect(engine.callbacks.gate).not.toHaveBeenCalled();
   });
 
   it('makes the warned breath cost at most one health per active pulse and honors bound shelter', () => {
@@ -262,6 +305,178 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(objective.breath.strikeCount).toBe(1);
   });
 
+  it('teaches guard and parry, accepts a heavy break, and rewards the three-hit chain only in cyan recovery', () => {
+    const { engine, duel } = beginDuelHarness();
+    const boss = duel.boss;
+    const target = boss.target;
+    Object.assign(engine.player, {
+      x: target.x - 14,
+      y: target.y - 22,
+      grounded: true,
+      invuln: 0,
+    });
+
+    boss.action = 'active';
+    boss.actionClock = .2;
+    boss.attackKind = 'high';
+    boss.attackConsumed = false;
+    engine.input.down = true;
+    engine.input.pressed.add('down');
+    expect(engine.updateWardenDuel(.05)).toBe(true);
+    expect(engine.player.hp).toBe(4);
+    expect(boss).toMatchObject({ action: 'recovery', attackConsumed: true, invulnerable: false });
+    expect(boss.actionClock).toBeGreaterThan(duel.timing.guardianRecovery);
+
+    boss.action = 'telegraph';
+    boss.actionClock = .5;
+    boss.invulnerable = true;
+    engine.player.attackHits.clear();
+    expect(engine.resolveWardenDuelStrike()).toBe(true);
+    expect(boss).toMatchObject({ action: 'recovery', invulnerable: false });
+    expect(boss.hp).toBe(18);
+
+    engine.input.down = false;
+    for (const expectedHp of [17, 16, 14]) {
+      engine.player.attackHits.clear();
+      expect(engine.resolveWardenDuelStrike()).toBe(true);
+      expect(boss.hp).toBe(expectedHp);
+    }
+    expect(duel.player).toMatchObject({ comboStep: 0, comboClock: 0 });
+  });
+
+  it('keeps DOWN as guard on the one-way arena and fits three separate touch-like strikes inside every recovery', () => {
+    const { engine, duel } = beginDuelHarness();
+    const boss = duel.boss;
+    const target = boss.target;
+    Object.assign(engine.player, {
+      x: target.x - 14,
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      grounded: true,
+      invuln: 0,
+    });
+    boss.action = 'recovery';
+    boss.actionClock = duel.timing.eclipseRecovery;
+    boss.phase = 'eclipse';
+    boss.invulnerable = false;
+    duel.phase = 'eclipse';
+
+    engine.setInput('down', true);
+    engine.updateWardenDuel(1 / 60);
+    engine.updatePlayer(1 / 60);
+    expect(engine.player).toMatchObject({
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      grounded: true,
+      dropTimer: 0,
+    });
+    engine.setInput('down', false);
+    engine.input.pressed.clear();
+    engine.input.released.clear();
+
+    for (let strike = 0; strike < 3; strike += 1) {
+      engine.setInput('attack', true);
+      engine.updatePlayer(1 / 60);
+      engine.input.pressed.clear();
+      engine.setInput('attack', false);
+      engine.input.released.clear();
+      if (strike >= 2) continue;
+      for (let frame = 0; frame < 20; frame += 1) {
+        engine.updateWardenDuel(1 / 60);
+        engine.updatePlayer(1 / 60);
+        engine.input.pressed.clear();
+        engine.input.released.clear();
+      }
+    }
+
+    expect(boss.hp).toBe(14);
+    expect(boss.action).toBe('recovery');
+    expect(duel.player).toMatchObject({ comboStep: 0, comboClock: 0 });
+  });
+
+  it('keeps the arena sealed until Dawnstroke, then restarts only the duel after a fatal attempt', () => {
+    const { level, engine, objective, duel } = beginDuelHarness();
+    engine.player.invuln = 0;
+    GameEngine.prototype.damagePlayer.call(engine, 4, -390);
+    expect(engine).toMatchObject({ mode: 'dead', deaths: 1, gateOpen: false });
+    expect(duel).toMatchObject({
+      attempt: { count: 1, damageTaken: 4 },
+      totals: { damageTaken: 4 },
+      boss: { hp: 18 },
+    });
+
+    GameEngine.prototype.respawn.call(engine);
+    expect(engine).toMatchObject({ mode: 'play', deaths: 1, gateOpen: false });
+    expect(objective).toMatchObject({
+      phase: 'duel', complete: false,
+      memorySeam: { revealed: true },
+      heartstone: { locked: true },
+      rememberedHand: { reached: true, restored: true },
+      crownPath: { restored: true },
+      duel: {
+        active: true, phase: 'guardian',
+        boss: { hp: 18, action: 'intro' },
+        attempt: { count: 2, elapsed: 0, damageTaken: 0 },
+        totals: { damageTaken: 4 },
+      },
+    });
+    expect(level.map[objective.restorationTiles[0].ty][objective.restorationTiles[0].tx]).toBe(Tile.GLOW);
+
+    const target = duel.boss.target;
+    Object.assign(engine.player, {
+      x: target.x - 14,
+      y: target.y - 22,
+      grounded: true,
+      invuln: 0,
+    });
+    duel.boss.hp = 1;
+    duel.boss.phase = 'eclipse';
+    duel.phase = 'eclipse';
+    duel.boss.action = 'recovery';
+    duel.boss.invulnerable = false;
+    engine.player.attackHits.clear();
+    expect(engine.resolveWardenDuelStrike()).toBe(true);
+    expect(objective).toMatchObject({ phase: 'finale', complete: false });
+    expect(duel).toMatchObject({ phase: 'finale', active: true, complete: false, finale: { ready: true, struck: false } });
+    expect(engine.gateOpen).toBe(false);
+
+    engine.player.invuln = 0;
+    GameEngine.prototype.damagePlayer.call(engine, 4, -390);
+    GameEngine.prototype.respawn.call(engine);
+    expect(engine).toMatchObject({ mode: 'play', deaths: 2, gateOpen: false });
+    expect(objective).toMatchObject({
+      phase: 'duel', complete: false,
+      duel: {
+        phase: 'guardian', active: true, complete: false,
+        boss: { hp: 18, action: 'intro' },
+        attempt: { count: 3 },
+        finale: { ready: false, struck: false },
+      },
+    });
+
+    Object.assign(engine.player, {
+      x: target.x - 14,
+      y: target.y - 22,
+      grounded: true,
+      invuln: 0,
+    });
+    duel.boss.hp = 1;
+    duel.boss.phase = 'eclipse';
+    duel.phase = 'eclipse';
+    duel.boss.action = 'recovery';
+    duel.boss.invulnerable = false;
+    engine.player.attackHits.clear();
+    expect(engine.resolveWardenDuelStrike()).toBe(true);
+    engine.player.attackHits.clear();
+    expect(engine.resolveWardenDuelStrike()).toBe(true);
+    expect(objective).toMatchObject({
+      phase: 'first-path', complete: true, restored: true,
+      warden: { state: 'kneeling', commandBroken: true },
+      duel: { phase: 'complete', active: false, complete: true, finale: { ready: true, struck: true } },
+    });
+    expect(engine.gateOpen).toBe(true);
+    expect(engine.callbacks.gate).toHaveBeenCalledOnce();
+    expect(level.map.slice(12, 20).every((row) => row[45] === Tile.AIR)).toBe(true);
+  });
+
   it('emits the exact isolated preview identity and ending at the restored door', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createWardenOfDust(), identity));
     const engine = engineHarness(level);
@@ -273,6 +488,10 @@ describe('Outer Veil Level 10 production preview', () => {
     objective.rememberedHand.raised = true;
     objective.rememberedHand.reached = true;
     objective.bridle.struck = true;
+    objective.duel.active = true;
+    objective.duel.boss.invulnerable = false;
+    expect(damageWardenDuelBoss(objective.duel, objective.duel.boss.maxHp)).toBe(true);
+    expect(completeWardenDuel(objective.duel)).toBe(true);
     engine.totalTime = 132;
     expect(GameEngine.prototype.completeWarden.call(engine)).toBe(true);
     engine.player.x = level.door.x + 20;
@@ -361,6 +580,7 @@ describe('Outer Veil Level 10 production preview', () => {
       levelIndex: 0, level: runtimeA, totalTime: 88, deaths: 2,
       soldiers: [{}], projectiles: [{}], particles: [{}],
       repository: { createRuntime: vi.fn(() => preview.createRuntime(0)) },
+      restartWardenDuelAttempt: GameEngine.prototype.restartWardenDuelAttempt,
       cancelLevelTransition: vi.fn(), loadLevel: vi.fn(), clearInputs: vi.fn(),
       callbacks: { mode: vi.fn() }, setHint: vi.fn(), pushHud: vi.fn(),
     };

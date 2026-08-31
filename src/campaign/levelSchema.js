@@ -1418,6 +1418,7 @@ function validateWarden(level, issues) {
   const duel = objective.duel;
   const arena = duel?.arena;
   const checkpoint = arena?.checkpoint;
+  const seal = arena?.seal;
   const duelBoss = duel?.boss;
   const duelPlayer = duel?.player;
   const timing = duel?.timing;
@@ -1429,18 +1430,29 @@ function validateWarden(level, issues) {
     || !checkpoint || checkpoint.tx !== 48 || checkpoint.tx <= arena.minTx
     || checkpoint.tx >= arena.maxTx || checkpoint.feetTy !== arena.feetTy
     || ![-1, 1].includes(checkpoint.facing)
+    || !seal || seal.leftTx !== arena.minTx - 1 || seal.topTy !== 12 || seal.bottomTy !== arena.feetTy - 1
+    || !level.map.slice(seal.topTy, seal.bottomTy + 1).every((row) => row[seal.leftTx] === Tile.AIR)
     || !duelBoss || duelBoss.maxHp !== 18 || duelBoss.hp !== duelBoss.maxHp
-    || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle'
+    || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle' || duelBoss.attackKind !== 'high'
     || duelBoss.actionClock !== 0 || duelBoss.sequenceIndex !== 0 || duelBoss.hitstun !== 0
-    || duelBoss.invulnerable !== false
+    || duelBoss.invulnerable !== false || duelBoss.attackConsumed !== true
+    || !duelBoss.target || duelBoss.target.x !== 58.5 * TILE || duelBoss.target.y !== 20 * TILE - 72
+    || duelBoss.target.radius !== 3 * TILE
     || !duelPlayer || duelPlayer.comboStep !== 0 || duelPlayer.comboClock !== 0
     || duelPlayer.guarding !== false || duelPlayer.parryClock !== 0
-    || !timing || !Number.isFinite(timing.comboWindow) || timing.comboWindow < .3
+    || !timing || !Number.isFinite(timing.introSeconds) || timing.introSeconds < 1
+    || !Number.isFinite(timing.comboWindow) || timing.comboWindow < .7
     || !Number.isFinite(timing.parryWindow) || timing.parryWindow < .1
+    || !Number.isFinite(timing.guardianTelegraph) || timing.guardianTelegraph < .9
+    || !Number.isFinite(timing.commandTelegraph) || timing.commandTelegraph < .75
+    || !Number.isFinite(timing.eclipseTelegraph) || timing.eclipseTelegraph < .6
+    || timing.guardianTelegraph < timing.commandTelegraph
+    || timing.commandTelegraph < timing.eclipseTelegraph
+    || !Number.isFinite(timing.activeSeconds) || timing.activeSeconds < .18 || timing.activeSeconds > .32
     || !Number.isFinite(timing.guardianRecovery) || !Number.isFinite(timing.commandRecovery)
     || !Number.isFinite(timing.eclipseRecovery)
     || timing.guardianRecovery < timing.commandRecovery
-    || timing.commandRecovery < timing.eclipseRecovery || timing.eclipseRecovery < .5
+    || timing.commandRecovery < timing.eclipseRecovery || timing.eclipseRecovery < 1
     || !thresholds || !Number.isInteger(thresholds.commandHp) || !Number.isInteger(thresholds.eclipseHp)
     || thresholds.commandHp >= duelBoss.maxHp
     || thresholds.commandHp <= thresholds.eclipseHp || thresholds.eclipseHp <= 0

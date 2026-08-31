@@ -101,7 +101,7 @@ export default function App() {
   const [presentationCard, setPresentationCard] = useState(null);
   const presentationTimerRef = useRef(null);
   const presentationGenerationRef = useRef(0);
-  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null });
+  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN' });
 
   useEffect(() => {
     let cancelled = false;
@@ -456,7 +456,7 @@ export default function App() {
           )}
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">
-              <span>VEILED GUARDIAN</span>
+              <span>{hud.bossLabel}</span>
               <div><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
             </div>
           )}

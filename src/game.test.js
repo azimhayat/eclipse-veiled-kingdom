@@ -94,6 +94,7 @@ describe('Eclipse of the Veiled Kingdom', () => {
       levelIndex: 6,
       level: cloneLevel(template),
       repository: { createRuntime: vi.fn(() => cloneLevel(template)) },
+      restartWardenDuelAttempt: GameEngine.prototype.restartWardenDuelAttempt,
       cancelLevelTransition: vi.fn(),
       loadLevel: vi.fn(),
       clearInputs: vi.fn(),

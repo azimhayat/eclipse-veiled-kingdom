@@ -29,6 +29,13 @@ import {
 } from './render.js';
 import { releaseRenderedLevel, RenderedLevelCache } from './rendered-level-cache.js';
 import { getTimedTeethState } from './teeth-timing.js';
+import {
+  advanceWardenDuel,
+  completeWardenDuel,
+  damageWardenDuelBoss,
+  recordWardenDuelPlayerDamage,
+  startWardenDuelAttempt,
+} from './warden-duel-state.js';
 
 export const PHYSICS = Object.freeze({
   RUN_SPEED: 290,
@@ -280,6 +287,16 @@ export class GameEngine {
         handReached: Boolean(this.level.objective.rememberedHand?.reached),
         bridleExposed: Boolean(this.level.objective.bridle?.exposed),
         bridleStruck: Boolean(this.level.objective.bridle?.struck),
+        duelPhase: this.level.objective.duel?.phase || null,
+        duelActive: Boolean(this.level.objective.duel?.active),
+        duelComplete: Boolean(this.level.objective.duel?.complete),
+        duelBossHp: this.level.objective.duel?.boss?.hp ?? null,
+        duelBossAction: this.level.objective.duel?.boss?.action || null,
+        duelBossAttack: this.level.objective.duel?.boss?.attackKind || null,
+        duelAttempts: this.level.objective.duel?.attempt?.count || 0,
+        duelAttemptSeconds: this.level.objective.duel?.attempt?.elapsed || 0,
+        duelDamageTaken: this.level.objective.duel?.totals?.damageTaken || 0,
+        duelFinaleReady: Boolean(this.level.objective.duel?.finale?.ready),
         wardenState: this.level.objective.warden?.state || null,
         wardenKneeling: Boolean(this.level.objective.warden?.kneeling),
         crownPathRestored: Boolean(this.level.objective.crownPath?.restored),
@@ -574,6 +591,7 @@ export class GameEngine {
   }
 
   respawn() {
+    if (this.restartWardenDuelAttempt?.()) return;
     const currentIndex = this.levelIndex;
     const elapsedLevelTime = this.levelTime;
     this.cancelLevelTransition();
@@ -584,6 +602,30 @@ export class GameEngine {
     this.callbacks.mode?.('play');
     this.setHint('The realm reforms. Begin the level anew.');
     this.pushHud(true);
+  }
+
+  restartWardenDuelAttempt() {
+    const objective = this.level.objective;
+    const duel = objective?.type === 'warden-restoration' ? objective.duel : null;
+    if (!duel || this.checkpoint?.kind !== 'warden-duel' || !['duel', 'finale'].includes(objective.phase)
+      || duel.complete) return false;
+    if (!startWardenDuelAttempt(duel)) return false;
+    objective.phase = 'duel';
+    objective.warden.state = 'commanded';
+    this.cancelLevelTransition();
+    this.player = this.makePlayer(this.checkpoint);
+    this.soldiers = [];
+    this.projectiles = [];
+    this.particles = [];
+    this.crumble.clear();
+    this.mode = 'play';
+    this.clearInputs();
+    this.camera.x = clamp(this.player.x - VIEW_W * .4, 0, WORLD_W - VIEW_W);
+    this.camera.y = clamp(this.player.y - VIEW_H * .58, 0, WORLD_H - VIEW_H);
+    this.callbacks.mode?.('play');
+    this.setHint(`THE WARDEN RISES AGAIN · fight attempt ${duel.attempt.count}.`, 3.2);
+    this.pushHud(true);
+    return true;
   }
 
   async transitionToLevel(index = this.levelIndex + 1) {
@@ -829,7 +871,11 @@ export class GameEngine {
     p.digTimer = Math.max(0, p.digTimer - dt);
     p.jumpBuffer = this.input.pressed.has('jump') ? PHYSICS.JUMP_BUFFER : Math.max(0, p.jumpBuffer - dt);
     p.coyote = p.grounded ? PHYSICS.COYOTE : Math.max(0, p.coyote - dt);
-    if (this.input.pressed.has('down')) p.dropTimer = .2;
+    const guardingWarden = this.level.objective?.type === 'warden-restoration'
+      && this.level.objective.phase === 'duel'
+      && this.level.objective.duel?.active;
+    if (guardingWarden) p.dropTimer = 0;
+    else if (this.input.pressed.has('down')) p.dropTimer = .2;
 
     const readableCombat = ['parachute-choir-restoration', 'veil-gate-restoration', 'warden-restoration']
       .includes(this.level.objective?.type);
@@ -1356,14 +1402,24 @@ export class GameEngine {
         anchor: 'ANCHOR THE WARDEN’S MEMORY',
         ascend: 'CLIMB THE REMEMBERED HAND',
         unbind: 'BREAK THE INVERTED COMMAND',
+        duel: objective.duel?.boss?.phase === 'eclipse'
+          ? 'DUEL · SURVIVE THE LAST ECLIPSE'
+          : objective.duel?.boss?.phase === 'command'
+            ? 'DUEL · BREAK THE CROWN COMMAND'
+            : 'DUEL · READ THE GUARDIAN',
+        finale: 'DAWNSTROKE · FREE THE WARDEN',
         'first-path': 'CROSS THE FIRST CROWN PATH',
       };
+      const duelCurrent = objective.duel?.active || objective.duel?.complete
+        ? objective.duel.boss.maxHp - objective.duel.boss.hp
+        : 0;
+      const duelTarget = objective.duel?.boss?.maxHp || 1;
       return {
         type: 'warden-restoration',
         label: objective.hudLabel || 'WARDEN',
         title: objective.title || 'Free the guardian beneath the seal',
-        current: objective.complete ? 1 : 0,
-        target: 1,
+        current: objective.complete ? duelTarget : duelCurrent,
+        target: duelTarget,
         progressText: phaseText[objective.phase] || phaseText.listen,
         complete: Boolean(objective.complete),
       };
@@ -1547,8 +1603,14 @@ export class GameEngine {
   damagePlayer(amount, bounce = -360) {
     const p = this.player;
     if (p.invuln > 0 || this.mode !== 'play') return;
+    const previousHp = p.hp;
     p.hp = Math.max(0, p.hp - amount);
     if (this.demo && amount < PHYSICS.MAX_HP && p.hp <= 0) p.hp = PHYSICS.MAX_HP;
+    const actualDamage = Math.max(0, previousHp - p.hp);
+    const duel = this.level.objective?.type === 'warden-restoration'
+      ? this.level.objective.duel
+      : null;
+    if (actualDamage > 0 && duel?.active) recordWardenDuelPlayerDamage(duel, actualDamage);
     p.invuln = .9;
     p.vy = bounce;
     p.vx = -p.facing * 190;
@@ -1603,6 +1665,7 @@ export class GameEngine {
       }
     }
     this.soldiers = this.soldiers.filter((soldier) => soldier.hp > 0);
+    this.resolveWardenDuelStrike?.();
 
     const boss = this.level.boss;
     if (boss?.active && boss.hp > 0 && !p.attackHits.has('boss') && overlaps(hitbox, boss)) {
@@ -1994,6 +2057,12 @@ export class GameEngine {
     if (objective?.type !== 'warden-restoration' || objective.complete) return;
     const breath = objective.breath;
 
+    if (objective.phase === 'duel') {
+      this.updateWardenDuel(dt);
+      return;
+    }
+    if (objective.phase === 'finale') return;
+
     if (objective.phase === 'listen') {
       breath.clock += dt;
       if (breath.clock < breath.warningSeconds + breath.activeSeconds) return;
@@ -2063,6 +2132,256 @@ export class GameEngine {
     if (objective.phase === 'unbind') objective.bridle.clock += dt;
   }
 
+  wardenDuelRecoverySeconds(duel) {
+    if (duel.boss.phase === 'eclipse') return duel.timing.eclipseRecovery;
+    if (duel.boss.phase === 'command') return duel.timing.commandRecovery;
+    return duel.timing.guardianRecovery;
+  }
+
+  wardenDuelTelegraphSeconds(duel) {
+    if (duel.boss.phase === 'eclipse') return duel.timing.eclipseTelegraph;
+    if (duel.boss.phase === 'command') return duel.timing.commandTelegraph;
+    return duel.timing.guardianTelegraph;
+  }
+
+  setWardenDuelSeal(sealed) {
+    const objective = this.level.objective;
+    const seal = objective?.type === 'warden-restoration' ? objective.duel?.arena?.seal : null;
+    if (!seal) return false;
+    const chunks = this.bank.get(levelCacheKey(this.level));
+    const tile = sealed ? Tile.GATE : Tile.AIR;
+    for (let ty = seal.topTy; ty <= seal.bottomTy; ty += 1) {
+      this.level.map[ty][seal.leftTx] = tile;
+      restampCell(this.level, chunks, seal.leftTx, ty);
+    }
+    return true;
+  }
+
+  beginWardenDuel() {
+    const objective = this.level.objective;
+    const duel = objective?.type === 'warden-restoration' ? objective.duel : null;
+    if (!duel || objective.phase !== 'unbind' || !objective.bridle?.struck
+      || !objective.memorySeam?.revealed || !objective.heartstone?.locked
+      || !objective.rememberedHand?.reached || !startWardenDuelAttempt(duel)) return false;
+
+    objective.phase = 'duel';
+    objective.warden.state = 'commanded';
+    objective.rememberedHand.restored = true;
+    objective.crownPath.restored = true;
+    this.applyWardenHand(Tile.GLOW);
+    this.setWardenDuelSeal(true);
+    const chunks = this.bank.get(levelCacheKey(this.level));
+    for (const restoration of objective.restorationTiles || []) {
+      this.level.map[restoration.ty][restoration.tx] = restoration.tile;
+      restampCell(this.level, chunks, restoration.tx, restoration.ty);
+    }
+
+    const checkpoint = duel.arena.checkpoint;
+    this.checkpoint = {
+      kind: 'warden-duel',
+      id: 'warden-duel',
+      x: checkpoint.tx * TILE,
+      y: checkpoint.feetTy * TILE - this.player.h,
+      facing: checkpoint.facing,
+    };
+    Object.assign(this.player, {
+      x: this.checkpoint.x,
+      y: this.checkpoint.y,
+      vx: 0,
+      vy: 0,
+      facing: this.checkpoint.facing,
+      grounded: true,
+      wallSide: 0,
+      climbing: false,
+      hp: PHYSICS.MAX_HP,
+      invuln: 1.2,
+      attackTimer: 0,
+      attackBuffer: 0,
+    });
+    this.clearInputs();
+    this.player.attackHits.add('warden-duel');
+    this.camera.x = clamp(this.player.x - VIEW_W * .32, 0, WORLD_W - VIEW_W);
+    this.camera.y = clamp(this.player.y - VIEW_H * .58, 0, WORLD_H - VIEW_H);
+    this.projectiles = [];
+    this.audio.play('gate');
+    this.setHint('THE CROWN COMMANDS · Aren refuses to kill. Read the amber attack, then answer the cyan opening.', 6.2);
+    this.pushHud(true);
+    return true;
+  }
+
+  updateWardenDuel(dt = 0) {
+    const objective = this.level.objective;
+    const duel = objective?.type === 'warden-restoration' ? objective.duel : null;
+    if (!duel?.active || duel.complete || objective.phase !== 'duel' || dt <= 0) return false;
+    const boss = duel.boss;
+    const player = duel.player;
+    if (this.input.pressed.has('down')) player.parryClock = duel.timing.parryWindow;
+    player.guarding = Boolean(this.input.down && this.player.grounded);
+    advanceWardenDuel(duel, dt);
+
+    if (boss.action === 'intro') {
+      if (boss.actionClock <= 0) {
+        boss.action = 'idle';
+        boss.invulnerable = true;
+      }
+      return true;
+    }
+    if (boss.action === 'recovery') {
+      boss.invulnerable = false;
+      if (boss.actionClock <= 0 && boss.hitstun <= 0) {
+        boss.action = 'idle';
+        boss.invulnerable = true;
+      }
+      return true;
+    }
+    if (boss.action === 'idle') {
+      const patterns = {
+        guardian: ['high', 'sweep'],
+        command: ['high', 'sand-wave', 'sweep'],
+        eclipse: ['sand-wave', 'high', 'sweep', 'high'],
+      };
+      const pattern = patterns[boss.phase] || patterns.guardian;
+      boss.attackKind = pattern[boss.sequenceIndex % pattern.length];
+      boss.sequenceIndex += 1;
+      boss.action = 'telegraph';
+      boss.actionClock = this.wardenDuelTelegraphSeconds(duel);
+      boss.attackConsumed = true;
+      boss.invulnerable = true;
+      const warning = boss.attackKind === 'high'
+        ? 'AMBER HIGH CUT · hold DOWN to guard; tap it late to parry.'
+        : boss.attackKind === 'sweep'
+          ? 'LOW SWEEP · JUMP over the marked ground edge.'
+          : 'SAND WAVE · JUMP before the vermilion current crosses the arena.';
+      this.setHint(warning, boss.actionClock);
+      this.pushHud(true);
+      return true;
+    }
+    if (boss.action === 'telegraph') {
+      if (boss.actionClock <= 0) {
+        boss.action = 'active';
+        boss.actionClock = duel.timing.activeSeconds;
+        boss.attackConsumed = false;
+      }
+      return true;
+    }
+    if (boss.action !== 'active') return true;
+
+    if (!boss.attackConsumed) {
+      const playerCenter = this.player.x + this.player.w / 2;
+      const distance = Math.abs(playerCenter - boss.target.x);
+      const inArena = playerCenter >= duel.arena.minTx * TILE && playerCenter <= duel.arena.maxTx * TILE;
+      const airborne = !this.player.grounded
+        && this.player.y + this.player.h < duel.arena.feetTy * TILE - 8;
+      const dangerous = boss.attackKind === 'sand-wave'
+        ? inArena
+        : distance <= (boss.attackKind === 'high' ? 4.25 : 6.5) * TILE;
+      if (!dangerous || (boss.attackKind !== 'high' && airborne)) {
+        boss.attackConsumed = true;
+        if (dangerous) this.setHint('CLEAN EVADE · the Warden opens cyan after the sweep.', 1.5);
+      } else if (boss.attackKind === 'high' && player.guarding) {
+        boss.attackConsumed = true;
+        if (player.parryClock > 0) {
+          boss.action = 'recovery';
+          boss.actionClock = this.wardenDuelRecoverySeconds(duel) + .24;
+          boss.invulnerable = false;
+          boss.hitstun = .18;
+          this.audio.play('hit');
+          this.setHint('PERFECT GUARD · cyan counter window extended.', 1.8);
+        } else this.setHint('GUARD HELD · wait for cyan, then counter.', 1.4);
+      } else if (this.mode === 'play' && this.player.hp > 0) {
+        boss.attackConsumed = true;
+        const before = this.player.hp;
+        this.damagePlayer(1, -390);
+        if (this.player.hp < before) this.setHint('THE COMMAND CONNECTS · recover, then read the next amber tell.', 2.2);
+      }
+    }
+    if (boss.action === 'active' && boss.actionClock <= 0) {
+      boss.action = 'recovery';
+      boss.actionClock = this.wardenDuelRecoverySeconds(duel);
+      boss.invulnerable = false;
+      this.setHint('CYAN OPENING · STRIKE, use DOWN + STRIKE, or answer from the air.', 1.9);
+      this.pushHud(true);
+    }
+    return true;
+  }
+
+  resolveWardenDuelStrike() {
+    const objective = this.level.objective;
+    const duel = objective?.type === 'warden-restoration' ? objective.duel : null;
+    const boss = duel?.boss;
+    if (!duel?.active || duel.complete || !boss || this.mode !== 'play' || this.player.hp <= 0
+      || this.player.attackHits.has('warden-duel')) return false;
+    const target = boss.target;
+    const playerX = this.player.x + this.player.w / 2;
+    const playerY = this.player.y + this.player.h / 2;
+    if (Math.hypot(playerX - target.x, playerY - target.y) > target.radius) return false;
+    this.player.attackHits.add('warden-duel');
+
+    if (duel.phase === 'finale' && duel.finale.ready) {
+      if (!completeWardenDuel(duel)) return false;
+      objective.phase = 'finale';
+      this.burst(target.x, target.y, '#e9fbff', 64, 310);
+      this.audio.play('win');
+      return this.completeWarden();
+    }
+
+    const aerial = !this.player.grounded;
+    const heavy = !aerial && this.input.down;
+    if (heavy && ['idle', 'telegraph'].includes(boss.action)) {
+      boss.action = 'recovery';
+      boss.actionClock = this.wardenDuelRecoverySeconds(duel) + .18;
+      boss.attackConsumed = true;
+      boss.invulnerable = false;
+      boss.hitstun = .2;
+      duel.player.comboStep = 0;
+      duel.player.comboClock = 0;
+      this.burst(target.x, target.y, '#f1cf72', 18, 170);
+      this.audio.play('hit');
+      this.setHint('HEAVY BREAK · the amber guard cracks cyan.', 1.8);
+      this.pushHud(true);
+      return true;
+    }
+    if (boss.action !== 'recovery' || boss.invulnerable) {
+      this.audio.play('dig');
+      this.setHint('THE WARDEN BRACES · defend the attack and answer during cyan recovery.', 1.8);
+      return false;
+    }
+
+    let damage = 1;
+    let attackLabel = 'STRIKE';
+    if (aerial) {
+      damage = 2;
+      attackLabel = 'AERIAL DAWNSTROKE';
+      duel.player.comboStep = 0;
+      duel.player.comboClock = 0;
+    } else if (heavy) {
+      damage = 2;
+      attackLabel = 'HEAVY BREAK';
+      duel.player.comboStep = 0;
+      duel.player.comboClock = 0;
+    } else {
+      const nextStep = duel.player.comboClock > 0 ? duel.player.comboStep + 1 : 1;
+      damage = nextStep >= 3 ? 2 : 1;
+      attackLabel = `DAWN CHAIN ${Math.min(3, nextStep)}/3`;
+      duel.player.comboStep = nextStep >= 3 ? 0 : nextStep;
+      duel.player.comboClock = nextStep >= 3 ? 0 : duel.timing.comboWindow;
+    }
+
+    boss.invulnerable = false;
+    if (!damageWardenDuelBoss(duel, damage)) return false;
+    boss.hitstun = .16;
+    boss.actionClock = Math.max(boss.actionClock, .3);
+    this.burst(target.x, target.y, duel.phase === 'finale' ? '#dffcff' : '#f3d47d', 18 + damage * 5, 190);
+    this.audio.play('hit');
+    if (duel.finale.ready) {
+      objective.phase = 'finale';
+      objective.warden.state = 'staggered';
+      this.setHint('THE LAST BINDING BREAKS · step close and STRIKE the cyan heart with Dawnstroke.', 4.8);
+    } else this.setHint(`${attackLabel} · ${boss.hp}/${boss.maxHp} command strength remains.`, 1.5);
+    this.pushHud(true);
+    return true;
+  }
+
   strikeWardenBridle() {
     const objective = this.level.objective;
     const bridle = objective?.type === 'warden-restoration' ? objective.bridle : null;
@@ -2086,7 +2405,7 @@ export class GameEngine {
     bridle.struck = true;
     this.burst(targetX, targetY, '#8deaf1', 52, 270);
     this.audio.play('gate');
-    return this.completeWarden();
+    return this.beginWardenDuel();
   }
 
   completeWarden() {
@@ -2095,7 +2414,8 @@ export class GameEngine {
       || !objective.breath?.firstBreathComplete || !objective.memorySeam?.revealed
       || !objective.heartstone?.bound || !objective.heartstone?.locked
       || !objective.rememberedHand?.raised || !objective.rememberedHand?.reached
-      || !objective.bridle?.struck) return false;
+      || !objective.bridle?.struck || !objective.duel?.complete
+      || !objective.duel?.finale?.struck) return false;
     objective.complete = true;
     objective.restored = true;
     objective.phase = 'first-path';
@@ -2106,6 +2426,7 @@ export class GameEngine {
     objective.warden.commandBroken = true;
     objective.crownPath.restored = true;
     this.applyWardenHand(Tile.GLOW);
+    this.setWardenDuelSeal(false);
     const chunks = this.bank.get(levelCacheKey(this.level));
     for (const restoration of objective.restorationTiles || []) {
       this.level.map[restoration.ty][restoration.tx] = restoration.tile;
@@ -3198,6 +3519,9 @@ export class GameEngine {
   pushHud(force = false) {
     if (force) this.hudClock = .1;
     const objective = this.objectiveStatus();
+    const wardenDuel = this.level.objective?.type === 'warden-restoration'
+      ? this.level.objective.duel
+      : null;
     this.callbacks.hud?.({
       hp: this.player.hp,
       maxHp: PHYSICS.MAX_HP,
@@ -3211,8 +3535,9 @@ export class GameEngine {
       objectiveTarget: objective.target,
       objectiveProgressText: objective.progressText || null,
       demo: this.demo,
-      bossHp: this.level.boss?.active ? this.level.boss.hp : null,
-      bossMaxHp: this.level.boss?.maxHp || null,
+      bossHp: wardenDuel?.active ? wardenDuel.boss.hp : this.level.boss?.active ? this.level.boss.hp : null,
+      bossMaxHp: wardenDuel?.active ? wardenDuel.boss.maxHp : this.level.boss?.maxHp || null,
+      bossLabel: wardenDuel?.active ? 'WARDEN OF DUST' : 'VEILED GUARDIAN',
     });
   }
 

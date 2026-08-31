@@ -3,6 +3,7 @@ import { drawLevelMechanics } from './render.js';
 import { TILE } from './levels/constants.js';
 import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
 import { createParachuteChoir } from './levels/outerVeil/parachuteChoir.js';
+import { createWardenOfDust } from './levels/outerVeil/wardenOfDust.js';
 
 function recordingContext() {
   const calls = [];
@@ -128,5 +129,67 @@ describe('Parachute Choir skyboard rendering', () => {
       'ellipse', ring.tx * TILE, ring.ty * TILE, ring.radius, ring.radius * .38, 0, 0, Math.PI * 2,
     ]);
     expect(ctx.calls).toContainEqual(['fillText', 'RIDE', ring.tx * TILE, ring.ty * TILE - 18]);
+  });
+});
+
+describe('Warden duel rendering', () => {
+  it('shows the authored target, phase pips, and telegraphed arena wave during the duel', () => {
+    const level = createWardenOfDust();
+    level.objective.phase = 'duel';
+    level.objective.crownPath.restored = true;
+    level.objective.duel.active = true;
+    level.objective.duel.phase = 'command';
+    level.objective.duel.boss.phase = 'command';
+    level.objective.duel.boss.action = 'telegraph';
+    level.objective.duel.boss.attackKind = 'sand-wave';
+    const ctx = recordingContext();
+
+    drawLevelMechanics(ctx, level, 8, false);
+
+    expect(ctx.calls).toContainEqual([
+      'translate', level.objective.duel.boss.target.x, level.objective.duel.boss.target.y,
+    ]);
+    expect(ctx.calls.filter((call) => call[0] === 'arc' && call[3] === 7)).toHaveLength(3);
+    const pipColors = ctx.calls
+      .map((call, index) => ({ call, index }))
+      .filter(({ call }) => call[0] === 'arc' && call[3] === 7)
+      .map(({ index }) => ctx.calls.slice(0, index).findLast((call) => call[0] === 'set:fillStyle')?.[1]);
+    expect(pipColors).toEqual(Array(3).fill('rgba(229,186,86,.38)'));
+    expect(ctx.calls.some((call) => call[0] === 'lineTo'
+      && call[1] === level.objective.duel.arena.maxTx * TILE)).toBe(true);
+  });
+
+  it('switches the Warden target from vermilion danger to cyan punishability', () => {
+    const level = createWardenOfDust();
+    level.objective.phase = 'duel';
+    level.objective.duel.active = true;
+    level.objective.duel.boss.action = 'active';
+    const danger = recordingContext();
+    drawLevelMechanics(danger, level, 8, false);
+
+    level.objective.duel.boss.action = 'recovery';
+    const recovery = recordingContext();
+    drawLevelMechanics(recovery, level, 8.2, false);
+
+    expect(danger.calls).toContainEqual(['set:strokeStyle', '#ed705b']);
+    expect(recovery.calls).toContainEqual(['set:strokeStyle', '#78e7f1']);
+  });
+
+  it('keeps the sweep warning local while the sand wave marks the complete sealed arena', () => {
+    const level = createWardenOfDust();
+    level.objective.phase = 'duel';
+    level.objective.duel.active = true;
+    level.objective.duel.boss.action = 'telegraph';
+    level.objective.duel.boss.attackKind = 'sweep';
+    const sweep = recordingContext();
+    drawLevelMechanics(sweep, level, 8, false);
+
+    level.objective.duel.boss.attackKind = 'sand-wave';
+    const sandWave = recordingContext();
+    drawLevelMechanics(sandWave, level, 8, false);
+
+    const edgeY = level.objective.duel.arena.feetTy * TILE - 9;
+    expect(sweep.calls).toContainEqual(['moveTo', 52 * TILE, edgeY]);
+    expect(sandWave.calls).toContainEqual(['moveTo', level.objective.duel.arena.minTx * TILE, edgeY]);
   });
 });

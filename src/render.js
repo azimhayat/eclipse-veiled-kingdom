@@ -1338,7 +1338,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
     const objective = level.objective;
     const warden = objective.warden;
     const breath = objective.breath;
-    const restored = objective.complete;
+    const restored = objective.crownPath?.restored || objective.complete;
     const pulse = .72 + Math.sin(time * 3.1) * .18;
     const centerX = warden.x;
     const feetY = warden.feetY;
@@ -1468,6 +1468,72 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
       ctx.fill();
       ctx.stroke();
       ctx.restore();
+    }
+
+    const duel = objective.duel;
+    if (duel?.active) {
+      const boss = duel.boss;
+      const target = boss.target;
+      const active = boss.action === 'active';
+      const recovery = boss.action === 'recovery';
+      const finale = duel.phase === 'finale';
+      const combatColor = finale ? '#e5fcff' : recovery ? '#78e7f1' : active ? '#ed705b' : '#e4b451';
+      ctx.save();
+      ctx.translate(target.x, target.y);
+      ctx.rotate(Math.PI / 4 + Math.sin(time * 2.4) * .06);
+      ctx.strokeStyle = combatColor;
+      ctx.fillStyle = finale
+        ? 'rgba(214,250,255,.34)'
+        : recovery ? 'rgba(104,226,238,.27)' : active ? 'rgba(222,81,62,.24)' : 'rgba(212,163,67,.2)';
+      ctx.shadowColor = combatColor;
+      ctx.shadowBlur = recovery || finale ? 34 : 22;
+      ctx.lineWidth = recovery || finale ? 7 : 5;
+      ctx.fillRect(-30, -30, 60, 60);
+      ctx.strokeRect(-30, -30, 60, 60);
+      ctx.restore();
+
+      ctx.save();
+      for (let phase = 0; phase < 3; phase += 1) {
+        const threshold = phase === 0 ? duel.thresholds.commandHp : phase === 1 ? duel.thresholds.eclipseHp : 0;
+        ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.38)';
+        ctx.shadowColor = boss.hp <= threshold ? '#73e5ef' : 'transparent';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(target.x - 40 + phase * 40, target.y - 72, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      if (['sweep', 'sand-wave'].includes(boss.attackKind)
+        && ['telegraph', 'active'].includes(boss.action)) {
+        const targetTx = boss.target.x / TILE;
+        const waveMinTx = boss.attackKind === 'sweep'
+          ? Math.max(duel.arena.minTx, targetTx - 6.5)
+          : duel.arena.minTx;
+        const waveMaxTx = boss.attackKind === 'sweep'
+          ? Math.min(duel.arena.maxTx, targetTx + 6.5)
+          : duel.arena.maxTx;
+        const arenaX = waveMinTx * TILE;
+        const arenaW = (waveMaxTx - waveMinTx) * TILE;
+        const edgeY = duel.arena.feetTy * TILE - 9;
+        ctx.save();
+        ctx.strokeStyle = active ? '#ef715b' : '#e3b24f';
+        ctx.fillStyle = active ? 'rgba(231,92,68,.2)' : 'rgba(224,174,70,.1)';
+        ctx.shadowColor = active ? '#ee684f' : '#e4af4f';
+        ctx.shadowBlur = active ? 26 : 16;
+        ctx.lineWidth = active ? 10 : 6;
+        ctx.beginPath();
+        ctx.moveTo(arenaX, edgeY);
+        for (let tx = Math.ceil(waveMinTx); tx <= Math.floor(waveMaxTx); tx += 1) {
+          ctx.lineTo(tx * TILE, edgeY - Math.sin(tx * .9 + time * 7) * (active ? 17 : 9));
+        }
+        ctx.lineTo(arenaX + arenaW, edgeY + 18);
+        ctx.lineTo(arenaX, edgeY + 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     if (restored) {

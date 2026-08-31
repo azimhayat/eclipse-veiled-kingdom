@@ -742,3 +742,46 @@ Scope: first bounded overnight milestone; data and deterministic state only. The
 ## Exact next milestone
 
 Integrate the bridle-to-duel transition and fight-only checkpoint without yet adding final presentation or music. Add deterministic engine tests for keyboard/touch-safe combo, guard, heavy break, aerial strike, boss attack damage, death/retry, phase thresholds, and completion deferral. Then perform desktop and phone browser checks before committing the integration.
+
+---
+
+# Stage I finale — playable Warden duel integration
+
+Updated: 2026-09-01 02:59 Asia/Dubai
+Scope: second bounded overnight milestone; local Level 10 duel integration only. Levels 1-9 and the public GitHub Pages game remain untouched.
+
+## Completed milestone
+
+- The existing cyan bridle strike now restores the remembered hand and first Crown Path, seals the authored upper arena, heals Aren, and begins a separate three-phase Warden duel instead of prematurely opening the exit.
+- Added a safe fight-only checkpoint. Fatal duel attempts keep every solved Level 10 puzzle and restoration tile, reset both combatants, increment the Warden attempt count, and retain elapsed fight time and real damage totals. A fall after the boss reaches its final stagger also restarts the duel rather than reforming the complete realm.
+- Added readable amber telegraphs, vermilion active danger, cyan recovery windows, a visible Warden health bar, phase pips, local sweep and arena-wide sand-wave warnings, and a non-lethal final Dawnstroke. The gate opens only after the second earned finale strike breaks the Crown command and leaves the Warden kneeling.
+- Keyboard and touch routes use the established controls: Down guards and late-tap parries, Down plus Strike creates a heavy guard break, ordinary Strike forms a 1-1-2 three-hit chain, and an airborne Strike deals the aerial answer. Warden guarding explicitly suppresses the normal one-way-platform drop-through conflict.
+- Added an authored left arena seal while preserving the existing east gate. Both seals are removed exactly once on victory and fully return to pristine state on a complete realm reform.
+- Extended the debug snapshot and HUD without routing the Warden through the legacy boss/contact-damage system.
+
+## Validation evidence
+
+- Complete automated suite: **192 tests across 24 files passed**.
+- Deterministic coverage includes pristine schema/clone reset, bridle-to-duel deferral, safe arena seal, full update-loop guard on one-way tiles, real attack cooldown and three separate touch-like taps, heavy break, parry, damage totals, fatal attempt and post-stagger restart, final-strike ordering, both gate removals, phase colors, and sweep-versus-sand-wave geometry.
+- Production build: **55 modules transformed**; Level 10 remains independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Live local browser route: `http://127.0.0.1:4173/eclipse-veiled-kingdom/?previewLevel=warden-of-dust&fresh=1`.
+- Browser proof covered 1440x900 desktop, 844x390 landscape phone, and 390x844 portrait phone. HUD, boss health, hints, canvas, and all seven touch controls remained visible without overlap.
+- The real input path proved Arrow Down guards without falling through the arena; three pointer press/release Strike taps at 340 ms cadence completed the 1-1-2 chain inside the shortest Eclipse recovery.
+- The live checkpoint was driven through boss health zero, deferred finale, non-lethal Dawnstroke, kneeling restoration, and both arena seals opening. A fresh isolated reload reported no browser errors or warnings. The user's tab was returned to a pristine 4/4 Level 10 start.
+- No push, deployment, purchase, paid API, credential access, public-site mutation, or backup alteration occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted all four integration-audit findings: Down originally conflicted with one-way drop-through; the shortest recovery was too narrow for three touch taps; the first phase pip was lit at full health; and the sweep visual was wider than its damage area. Each issue now has a deterministic regression and live input proof where applicable.
+- Retained the user-approved health-bar duel despite the earlier proof-only recommendation. The Warden still restores rather than dies and remains separate from the generic legacy boss model.
+
+## Remaining quality gaps
+
+- This milestone establishes the complete playable combat grammar, checkpoint, and presentation states; it is not yet the final cinematic animation, audio, balance, or accessibility pass.
+- Automated and accelerated browser play prove the causal route, but the 90-120 second human difficulty target still needs a natural-input balance session. Do not claim final duel pacing yet.
+- Stage I Chronicle persistence, player-name capture, rank policy, adaptive music, sound effects, volume controls, and studio polish remain intentionally unimplemented.
+
+## Exact next milestone
+
+Implement the original adaptive audio foundation and defensive browser-unlock lifecycle as an isolated local milestone: separate persistent Music and Effects settings, deterministic procedural exploration/puzzle/Warden/victory score states, voice-limited SFX buses, and tests. Preserve the newly verified duel logic and postpone Chronicle/save v5 presentation until the audio foundation is independently green.

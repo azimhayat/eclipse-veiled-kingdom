@@ -4,10 +4,12 @@ function resetBoss(duel) {
   duel.boss.hp = duel.boss.maxHp;
   duel.boss.phase = 'guardian';
   duel.boss.action = 'idle';
+  duel.boss.attackKind = 'high';
   duel.boss.actionClock = 0;
   duel.boss.sequenceIndex = 0;
   duel.boss.hitstun = 0;
   duel.boss.invulnerable = false;
+  duel.boss.attackConsumed = true;
 }
 
 function resetPlayer(duel) {
@@ -44,6 +46,9 @@ export function startWardenDuelAttempt(duel) {
   duel.active = true;
   duel.phase = 'guardian';
   resetBoss(duel);
+  duel.boss.action = 'intro';
+  duel.boss.actionClock = duel.timing.introSeconds;
+  duel.boss.invulnerable = true;
   resetPlayer(duel);
   duel.attempt.count += 1;
   resetAttempt(duel);
@@ -81,9 +86,6 @@ export function advanceWardenDuel(duel, dt) {
   duel.boss.actionClock = Math.max(0, duel.boss.actionClock - dt);
   duel.boss.hitstun = Math.max(0, duel.boss.hitstun - dt);
   if (duel.player.comboClock === 0) duel.player.comboStep = 0;
-  if (duel.boss.actionClock === 0 && duel.boss.hitstun === 0 && duel.boss.action !== 'staggered') {
-    duel.boss.action = 'idle';
-  }
   updateWardenDuelPhase(duel);
   return true;
 }
