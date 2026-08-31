@@ -393,3 +393,51 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Begin the bounded natural-input quality pass for Chapter 5, **Teeth Beneath Dust**. Verify its two-pulse warning language, Oathbind shelter lesson and combination, recovery fairness after a missed cycle, finite completion/restoration, fatal reset, real Chapter 6 transition, and desktop/landscape/portrait presentation. Fix only reproduced failures, preserve completed Chapter 1-4 behavior, and do not publish or author Inner Kingdom content.
+
+---
+
+# Reviewed continuation — Civic Promise balance payoff
+
+Updated: 2026-08-31 22:19 Asia/Dubai
+Scope: the user requested one narrow Level 4 change; all other levels, geometry, controls, story, and campaign behavior remain unchanged. Public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Implemented the user's Civic Promise rule: after the archive record is carved, pushing the unbound rune box far enough onto the two-tile public scale now seats it fully on the nearest valid side and locks horizontal translation until DIG.
+- Removed the reproduced stale-instruction edge where the game could say **THE SCALE IS BALANCED BUT UNBOUND** while continued movement nudged the box back out before the DIG action.
+- Kept the player beside the small seating adjustment, so the instruction and immediate DIG interaction remain causally connected without a second repositioning step.
+- The final DIG now binds the seated oath, restores the golden civic road, opens the gate, and starts one readable 1.1-second scale payoff.
+- Reworked only the Civic Promise monument transform: the stone pillar stays grounded, the beam eases from the Crown's crooked angle to level, and both pans remain vertical under gravity throughout the swing.
+- Aligned objective-mechanic rendering with the engine's simulation clock, matching every authored `completedAt` timestamp. Backdrop, relic, and hero ambience retain the existing RAF clock.
+- Full-life reform clears the runtime-only scale lock and restores the pristine movable Level 4 block.
+
+## Validation evidence
+
+- Focused Level 4/render suites: **16 tests across 2 files passed**.
+- Complete automated suite: **169 tests across 23 files passed**.
+- New regressions prove half-overlap seating, immediate DIG reach without repositioning, translation lock, exact final bind, gate/restoration completion, pristine fatal reset, upright pillar, tilted unrestored beam, vertical pans, eased midpoint, and fully level settled beam.
+- Production build: **54 modules transformed**; all production chapters remain separately lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Fresh browser replay completed the real Level 4 production preview at **01:56.84**, **4/4 health**, and **0 falls**. The result reached **OATH RESTORED / The gate remembers its promise** without state injection.
+- The final completion card fit at desktop default, landscape phone 844×390 (document exactly 844×390; card bottom 342), and portrait phone 390×844 (document exactly 390×844; card bottom 688). The viewport override was reset.
+- Three recorded render-cache errors occurred only during source hot replacement before the final hard reload. The fresh full route and responsive checks added no later warning/error entries.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: the real live failure was a hint/interaction race, not a missing completion branch. Seat and lock the prepared box before issuing the DIG hint.
+- Accepted after correction: use the nearest fully contained scale position rather than the center, and carry a nearby player through the maximum 24-pixel seating adjustment so DIG remains immediately reachable.
+- Accepted: keep the pillar upright, rotate only the beam, and counter-rotate the pan assemblies so the visual reads as a working balance rather than a tilted sign.
+- Accepted: objective restoration uses simulation time; rendering its 1.1-second payoff on RAF epoch time would skip directly to the end state.
+- Rejected: widening Oathbind reach globally. No other puzzle or level needed an interaction-distance change.
+- Rejected: redesigning the Level 4 route, scale location, controls, copy, or campaign save. The requested change is isolated to final seating and payoff.
+
+## Remaining quality gaps
+
+- The natural-input quality pass is complete through Chapter 4 only; Chapters 5-10 remain outstanding.
+- The final browser run used real visible controls through browser automation, whose multi-pointer timing is less precise than a human touch device; deterministic engine and render regressions cover the exact final interaction independently.
+- Portrait remains strongly letterboxed; music, cinematics, accessibility settings, and Inner Kingdom content remain unbuilt.
+
+## Exact next milestone
+
+Begin the bounded natural-input quality pass for Chapter 5, **Teeth Beneath Dust**. Verify its warning rhythm, Oathbind shelter, recovery fairness, fatal reset, Chapter 6 transition, and desktop/landscape/portrait presentation. Preserve the completed Civic Promise behavior and all Chapter 1-4 routes. Do not publish or author Inner Kingdom content.

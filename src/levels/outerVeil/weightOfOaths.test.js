@@ -331,6 +331,51 @@ describe('Outer Veil Level 4 production preview', () => {
     });
   });
 
+  it('seats a valid final bind squarely on the Civic Promise before balancing the scale', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWeightOfOaths(), identity));
+    const engine = engineHarness(level);
+    level.objective.lessonComplete = true;
+    level.objective.memoryMark.revealed = true;
+    level.objective.phase = 'seal';
+    level.block.x = level.objective.finalSeal.x - level.block.w / 2;
+    level.block.y = 26 * TILE - level.block.h;
+    standBeside(engine, 'left');
+
+    expect(GameEngine.prototype.blockOnOathZone.call(engine, level.objective.finalSeal)).toBe(true);
+    GameEngine.prototype.updateOathbindObjective.call(engine);
+
+    const seatedX = level.objective.finalSeal.x;
+    expect(level.block).toMatchObject({
+      x: seatedX,
+      vx: 0,
+      vy: 0,
+      bound: false,
+      translationLocked: true,
+    });
+    expect(level.objective.complete).toBe(false);
+    expect(GameEngine.prototype.canMoveBlock.call(engine, -4)).toBe(false);
+    expect(engine.setHint).toHaveBeenLastCalledWith(
+      'THE SCALE IS BALANCED BUT UNBOUND · press DIG beside the rune block.',
+      3.2,
+    );
+
+    expect(GameEngine.prototype.toggleOathbind.call(engine)).toBe(true);
+
+    const boundY = level.objective.finalSeal.y + level.objective.finalSeal.h
+      - level.block.h - level.block.oathLift;
+    expect(level.block).toMatchObject({
+      x: seatedX,
+      y: boundY,
+      vx: 0,
+      vy: 0,
+      bound: true,
+      translationLocked: true,
+    });
+    expect(level.objective).toMatchObject({ phase: 'complete', complete: true, restored: true });
+    expect(engine.gateOpen).toBe(true);
+    expect(engine.setHint).toHaveBeenLastCalledWith(level.objective.completionHint, 6);
+  });
+
   it('explains how to recover after reaching the public scale before carving the record', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createWeightOfOaths(), identity));
     const engine = engineHarness(level);
@@ -541,6 +586,7 @@ describe('Outer Veil Level 4 production preview', () => {
       vy: 0,
       bound: false,
     });
+    expect(engine.level.block.translationLocked).toBeFalsy();
     expect(engine.level.objective).toMatchObject({
       phase: 'learn',
       lessonComplete: false,

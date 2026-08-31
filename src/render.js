@@ -557,39 +557,54 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
 
     if (monument) {
       const restored = objective.restored;
-      const elapsed = restored ? Math.max(0, time - (objective.completedAt || time)) : 0;
-      const rise = restored ? Math.min(1, elapsed / 1.1) : 0;
-      const rotation = monument.rotation * (1 - rise);
+      const elapsed = restored ? Math.max(0, time - (objective.completedAt ?? time)) : 0;
+      const progress = restored ? Math.min(1, elapsed / 1.1) : 0;
+      const balance = 1 - (1 - progress) ** 3;
+      const rotation = monument.rotation * (1 - balance);
       const x = monument.tx * TILE;
       const y = monument.baseTy * TILE;
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(rotation);
       ctx.strokeStyle = restored ? '#f7d574' : '#6f7482';
       ctx.fillStyle = restored ? 'rgba(247,213,116,.2)' : 'rgba(34,39,54,.72)';
       ctx.shadowColor = restored ? '#f7d574' : 'transparent';
       ctx.shadowBlur = restored ? 22 : 0;
       ctx.lineWidth = 5;
+
+      // Keep the civic pillar grounded while the beam and its pans visibly
+      // swing from the Crown's crooked law into a level public promise.
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(0, -118);
-      ctx.moveTo(-58, -94);
-      ctx.lineTo(58, -94);
       ctx.stroke();
-      for (const side of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(side * 47, -94);
-        ctx.lineTo(side * 47, -54);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(side * 47, -45, 23, 0, Math.PI, false);
-        ctx.fill();
-        ctx.stroke();
-      }
       ctx.beginPath();
       ctx.moveTo(-22, 0);
       ctx.lineTo(22, 0);
       ctx.stroke();
+
+      ctx.save();
+      ctx.translate(0, -94);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.moveTo(-58, 0);
+      ctx.lineTo(58, 0);
+      ctx.stroke();
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(side * 47, 0);
+        ctx.rotate(-rotation);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, 40);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 49, 23, 0, Math.PI, false);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+
       ctx.fillStyle = restored ? '#ffe39a' : '#9a9daa';
       ctx.font = "600 10px 'Outfit'";
       ctx.textAlign = 'center';

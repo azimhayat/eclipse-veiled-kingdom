@@ -2391,11 +2391,40 @@ export class GameEngine {
       this.setHint('THE PUBLIC SCALE WAITS · release the block and return west beneath the archive.', 3.8);
       return;
     }
+
+    const seatOnCivicPromise = () => {
+      const previousX = block.x;
+      const playerWasBeside = this.player.y + this.player.h > block.y - 8
+        && this.player.y < block.y + block.h + 8
+        && Math.max(
+          0,
+          block.x - (this.player.x + this.player.w),
+          this.player.x - (block.x + block.w),
+        ) <= 24;
+      block.x = clamp(
+        block.x,
+        objective.finalSeal.x,
+        objective.finalSeal.x + objective.finalSeal.w - block.w,
+      );
+      block.y = objective.finalSeal.y + objective.finalSeal.h
+        - block.h - (block.bound ? block.oathLift || 0 : 0);
+      block.vx = 0;
+      block.vy = 0;
+      block.translationLocked = true;
+      if (playerWasBeside) this.player.x += block.x - previousX;
+    };
     if (!block.bound) {
+      // Once the prepared oath reaches the scale, hold its readable placement
+      // until DIG. Continued movement cannot turn this instruction stale.
+      seatOnCivicPromise();
       this.setHint('THE SCALE IS BALANCED BUT UNBOUND · press DIG beside the rune block.', 3.2);
       return;
     }
 
+    // The final oath is a deliberate placement, not a precision tax. Once a
+    // valid bound block overlaps the Civic Promise, seat it squarely on the
+    // scale so the visual balance and restoration happen as one clear action.
+    seatOnCivicPromise();
     objective.complete = true;
     objective.restored = true;
     objective.phase = 'complete';
@@ -3007,7 +3036,10 @@ export class GameEngine {
 
     ctx.save();
     ctx.translate(-this.camera.x, -this.camera.y);
-    drawLevelMechanics(ctx, this.level, time, this.gateOpen);
+    // Objective restoration timestamps use simulation time, so mechanics must
+    // render on the same clock. Backdrop, relic, and hero ambience remain on
+    // the RAF clock below.
+    drawLevelMechanics(ctx, this.level, this.totalTime, this.gateOpen);
     if (!this.level.block?.disabled) {
       drawBlockAndPlate(ctx, this.level.block, this.level.plate, this.gateOpen);
     }
