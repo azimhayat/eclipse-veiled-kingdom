@@ -555,7 +555,14 @@ describe('Outer Veil Level 4 production preview', () => {
     expect(engine).toMatchObject({ mode: 'dead', deaths: 1 });
     expect(engine.player.hp).toBe(0);
     expect(callbacks.death).toHaveBeenCalledOnce();
-    expect(callbacks.death).toHaveBeenCalledWith({ deaths: 1, demo: false });
+    expect(callbacks.death).toHaveBeenCalledWith({
+      deaths: 1,
+      levelDeaths: 1,
+      levelTime: 31,
+      levelKey: identity.levelKey,
+      wardenStats: null,
+      demo: false,
+    });
     expect(callbacks.levelComplete).not.toHaveBeenCalled();
 
     vi.stubGlobal('document', { createElement: vi.fn(() => canvasSurface()) });

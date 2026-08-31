@@ -826,3 +826,54 @@ Scope: third bounded overnight milestone; local audio foundation and controls on
 ## Exact next milestone
 
 Extend the versioned campaign save with truthful Stage I run and Warden statistics, including explicit unknowns for migrated saves. Then build the local Chronicle completion sequence, validated player-name prompt, transparent rank calculation, and non-functional Stage II indication without changing Levels 1-9 or publishing anything.
+
+---
+
+# Stage I finale — Chronicle and truthful save v5
+
+Updated: 2026-09-01 03:57 Asia/Dubai
+Scope: fourth bounded overnight milestone; local Stage I statistics, migration, completion presentation, and reload continuity. Levels 1-9, Level 10 geometry/art/puzzles, the verified backup, and the public GitHub Pages game remain untouched.
+
+## Completed milestone
+
+- Migrated the existing campaign foundation from `eotvk-save-v4` to `eotvk-save-v5` with explicit Stage I run and Chronicle records. The loader prefers valid v5, falls back through v4/v3/v2/v1, repairs missing v5 Stage state, keeps stable level identity separate from order, and never overwrites an older save key.
+- Historic completed saves now receive an honest 10/10 Chronicle with unknown time, retries, Warden statistics, and no fabricated rank. Incomplete migrated runs continue from their real chapter but remain explicitly partial and unranked. Zero-progress v2/v3/v4 saves remain fresh rank-eligible runs.
+- Added monotonic live checkpoints for current chapter time, deaths, Warden attempts, Warden damage, and cumulative active Warden combat across all attempts. They flush every five seconds and on death, pause, visibility loss, page hide, and title return; reload restores them before resumed play. Final chapter completion atomically seals the Chronicle and progression.
+- Removed the misleading resumed-session realm time. The realm best is now written only from the exact sum of a complete verified live Chronicle, including verified replays; migrated v4 session time is retained nowhere as a Stage total.
+- Added a pure versioned rank policy with exact visible thresholds. S / Dawn requires 22:35 or better, zero retries, one Warden attempt, at most one Warden damage, and at most 90 seconds total Warden combat; A and B have similarly displayed conjunctive limits; other complete verified live runs receive C. Partial, historic, unknown, and malformed evidence fails closed to Unranked.
+- Added Unicode-safe local name capture using NFKC normalization, Unicode-space collapse, 1–24 graphemes, a defensive hard bound, visible-base requirement, and internal-only ZWJ/ZWNJ handling. Arabic/Persian and extended emoji names are preserved; hidden controls, bidi overrides, invisible-only names, broken joiners, and unsafe lengths are rejected. No name is sent remotely.
+- Replaced the production completion card with `STAGE I CLEAR · THE OUTER VEIL RESTORED`, the exact kingdom-name prompt, an accessible semantic Chronicle, 10/10 restoration, truthful metrics or `Not recorded`, completion date, transparent rank criteria, editable local name, and a static `Road of Missing Names` Stage II indication. Stage II remains non-functional and no placeholder levels were created.
+- Completed modal focus isolation/restoration, disabled background HUD controls, safe mobile centering, no forced phone keyboard, readable 44px-plus controls, responsive 3/2-column Chronicle layouts, edit-name flow, and provenance-specific unranked explanations.
+
+## Validation evidence
+
+- Complete automated suite: **254 tests across 28 files passed** after final coverage additions for v5 precedence/fallback, v4/v3/v2 migration truth, missing-state repair, hostile progression binding, duplicate final events, partial finalization, Unicode edge cases, exact rank boundaries, live checkpoints, Warden carry, respawn preservation, and callback order/metrics.
+- Production build: **58 modules transformed**; all ten Stage I chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF notices.
+- Browser presentation proof covered 1440x900 desktop, 844x390 landscape phone, and 390x844 portrait phone. The Chronicle remained readable and scroll-safe without horizontal overflow; its dialog heading receives focus, background controls are disabled, and title focus returns correctly.
+- A real local name submission rejected a bidi-control payload, accepted a valid name, rendered the historic unknown-stat card, and survived reload. The original user save was then restored exactly.
+- A real Stage I replay persisted a Level 1 live checkpoint after the five-second interval (`timeSeconds: 3.9833`, zero deaths), reloaded without browser errors, and retained the checkpoint; the deterministic engine test proves those counters are restored into resumed play. The original user save was restored after the check.
+- Final fresh local loads reported no browser errors or warnings. Playable local routes remain `http://127.0.0.1:4173/eclipse-veiled-kingdom/?campaign=outer-veil` and `http://127.0.0.1:4173/eclipse-veiled-kingdom/?previewLevel=warden-of-dust&fresh=1`.
+- Audio provenance remains unchanged: all music and effects are original deterministic Web Audio synthesis authored locally in source. No samples, downloads, paid APIs, or third-party copyrighted assets were introduced.
+- No push, deployment, purchase, credential access, public-site mutation, or backup alteration occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted all final save-audit findings: never treat resumed `campaignTime` as Stage time; persist Warden metrics atomically; distinguish v2/v3/v4 provenance; repair missing v5 Stage state; bind active runs to campaign progression; preserve in-progress chapter and all-attempt Warden counters; and keep zero/unknown evidence unranked.
+- Accepted all name/rank audit findings: visible Unicode base, constrained joiners, independent hard ceiling, exact `mm:ss` criteria, explicit unknown provenance, and cumulative Warden-time labeling.
+- Accepted all presentation findings: focus isolation/restoration, no mobile autofocus, safe scroll start, editable name, consistent validation guidance, long-name wrapping, corrected live validation state, and provenance-specific unranked copy.
+- Rejected the early suggestion to store the Chronicle under a separate local-storage key. The approved requirement was to extend the existing versioned campaign-save foundation, so v5 keeps progression, raw metrics, Chronicle identity, and migration in one atomic record.
+
+## Backup and rollback
+
+- Pre-finale recovery point remains commit `bcadb1b2a12f50b8709b852ddd6ec49150684f1f`, branch `backup/stage-1-before-finale-20260901`, tag `backup-stage-1-playtested-20260901`, and bundle `C:\Users\azimh\Documents\Codex\backups\eclipse-veiled-kingdom\2026-09-01-stage1\eclipse-veiled-kingdom-stage1.bundle`.
+- This Chronicle milestone will be committed locally as its own coherent rollback point after the final green validation.
+
+## Remaining quality gaps
+
+- The complete functional Stage I finale now has combat, adaptive audio, durable local statistics, and Chronicle presentation. The approved final balance/accessibility milestone remains: natural-input 90–120 second duel pacing, touch and keyboard difficulty, final cinematic timing, device-speaker mix/fatigue, reduced-motion/contrast review, and one uninterrupted Level 10 checkpoint-to-Chronicle human acceptance run.
+- The synthesized audio is still a professional first pass, not final studio performance or mastering.
+
+## Exact next milestone
+
+Run the final local balance and accessibility pass without adding scope: naturally play the real Level 10 fight through the Dawnstroke and Chronicle on keyboard and touch, tune only reproduced fairness/readability/audio issues, verify reduced-motion and contrast behavior, rerun every automated/build/responsive check, and prepare the concise morning handoff. Keep all work local until the user explicitly approves publication.

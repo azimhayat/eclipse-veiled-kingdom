@@ -334,6 +334,54 @@ describe('lazy runtime transitions', () => {
     expect(engine.callbacks.mode).toHaveBeenCalledWith('title');
   });
 
+  it('preserves the current level timer and retry count across a realm respawn', () => {
+    const engine = {
+      restartWardenDuelAttempt: vi.fn(() => false),
+      levelIndex: 4,
+      levelTime: 63,
+      levelDeaths: 2,
+      cancelLevelTransition: vi.fn(),
+      loadLevel: vi.fn(function loadLevel() {
+        this.levelTime = 0;
+        this.levelDeaths = 0;
+      }),
+      clearInputs: vi.fn(),
+      callbacks: { mode: vi.fn() },
+      setHint: vi.fn(),
+      pushHud: vi.fn(),
+    };
+    GameEngine.prototype.respawn.call(engine);
+    expect(engine.loadLevel).toHaveBeenCalledWith(4, true);
+    expect(engine.levelTime).toBe(63);
+    expect(engine.levelDeaths).toBe(2);
+    expect(engine.mode).toBe('play');
+  });
+
+  it('restores persisted chapter counters before resumed play', () => {
+    const engine = {
+      mode: 'play', levelTime: 0, levelDeaths: 0, deaths: 0, pushHud: vi.fn(),
+      level: {
+        objective: {
+          type: 'warden-restoration',
+          duel: { attempt: { count: 0 }, totals: { damageTaken: 0, elapsed: 0 } },
+        },
+      },
+    };
+    expect(GameEngine.prototype.restoreLevelRunStats.call(engine, {
+      levelTime: 42.5,
+      levelDeaths: 2,
+      wardenStats: { attempts: 3, damageTaken: 5, combatTimeSeconds: 74.5 },
+    })).toBe(true);
+    expect(engine).toMatchObject({ levelTime: 42.5, levelDeaths: 2, deaths: 2 });
+    expect(engine.level.objective.duel).toMatchObject({
+      attempt: { count: 3 }, totals: { damageTaken: 5, elapsed: 74.5 },
+    });
+    expect(engine.pushHud).toHaveBeenCalledWith(true);
+    expect(GameEngine.prototype.restoreLevelRunStats.call(engine, {
+      levelTime: -1, levelDeaths: 0,
+    })).toBe(false);
+  });
+
   it('replays from a completed run with exactly one visible Level 1 announcement', () => {
     const engine = {
       mode: 'win',

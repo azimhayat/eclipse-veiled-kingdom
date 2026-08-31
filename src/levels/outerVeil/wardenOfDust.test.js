@@ -55,9 +55,9 @@ function engineHarness(level) {
     },
     gateOpen: false,
     particles: [], soldiers: [], projectiles: [], crumble: new Map(),
-    mode: 'play', totalTime: 0, deaths: 0, demo: false,
+    mode: 'play', totalTime: 0, levelTime: 0, deaths: 0, levelDeaths: 0, demo: false,
     audio: { play: vi.fn() },
-    callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), death: vi.fn(), mode: vi.fn() },
+    callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), levelComplete: vi.fn(), death: vi.fn(), mode: vi.fn() },
     setHint: vi.fn(), pushHud: vi.fn(), burst: vi.fn(),
     setInput: GameEngine.prototype.setInput,
     clearInputs: GameEngine.prototype.clearInputs,
@@ -489,6 +489,9 @@ describe('Outer Veil Level 10 production preview', () => {
     objective.rememberedHand.reached = true;
     objective.bridle.struck = true;
     objective.duel.active = true;
+    objective.duel.attempt.count = 2;
+    objective.duel.totals.elapsed = 88;
+    objective.duel.totals.damageTaken = 7;
     objective.duel.boss.invulnerable = false;
     expect(damageWardenDuelBoss(objective.duel, objective.duel.boss.maxHp)).toBe(true);
     expect(completeWardenDuel(objective.duel)).toBe(true);
@@ -500,6 +503,10 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(engine.callbacks.win).toHaveBeenCalledWith({
       time: 132,
       deaths: 0,
+      levelDeaths: 0,
+      completionStats: {
+        provenance: 'live-run-v1', attempts: 2, damageTaken: 7, combatTimeSeconds: 88,
+      },
       campaignId: 'production-preview-warden-of-dust',
       sessionKind: 'production-preview',
       completedLevels: 1,
@@ -508,6 +515,14 @@ describe('Outer Veil Level 10 production preview', () => {
       campaignOrder: 10,
       objectiveType: 'warden-restoration',
     });
+    expect(engine.callbacks.levelComplete).toHaveBeenCalledWith(expect.objectContaining({
+      levelKey: identity.levelKey,
+      realmComplete: true,
+      levelDeaths: 0,
+      completionStats: {
+        provenance: 'live-run-v1', attempts: 2, damageTaken: 7, combatTimeSeconds: 88,
+      },
+    }));
   });
 
   it('deep-clones preview state and reforms the complete transformation after life-over', async () => {

@@ -119,6 +119,7 @@ export class GameEngine {
     this.totalTime = 0;
     this.levelTime = 0;
     this.deaths = 0;
+    this.levelDeaths = 0;
     this.levelCompletionEmitted = false;
     this.camera = { x: 0, y: WORLD_H - VIEW_H };
     this.input = {
@@ -301,6 +302,7 @@ export class GameEngine {
         duelBossAttack: this.level.objective.duel?.boss?.attackKind || null,
         duelAttempts: this.level.objective.duel?.attempt?.count || 0,
         duelAttemptSeconds: this.level.objective.duel?.attempt?.elapsed || 0,
+        duelTotalSeconds: this.level.objective.duel?.totals?.elapsed || 0,
         duelDamageTaken: this.level.objective.duel?.totals?.damageTaken || 0,
         duelFinaleReady: Boolean(this.level.objective.duel?.finale?.ready),
         wardenState: this.level.objective.warden?.state || null,
@@ -327,8 +329,10 @@ export class GameEngine {
       objective,
       gateOpen: this.gateOpen,
       deaths: this.deaths,
+      levelDeaths: this.levelDeaths,
       soldiers: this.soldiers.length,
       time: this.totalTime,
+      levelTime: this.levelTime,
       timedTeeth,
       bellTower,
       sanctum,
@@ -518,6 +522,7 @@ export class GameEngine {
     this.totalTime = 0;
     this.levelTime = 0;
     this.deaths = 0;
+    this.levelDeaths = 0;
     this.loadLevel(0, true);
   }
 
@@ -565,6 +570,26 @@ export class GameEngine {
     return this.transitionToLevel(index);
   }
 
+  restoreLevelRunStats({ levelTime, levelDeaths, wardenStats } = {}) {
+    if (this.mode !== 'play'
+      || !Number.isFinite(levelTime) || levelTime < 0
+      || !Number.isInteger(levelDeaths) || levelDeaths < 0) return false;
+    this.levelTime = Math.max(this.levelTime, levelTime);
+    this.levelDeaths = Math.max(this.levelDeaths, levelDeaths);
+    this.deaths = Math.max(this.deaths, this.levelDeaths);
+    const duel = this.level?.objective?.type === 'warden-restoration' ? this.level.objective.duel : null;
+    if (duel && wardenStats
+      && Number.isInteger(wardenStats.attempts) && wardenStats.attempts >= 0
+      && Number.isInteger(wardenStats.damageTaken) && wardenStats.damageTaken >= 0
+      && Number.isFinite(wardenStats.combatTimeSeconds) && wardenStats.combatTimeSeconds >= 0) {
+      duel.attempt.count = Math.max(duel.attempt.count, wardenStats.attempts);
+      duel.totals.damageTaken = Math.max(duel.totals.damageTaken, wardenStats.damageTaken);
+      duel.totals.elapsed = Math.max(duel.totals.elapsed, wardenStats.combatTimeSeconds);
+    }
+    this.pushHud(true);
+    return true;
+  }
+
   pause(paused) {
     if (this.mode !== 'play' && this.mode !== 'paused') return;
     this.audio?.play('menu');
@@ -583,6 +608,7 @@ export class GameEngine {
     this.levelIndex = index;
     this.level = nextLevel;
     this.levelTime = 0;
+    this.levelDeaths = 0;
     this.levelCompletionEmitted = false;
     this.player = this.makePlayer(this.level.spawn);
     this.checkpoint = { kind: 'spawn', id: null, ...this.level.spawn, facing: 1 };
@@ -605,9 +631,11 @@ export class GameEngine {
     if (this.restartWardenDuelAttempt?.()) return;
     const currentIndex = this.levelIndex;
     const elapsedLevelTime = this.levelTime;
+    const elapsedLevelDeaths = this.levelDeaths;
     this.cancelLevelTransition();
     this.loadLevel(currentIndex, true);
     this.levelTime = elapsedLevelTime;
+    this.levelDeaths = elapsedLevelDeaths;
     this.mode = 'play';
     this.clearInputs();
     this.callbacks.mode?.('play');
@@ -1672,8 +1700,20 @@ export class GameEngine {
     this.pushHud(true);
     if (p.hp <= 0) {
       this.deaths += 1;
+      this.levelDeaths = (Number.isInteger(this.levelDeaths) ? this.levelDeaths : 0) + 1;
       this.mode = 'dead';
-      this.callbacks.death?.({ deaths: this.deaths, demo: this.demo });
+      this.callbacks.death?.({
+        deaths: this.deaths,
+        levelDeaths: this.levelDeaths,
+        levelTime: this.levelTime,
+        levelKey: this.level.levelKey || null,
+        wardenStats: duel ? {
+          attempts: duel.attempt.count,
+          damageTaken: duel.totals.damageTaken,
+          combatTimeSeconds: duel.totals.elapsed,
+        } : null,
+        demo: this.demo,
+      });
     }
   }
 
@@ -3434,6 +3474,7 @@ export class GameEngine {
             levelTime: this.levelTime,
             campaignTime: this.totalTime,
             deaths: this.deaths,
+            ...(Number.isInteger(this.levelDeaths) ? { levelDeaths: this.levelDeaths } : {}),
             realmKey: this.repository.entryAt?.(this.levelIndex)?.realmKey || null,
             realmComplete: false,
           });
@@ -3443,6 +3484,17 @@ export class GameEngine {
       } else {
         if (!this.levelCompletionEmitted) {
           this.levelCompletionEmitted = true;
+          const duel = this.level.objective?.type === 'warden-restoration'
+            ? this.level.objective.duel
+            : null;
+          const completionStats = duel?.complete
+            && duel.attempt.count >= 1
+            && duel.totals.elapsed > 0 ? {
+            provenance: 'live-run-v1',
+            attempts: duel.attempt.count,
+            damageTaken: duel.totals.damageTaken,
+            combatTimeSeconds: duel.totals.elapsed,
+          } : null;
           this.callbacks.levelComplete?.({
             campaignId: this.repository.campaignId,
             sessionKind: this.repository.sessionKind,
@@ -3453,6 +3505,8 @@ export class GameEngine {
             levelTime: this.levelTime,
             campaignTime: this.totalTime,
             deaths: this.deaths,
+            ...(Number.isInteger(this.levelDeaths) ? { levelDeaths: this.levelDeaths } : {}),
+            ...(completionStats ? { completionStats } : {}),
             realmKey: this.repository.entryAt?.(this.levelIndex)?.realmKey || null,
             realmComplete: true,
           });
@@ -3462,6 +3516,15 @@ export class GameEngine {
         this.callbacks.win?.({
           time: this.totalTime,
           deaths: this.deaths,
+          ...(Number.isInteger(this.levelDeaths) ? { levelDeaths: this.levelDeaths } : {}),
+          ...(this.level.objective?.duel?.complete
+            && this.level.objective.duel.attempt.count >= 1
+            && this.level.objective.duel.totals.elapsed > 0 ? { completionStats: {
+            provenance: 'live-run-v1',
+            attempts: this.level.objective.duel.attempt.count,
+            damageTaken: this.level.objective.duel.totals.damageTaken,
+            combatTimeSeconds: this.level.objective.duel.totals.elapsed,
+          } } : {}),
           campaignId: this.repository.campaignId,
           sessionKind: this.repository.sessionKind,
           completedLevels: this.repository.length,
