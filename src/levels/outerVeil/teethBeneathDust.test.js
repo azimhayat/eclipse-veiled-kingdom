@@ -474,6 +474,175 @@ describe('Outer Veil Level 5 production preview', () => {
     expect(template.objective).toMatchObject({ phase: 'observe', complete: false, restored: false });
   });
 
+  it('completes Chapter 5 once and opens the real lazy Chapter 6 with the advanced save', async () => {
+    const timestamp = new Date('2026-08-31T19:45:00.000Z');
+    const repository = createOuterVeilCampaignRepository();
+    repository.retainAround(4);
+    await repository.loadTemplate(4);
+    expect(repository.has(5)).toBe(false);
+    const level = repository.createRuntime(4);
+
+    let save = createCampaignSave({ now: () => timestamp });
+    for (const [index, levelKey] of OUTER_VEIL_LEVEL_KEYS.slice(0, 4).entries()) {
+      save = recordProductionLevelCompletion(save, {
+        levelKey,
+        levelTime: 30 + index,
+        campaignTime: 100 + index,
+        completedAt: timestamp,
+        now: () => timestamp,
+      });
+    }
+    const order = [];
+    const rendered = new Map([
+      [OUTER_VEIL_LEVEL_KEYS[4], canvasChunks()],
+      [OUTER_VEIL_LEVEL_KEYS[5], canvasChunks()],
+    ]);
+    const bank = {
+      retain: vi.fn(() => bank),
+      has: vi.fn((key) => rendered.has(key)),
+      get: vi.fn((key) => rendered.get(key)),
+      set: vi.fn((key, chunks) => {
+        rendered.set(key, chunks);
+        return bank;
+      }),
+    };
+    const callbacks = {
+      gate: vi.fn(),
+      mode: vi.fn(),
+      level: vi.fn(),
+      transition: vi.fn(),
+      levelComplete: vi.fn((completion) => {
+        order.push('complete');
+        save = recordProductionLevelCompletion(save, {
+          ...completion,
+          completedAt: timestamp,
+          now: () => timestamp,
+        });
+      }),
+      win: vi.fn(),
+    };
+    let transitionPromise;
+    const engine = {
+      repository,
+      bank,
+      levelIndex: 4,
+      level,
+      player: GameEngine.prototype.makePlayer(level.spawn),
+      checkpoint: { kind: 'spawn', id: null, ...level.spawn, facing: 1 },
+      camera: { x: 0, y: 0 },
+      input: {
+        left: false, right: false, climb: false, down: false, jump: false, attack: false, dig: false,
+        pressed: new Set(), released: new Set(),
+      },
+      soldiers: [],
+      projectiles: [],
+      particles: [],
+      crumble: new Map(),
+      gateOpen: false,
+      mode: 'play',
+      demo: false,
+      running: true,
+      totalTime: 130,
+      levelTime: 45,
+      deaths: 1,
+      levelCompletionEmitted: false,
+      spawnClock: 0,
+      transitionRetryBlocked: false,
+      hintHoldUntil: 0,
+      prefetchGeneration: 0,
+      prefetchController: null,
+      prefetchHandle: null,
+      prefetchTargetIndex: null,
+      prefetchPromise: null,
+      prefetchStart: null,
+      transitionGeneration: 0,
+      transitionController: null,
+      transitioning: false,
+      transitionTargetIndex: null,
+      callbacks,
+      audio: { play: vi.fn() },
+      makePlayer: GameEngine.prototype.makePlayer,
+      relicCount: GameEngine.prototype.relicCount,
+      objectiveStatus: GameEngine.prototype.objectiveStatus,
+      isExitReady: GameEngine.prototype.isExitReady,
+      updateTimedTeethObjective: GameEngine.prototype.updateTimedTeethObjective,
+      toggleOathbind: GameEngine.prototype.toggleOathbind,
+      openGate: GameEngine.prototype.openGate,
+      cancelLevelPrefetch: GameEngine.prototype.cancelLevelPrefetch,
+      cancelLevelTransition: GameEngine.prototype.cancelLevelTransition,
+      prepareAuthoredLevel: GameEngine.prototype.prepareAuthoredLevel,
+      loadLevel: GameEngine.prototype.loadLevel,
+      clearInputs: GameEngine.prototype.clearInputs,
+      announceCurrentLevel: GameEngine.prototype.announceCurrentLevel,
+      setHint: vi.fn(),
+      pushHud: vi.fn(),
+      burst: vi.fn(),
+      scheduleNextLevel: vi.fn(),
+    };
+    engine.transitionToLevel = vi.fn((index) => {
+      order.push('transition');
+      transitionPromise = GameEngine.prototype.transitionToLevel.call(engine, index);
+      return transitionPromise;
+    });
+
+    const thresholds = level.objective.thresholds;
+    engine.player.x = thresholds.lessonClearTx * TILE;
+    GameEngine.prototype.updateTimedTeethObjective.call(engine);
+    engine.player.x = thresholds.controlledClearTx * TILE;
+    GameEngine.prototype.updateTimedTeethObjective.call(engine);
+    standBesideShelter(engine);
+    GameEngine.prototype.toggleOathbind.call(engine);
+    const landing = thresholds.masteryLanding;
+    engine.player.x = (landing.maxTx + 1) * TILE;
+    engine.player.y = landing.feetTy * TILE - engine.player.h - 80;
+    engine.player.grounded = false;
+    GameEngine.prototype.updateTimedTeethObjective.call(engine);
+    expect(level.objective).toMatchObject({ phase: 'complete', complete: true, restored: true });
+    expect(engine.gateOpen).toBe(true);
+
+    engine.player.x = level.door.x;
+    engine.player.y = level.door.y;
+    GameEngine.prototype.updateRelicsAndFlow.call(engine);
+    expect(order.slice(0, 2)).toEqual(['complete', 'transition']);
+    expect(callbacks.levelComplete).toHaveBeenCalledOnce();
+    expect(callbacks.levelComplete).toHaveBeenCalledWith(expect.objectContaining({
+      campaignId: 'outer-veil-production-v1',
+      sessionKind: 'production-campaign',
+      levelKey: OUTER_VEIL_LEVEL_KEYS[4],
+      campaignOrder: 5,
+      nextLevelKey: OUTER_VEIL_LEVEL_KEYS[5],
+      abilityUnlockKey: null,
+      realmComplete: false,
+    }));
+
+    await expect(transitionPromise).resolves.toBe(true);
+    expect(repository.has(5)).toBe(true);
+    const chapterSixTemplate = repository.peekTemplate(5);
+    expect(engine).toMatchObject({ levelIndex: 5, mode: 'play', levelTime: 0, levelCompletionEmitted: false });
+    expect(engine.level).not.toBe(chapterSixTemplate);
+    expect(engine.level).toMatchObject({
+      levelKey: OUTER_VEIL_LEVEL_KEYS[5],
+      campaignOrder: 6,
+      objective: {
+        type: 'bell-tower-restoration',
+        phase: 'learn',
+        complete: false,
+        bell: { puzzle: { progress: [], mistakes: 0 } },
+      },
+    });
+    expect(engine.player).toMatchObject({ ...engine.level.spawn, hp: 4 });
+    expect(save.progress.completedLevelKeys).toEqual(OUTER_VEIL_LEVEL_KEYS.slice(0, 5));
+    expect(save.progress.unlockedAbilityKeys).toEqual(['memory-carve', 'oathbind', 'pilgrims-grip']);
+    expect(getOuterVeilContinueTarget(save)).toEqual({
+      kind: 'level',
+      levelKey: OUTER_VEIL_LEVEL_KEYS[5],
+      campaignOrder: 6,
+    });
+    expect(callbacks.level).toHaveBeenCalledOnce();
+    expect(callbacks.transition).toHaveBeenCalledOnce();
+    expect(callbacks.win).not.toHaveBeenCalled();
+  });
+
   it('keeps preview identity, ending, save isolation, dynamic chunk, and prototype Level 5 distinct', async () => {
     expect(PRODUCTION_PREVIEW_KEYS).toContain('teeth-beneath-dust');
     const preview = createProductionPreviewRepository('teeth-beneath-dust');

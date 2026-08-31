@@ -594,3 +594,30 @@ Scope: user explicitly preferred the prior Chapter 6 layout and requested only t
 ## Exact next milestone
 
 Have the user replay to the bells and press STRIKE under Dawn. If it records `CHIME ORDER 1/3`, complete Veil then Shelter and accept Chapter 6. Otherwise fix only the newly reproduced STRIKE behavior. Keep all work local.
+
+---
+
+# Reviewed continuation — Chapter 5 to Chapter 6 transition proof
+
+Updated: 2026-08-31 23:52 Asia/Dubai
+Scope: local test and evidence milestone only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Added the deferred real Chapter 5 → Chapter 6 integration proof using the ten-chapter authored repository without preloading the Chapter 6 module.
+- Drove the real Teeth Beneath Dust lesson, controlled crossing, Oathbind shelter, high-line mastery, restoration, gate, and door flow rather than injecting completion state.
+- Proved Chapter 5 emits its stable completion exactly once before the transition, the real lazy loader imports Chapter 6, and the engine activates a distinct pristine `outer-veil-06-pilgrims-climb` runtime.
+- Proved the save contains exactly Chapters 1-5, unlocks Pilgrim's Grip for Chapter 6, and Continue targets stable Chapter 6 identity and campaign order 6.
+
+## Validation evidence
+
+- Focused Chapter 5 suite: **12 tests passed**.
+- Complete automated suite: **175 tests across 23 files passed**.
+- Production build: **54 modules transformed**; all production chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- No browser pass was needed because this milestone changes tests and evidence only.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Exact next milestone
+
+Chapter 5 reset and transition integration are now closed. Preserve the user-accepted Chapter 6 STRIKE behavior and begin the bounded Chapter 7 quality pass only after the saved Level 6 result is handed off.
