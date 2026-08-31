@@ -35,13 +35,20 @@ function engineHarness(level) {
     levelIndex: 0,
     bank: { get: () => canvasChunks() },
     player: {
-      x: 0, y: 0, w: 28, h: 44, facing: 1, digTimer: 0, dropTimer: 0,
-      hp: 4, vy: 0, grounded: true,
+      x: 0, y: 0, w: 28, h: 44, vx: 0, vy: 0, facing: 1,
+      grounded: true, wallSide: 0, climbing: false, hp: 4, invuln: 0,
+      coyote: 0, jumpBuffer: 0, dropTimer: 0, attackTimer: 0, attackBuffer: 0,
+      digTimer: 0, attackHits: new Set(), inWater: false,
     },
-    input: { down: false, pressed: new Set() },
+    input: {
+      left: false, right: false, climb: false, down: false, jump: false, attack: false, dig: false,
+      pressed: new Set(), released: new Set(),
+    },
     gateOpen: false,
     particles: [],
     soldiers: [],
+    projectiles: [],
+    crumble: new Map(),
     audio: { play: vi.fn() },
     callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), mode: vi.fn() },
     setHint: vi.fn(),
@@ -57,6 +64,19 @@ function engineHarness(level) {
     openGate: GameEngine.prototype.openGate,
     tileAt: GameEngine.prototype.tileAt,
     isSolidTile: GameEngine.prototype.isSolidTile,
+    solidProbe: GameEngine.prototype.solidProbe,
+    movePlayerHorizontal: GameEngine.prototype.movePlayerHorizontal,
+    movePlayerVertical: GameEngine.prototype.movePlayerVertical,
+    canMoveBlock: GameEngine.prototype.canMoveBlock,
+    recordPilgrimGrip: GameEngine.prototype.recordPilgrimGrip,
+    recordPilgrimWallJump: GameEngine.prototype.recordPilgrimWallJump,
+    resolveAttackHits: GameEngine.prototype.resolveAttackHits,
+    strikePilgrimBell: vi.fn(),
+    checkHazards: vi.fn(),
+    armCrumble: vi.fn(),
+    armBellTowerCollapseLedge: vi.fn(),
+    hintHoldUntil: 0,
+    lastHint: '',
     totalTime: 0,
     deaths: 0,
     mode: 'play',
@@ -100,6 +120,7 @@ describe('Outer Veil Level 4 production preview', () => {
       },
     });
     expect(level.map.flat().filter((tile) => tile === Tile.SAND)).toHaveLength(1);
+    expect(level.block.w).toBe(TILE);
     expect(level.map.flat()).not.toContain(Tile.SPIKE);
     expect(level.relics).toEqual([]);
     expect(level.gameplay.enemyRoster).toEqual([]);
@@ -112,11 +133,78 @@ describe('Outer Veil Level 4 production preview', () => {
     const archiveTop = 21 * TILE;
     const raisedBlockTop = level.block.y - level.block.oathLift;
     expect(roadTop - archiveTop).toBe(240);
-    expect(raisedBlockTop - archiveTop).toBeLessThan(200);
+    expect(raisedBlockTop - archiveTop).toBe(168);
+    expect(200 - (raisedBlockTop - archiveTop)).toBeGreaterThanOrEqual(TILE / 2);
     for (let tx = 14; tx <= 34; tx += 1) {
       expect(level.map[25][tx]).toBe(Tile.AIR);
       expect(level.map[26][tx]).toBe(Tile.STONE);
     }
+  });
+
+  it('lands a full held jump from the bound block on the archive ledge', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWeightOfOaths(), identity));
+    const engine = engineHarness(level);
+    placeBlock(level, level.objective.lessonZone);
+    standBeside(engine);
+    GameEngine.prototype.toggleOathbind.call(engine);
+
+    engine.player.x = level.block.x + 6;
+    engine.player.y = level.block.y - engine.player.h;
+    engine.player.grounded = true;
+    engine.input.right = true;
+    engine.input.jump = true;
+    engine.input.pressed.add('jump');
+    let landedArchive = false;
+    for (let frame = 0; frame < 120; frame += 1) {
+      GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+      engine.input.pressed.clear();
+      if (engine.player.grounded && Math.abs((engine.player.y + engine.player.h) - 21 * TILE) < 1) {
+        landedArchive = true;
+        break;
+      }
+    }
+
+    expect(landedArchive).toBe(true);
+    expect(engine.player.x).toBeGreaterThanOrEqual(20 * TILE - engine.player.w);
+  });
+
+  it('keeps bound hints causal across the climb, carve, and release phases', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWeightOfOaths(), identity));
+    const engine = engineHarness(level);
+    placeBlock(level, level.objective.lessonZone);
+    level.block.bound = true;
+    level.block.y -= level.block.oathLift;
+    engine.player.x = level.block.x - engine.player.w - 4;
+    engine.player.y = 26 * TILE - engine.player.h;
+
+    for (const [phase, expected] of [
+      ['cross', 'KEEP IT BOUND'],
+      ['carve', 'FACE RIGHT INTO THE CYAN RECORD'],
+      ['seal', 'DROP TO THE ROAD'],
+    ]) {
+      level.objective.phase = phase;
+      engine.setHint.mockClear();
+      GameEngine.prototype.updateHints.call(engine);
+      expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining(expected));
+      if (phase !== 'seal') expect(engine.setHint.mock.calls.at(-1)[0]).not.toMatch(/release/i);
+    }
+  });
+
+  it('records the complete bind, climb, carve, release, push, and rebind route', () => {
+    const route = createWeightOfOaths().gameplay.deterministicRoute;
+    expect(route).toEqual([
+      'push-to-oathbind-lesson-sigil',
+      'oathbind-lesson-sigil',
+      'bind-oath-foothold',
+      'archive-ledge',
+      'cartographer-oath-record',
+      'drop-to-civic-road',
+      'release-oath-foothold',
+      'push-to-public-civic-seal',
+      'public-civic-seal',
+      'rebind-public-civic-seal',
+      'eclipse-door',
+    ]);
   });
 
   it('keeps preview identity, ending copy, and the original prototype independently addressable', async () => {
@@ -154,7 +242,7 @@ describe('Outer Veil Level 4 production preview', () => {
     const restingY = level.block.y;
 
     expect(GameEngine.prototype.toggleOathbind.call(engine)).toBe(true);
-    expect(level.block).toMatchObject({ bound: true, y: restingY - 16 });
+    expect(level.block).toMatchObject({ bound: true, y: restingY - level.block.oathLift });
     expect(level.objective).toMatchObject({ lessonComplete: true, phase: 'cross' });
     expect(GameEngine.prototype.canMoveBlock.call(engine, 4)).toBe(false);
 
@@ -228,6 +316,26 @@ describe('Outer Veil Level 4 production preview', () => {
       campaignOrder: 4,
       objectiveType: 'oathbind-restoration',
     });
+  });
+
+  it('explains how to recover after reaching the public scale before carving the record', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWeightOfOaths(), identity));
+    const engine = engineHarness(level);
+    level.objective.lessonComplete = true;
+    level.objective.phase = 'seal';
+    placeBlock(level, level.objective.finalSeal);
+    level.block.bound = true;
+    level.block.y -= level.block.oathLift;
+    standBeside(engine, 'right');
+
+    GameEngine.prototype.updateOathbindObjective.call(engine);
+    expect(level.objective.complete).toBe(false);
+    expect(engine.setHint).toHaveBeenLastCalledWith(
+      expect.stringContaining('release the block and return west beneath the archive'),
+      3.8,
+    );
+    expect(GameEngine.prototype.toggleOathbind.call(engine)).toBe(true);
+    expect(level.block.bound).toBe(false);
   });
 
   it('fully reforms the block, record, seal, road, monument, and gate after life ends', () => {

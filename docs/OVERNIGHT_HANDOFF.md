@@ -303,3 +303,51 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Resume the integrated natural-input quality pass at Chapter 4. Preserve the repaired Chapter 3 route unless a new real-player failure is reproduced. Verify Chapter 4 Oathbind flow, Continue persistence after its completion, and then advance one bounded chapter at a time with full tests and responsive checks. Do not publish or author Inner Kingdom content.
+
+---
+
+# Reviewed continuation — Chapter 4 Oathbind quality pass
+
+Updated: 2026-08-31 21:34 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Raised the bound Oathbind foothold from 16 to 32 pixels and widened its Level 4 block from 40 to one full 48-pixel tile. The unbound road jump remains impossible, while the intended full-held jump now has a fair half-tile vertical margin and a broader landing surface.
+- Replaced the contradictory generic bound-block hint with phase-authoritative guidance. A correct lesson bind now says to keep the block bound and hold JUMP; the archive phase explicitly says to face right and carve; the seal phase explains the drop, release, eastward push, and final rebind.
+- Added a specific recovery message when the block reaches the public scale before the archive record: release it and return west beneath the archive.
+- Expanded the deterministic route from four destination IDs into the complete causal action chain: push, lesson bind, foothold, archive ledge, carve, drop, release, eastward push, public scale, rebind, exit.
+- Added an intermediate save acceptance proving four contiguous chapter completions persist and reload as Chapter 5 Continue with only Memory Carve and Oathbind unlocked and no false realm completion.
+
+## Validation evidence
+
+- Focused Level 4/save suite: **24 tests across 2 files passed**.
+- Complete automated suite: **165 tests across 22 files passed**.
+- Production build: **54 modules transformed**; the authored levels remain separate lazy chunks.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- New physics regression uses the real fixed-step player update and proves a full-held jump from the bound block lands on the row-21 archive ledge.
+- New hint regressions prove bound `cross` and `carve` phases never instruct release, while `seal` gives the correct release route.
+- Browser engine-input play, with no objective injection, completed the full causal loop: push into the lesson sigil, bind, mount the foothold, full-held jump to the archive, face right and carve, return to the road, release, push east, rebind, reach `OATHBIND 3/3`, and open the gate.
+- The same control-driven run crossed the restored road and entered exact Chapter 5 key `outer-veil-05-teeth-beneath-dust` through the real lazy transition.
+- Default desktop, 844×390 landscape, and 390×844 portrait checks kept the bound block, archive target, phase hint, HUD, and touch controls visible. The temporary viewport override was reset.
+- Two render-cache errors were recorded only during live source hot replacement and manual engine-loop intervention. A hard reload then opened fresh Chapter 4 successfully and produced no new warning/error entries; production build and normal clean-load behavior remain green.
+
+## Agent findings accepted or rejected
+
+- Accepted: the original 16-pixel lift left only about nine pixels of real fixed-step jump clearance; a 32-pixel lift is the smallest authored correction that keeps the road jump impossible.
+- Accepted: the generic `OATHBOUND · release` hint contradicted the correct cross phase and shadowed every Level 4 tutorial cue. Phase-owned copy is now authoritative.
+- Accepted after strengthening: the audit focused on vertical margin; live control review also showed the 40-pixel landing was unnecessarily narrow, so the Level 4 block now uses the schema's maximum recoverable one-tile width.
+- Accepted: early final-seal placement is recoverable and now tells the player exactly how to return west.
+- Rejected: widening the block beyond one tile. The schema correctly protects side-swapping and reversible movement, so the final width stops at 48 pixels.
+- Deferred: a full fatal-damage-to-respawn integration test. Existing Level 4 reset coverage proves pristine runtime restoration, but the death callback, HP transition, checkpoint, and save non-advancement still need one combined real-loader test.
+
+## Remaining quality gaps
+
+- The natural-input quality pass is complete through Chapter 4 only; Chapters 5-10 still need the same integrated difficulty review.
+- Chapter 4's final bound block is intentionally solid and must be jumped once to continue east. The completed-state hint is readable, but a future polish pass could name that last hop explicitly if human testing shows hesitation.
+- Fatal life-over integration, Continue after a non-complete browser save, combined early/middle/final death acceptance, realm Replay, and the final ending remain outstanding.
+- Portrait remains strongly letterboxed; music, cinematics, accessibility settings, and Inner Kingdom content remain unbuilt.
+
+## Exact next milestone
+
+Add the combined fatal-damage/real-loader/save-non-advancement regression for Chapter 4, then begin the bounded natural-input quality pass for Chapter 5, Teeth Beneath Dust. Verify warning rhythm, Oathbind shelter, recovery fairness, life-over reset, Chapter 6 transition, and desktop/landscape/portrait presentation. Do not publish or author Inner Kingdom content.

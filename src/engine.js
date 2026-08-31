@@ -2388,7 +2388,7 @@ export class GameEngine {
 
     if (!this.blockOnOathZone(objective.finalSeal)) return;
     if (!objective.memoryMark?.revealed) {
-      this.setHint('THE PUBLIC SCALE WAITS · recover the high archive record first.', 3.2);
+      this.setHint('THE PUBLIC SCALE WAITS · release the block and return west beneath the archive.', 3.8);
       return;
     }
     if (!block.bound) {
@@ -2890,9 +2890,10 @@ export class GameEngine {
     else if (veilGate) this.setHint(veilGate.phaseHints?.[veilGate.phase] || this.level.mechanic);
     else if (warden) this.setHint(warden.phaseHints?.[warden.phase] || this.level.mechanic);
     else if (oathbind) {
-      if (nearBlock && block.bound) this.setHint('OATHBOUND · press DIG beside the block to release it');
-      else if (nearBlock) this.setHint(oathbind.phaseHints?.[oathbind.phase] || this.level.mechanic);
-      else this.setHint(oathbind.phaseHints?.[oathbind.phase] || this.level.mechanic);
+      const phaseHint = oathbind.phaseHints?.[oathbind.phase] || this.level.mechanic;
+      if (nearBlock && block.bound && oathbind.phase === 'learn') {
+        this.setHint('WRONG SIGIL · stand beside the block and press DIG to release it');
+      } else this.setHint(phaseHint);
     }
     else if (this.player.inWater) this.setHint('Tap jump to swim · hold Down to dive · currents change momentum');
     else if (this.level.veilPlatforms.length && tx > 42 && tx < 66) this.setHint('Veil bridges alternate every 2.6 seconds · move with the pulse');

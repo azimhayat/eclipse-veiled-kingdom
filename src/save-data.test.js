@@ -160,6 +160,34 @@ describe('campaign save data v4', () => {
     });
   });
 
+  it('persists Chapter 4 and continues at Chapter 5 without completing the realm', () => {
+    const storage = createStorage();
+    let save = createCampaignSave({ now: () => NOW });
+    for (const [index, levelKey] of OUTER_VEIL_LEVEL_KEYS.slice(0, 4).entries()) {
+      save = recordProductionLevelCompletion(save, {
+        levelKey,
+        levelTime: 40 + index,
+        campaignTime: 150 + index,
+        completedAt: NOW,
+        now: () => NOW,
+      });
+    }
+    expect(persistCampaignSave({ storage, save, now: () => NOW }).persisted).toBe(true);
+
+    const reloaded = loadCampaignSave({ storage, now: () => NOW }).save;
+    expect(reloaded.progress).toMatchObject({
+      currentLevelKey: OUTER_VEIL_LEVEL_KEYS[4],
+      completedLevelKeys: OUTER_VEIL_LEVEL_KEYS.slice(0, 4),
+      unlockedAbilityKeys: ['memory-carve', 'oathbind'],
+      completedRealmKeys: [],
+      unlockedRealmSlotKeys: [OUTER_VEIL_REALM_KEY],
+    });
+    expect(getOuterVeilContinueTarget(reloaded)).toEqual({
+      kind: 'level', levelKey: OUTER_VEIL_LEVEL_KEYS[4], campaignOrder: 5,
+    });
+    expect(reloaded.records.realmsByKey).toEqual({});
+  });
+
   it('fails closed for out-of-order completion and keeps repeated completion idempotent', () => {
     const save = createCampaignSave({ now: () => NOW });
     expect(recordProductionLevelCompletion(save, { levelKey: OUTER_VEIL_LEVEL_KEYS[4], levelTime: 2, now: () => NOW }))
