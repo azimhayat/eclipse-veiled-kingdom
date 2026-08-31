@@ -1578,9 +1578,13 @@ export class GameEngine {
       if (soldier.gateMember && soldier.kind === 'shield'
         && !['recovery', 'stun'].includes(soldier.attackPhase)) {
         p.attackHits.add(soldier.id);
+        soldier.attackPhase = 'recovery';
+        soldier.attackClock = Math.max(.75, soldier.recoverySeconds * .8);
+        soldier.attackConsumed = true;
+        soldier.vx = 0;
         this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#718499', 7, 90);
         this.audio.play('dig');
-        this.setHint('THE KEEPER BRACES · evade the amber sweep, then answer during blue recovery.', 2.4);
+        this.setHint('GUARD BROKEN · the Keeper is blue and exposed. STRIKE again.', 2.8);
         continue;
       }
       p.attackHits.add(soldier.id);

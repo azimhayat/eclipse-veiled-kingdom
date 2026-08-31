@@ -186,7 +186,8 @@ describe('Outer Veil Level 9 production preview', () => {
     keeper.attackPhase = 'windup';
     strikeKeeper(engine);
     expect(keeper.hp).toBe(3);
-    keeper.attackPhase = 'recovery';
+    expect(keeper).toMatchObject({ attackPhase: 'recovery', attackConsumed: true, vx: 0 });
+    expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('GUARD BROKEN'), 2.8);
     while (keeper.hp > 0) strikeKeeper(engine);
     expect(level.objective).toMatchObject({
       phase: 'keystone',
