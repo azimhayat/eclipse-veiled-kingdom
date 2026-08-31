@@ -3,9 +3,18 @@ import {
   createProductionPreviewRepository,
   getProductionPreviewDescriptor,
 } from '../../campaign/productionPreview.js';
+import {
+  createOuterVeilCampaignRepository,
+  OUTER_VEIL_LEVEL_KEYS,
+} from '../../campaign/outerVeilCampaign.js';
 import { assertValidAuthoredLevel, validateAuthoredLevel } from '../../campaign/levelSchema.js';
 import { GameEngine } from '../../engine.js';
 import { createLevels } from '../../levels.js';
+import {
+  createCampaignSave,
+  getOuterVeilContinueTarget,
+  recordProductionLevelCompletion,
+} from '../../save-data.js';
 import { cloneLevel } from '../cloneLevel.js';
 import { TILE, Tile } from '../constants.js';
 import { createWeightOfOaths } from './weightOfOaths.js';
@@ -15,7 +24,7 @@ const identity = {
   campaignOrder: 4,
 };
 
-function canvasChunks() {
+function canvasSurface() {
   const gradient = { addColorStop: vi.fn() };
   const context = new Proxy({}, {
     get: (_target, property) => (
@@ -25,7 +34,11 @@ function canvasChunks() {
     ),
     set: () => true,
   });
-  return Array.from({ length: 5 }, () => ({ getContext: () => context }));
+  return { width: 0, height: 0, getContext: () => context };
+}
+
+function canvasChunks() {
+  return Array.from({ length: 5 }, () => canvasSurface());
 }
 
 function engineHarness(level) {
@@ -382,5 +395,181 @@ describe('Outer Veil Level 4 production preview', () => {
     expect(engine.level.map.some((row) => row[engine.level.gateColumn] === Tile.GATE)).toBe(true);
     expect(engine.level.objective.restorationTiles.every(({ tx, ty }) => engine.level.map[ty][tx] === Tile.STONE)).toBe(true);
     expect(engine.mode).toBe('play');
+  });
+
+  it('uses the real campaign loader after fatal damage without advancing the save', async () => {
+    const timestamp = new Date('2026-08-31T17:30:00.000Z');
+    const repository = createOuterVeilCampaignRepository();
+    repository.retainAround(3);
+    await repository.loadTemplate(3);
+    const template = repository.peekTemplate(3);
+    const runtime = repository.createRuntime(3);
+
+    let save = createCampaignSave({ now: () => timestamp });
+    for (const [index, levelKey] of OUTER_VEIL_LEVEL_KEYS.slice(0, 3).entries()) {
+      save = recordProductionLevelCompletion(save, {
+        levelKey,
+        levelTime: 40 + index,
+        campaignTime: 120 + index,
+        completedAt: timestamp,
+        now: () => timestamp,
+      });
+    }
+    const saveBeforeDeath = structuredClone(save);
+    const rendered = new Map([[identity.levelKey, canvasChunks()]]);
+    const bank = {
+      retain: vi.fn(() => bank),
+      has: vi.fn((key) => rendered.has(key)),
+      get: vi.fn((key) => rendered.get(key)),
+      set: vi.fn((key, chunks) => {
+        rendered.set(key, chunks);
+        return bank;
+      }),
+    };
+    const callbacks = {
+      death: vi.fn(),
+      mode: vi.fn(),
+      level: vi.fn(),
+      levelComplete: vi.fn((completion) => {
+        save = recordProductionLevelCompletion(save, {
+          ...completion,
+          completedAt: timestamp,
+          now: () => timestamp,
+        });
+      }),
+    };
+    const engine = {
+      repository,
+      bank,
+      levelIndex: 3,
+      level: runtime,
+      player: GameEngine.prototype.makePlayer(runtime.spawn),
+      checkpoint: { kind: 'checkpoint', id: 'dirty-checkpoint', x: 999, y: 999, facing: -1 },
+      camera: { x: 0, y: 0 },
+      input: {
+        left: true, right: true, climb: true, down: true, jump: true, attack: true, dig: true,
+        pressed: new Set(['jump']), released: new Set(['dig']),
+      },
+      soldiers: [{ id: 'dirty-soldier' }],
+      projectiles: [{ id: 'dirty-projectile' }],
+      particles: [{ id: 'dirty-particle' }],
+      crumble: new Map([['dirty', { phase: 'falling' }]]),
+      gateOpen: true,
+      mode: 'play',
+      demo: false,
+      running: true,
+      totalTime: 88,
+      levelTime: 31,
+      deaths: 0,
+      levelCompletionEmitted: true,
+      spawnClock: 2,
+      transitionRetryBlocked: true,
+      hintHoldUntil: 4,
+      prefetchGeneration: 0,
+      prefetchController: null,
+      prefetchHandle: null,
+      prefetchTargetIndex: null,
+      prefetchPromise: null,
+      prefetchStart: null,
+      transitionGeneration: 0,
+      transitionController: null,
+      transitioning: false,
+      transitionTargetIndex: null,
+      callbacks,
+      audio: { play: vi.fn() },
+      makePlayer: GameEngine.prototype.makePlayer,
+      cancelLevelPrefetch: GameEngine.prototype.cancelLevelPrefetch,
+      cancelLevelTransition: GameEngine.prototype.cancelLevelTransition,
+      loadLevel: GameEngine.prototype.loadLevel,
+      clearInputs: GameEngine.prototype.clearInputs,
+      burst: vi.fn(),
+      setHint: vi.fn(),
+      pushHud: vi.fn(),
+      scheduleNextLevel: vi.fn(),
+    };
+
+    runtime.block.x = runtime.objective.finalSeal.x;
+    runtime.block.y -= runtime.block.oathLift;
+    runtime.block.vx = 140;
+    runtime.block.vy = -80;
+    runtime.block.bound = true;
+    runtime.objective.lessonComplete = true;
+    runtime.objective.memoryMark.revealed = true;
+    runtime.objective.phase = 'complete';
+    runtime.objective.complete = true;
+    runtime.objective.restored = true;
+    runtime.objective.completedAt = 19;
+    runtime.map[runtime.objective.memoryMark.ty][runtime.objective.memoryMark.tx] = Tile.AIR;
+    for (const tile of runtime.objective.restorationTiles) runtime.map[tile.ty][tile.tx] = Tile.GLOW;
+    engine.player.hp = 1;
+
+    expect(template.objective).toMatchObject({ phase: 'learn', complete: false, restored: false });
+    expect(template.map[template.objective.memoryMark.ty][template.objective.memoryMark.tx]).toBe(Tile.SAND);
+
+    GameEngine.prototype.damagePlayer.call(engine, 1);
+    expect(engine).toMatchObject({ mode: 'dead', deaths: 1 });
+    expect(engine.player.hp).toBe(0);
+    expect(callbacks.death).toHaveBeenCalledOnce();
+    expect(callbacks.death).toHaveBeenCalledWith({ deaths: 1, demo: false });
+    expect(callbacks.levelComplete).not.toHaveBeenCalled();
+
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvasSurface()) });
+    try {
+      GameEngine.prototype.respawn.call(engine);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(engine.level).not.toBe(runtime);
+    expect(engine.level).not.toBe(template);
+    expect(engine).toMatchObject({
+      levelIndex: 3,
+      mode: 'play',
+      deaths: 1,
+      totalTime: 88,
+      levelTime: 31,
+      gateOpen: false,
+      levelCompletionEmitted: false,
+    });
+    expect(engine.level).toMatchObject(identity);
+    expect(engine.player).toMatchObject({ ...template.spawn, hp: 4, invuln: 0, digTimer: 0 });
+    expect(engine.checkpoint).toEqual({ kind: 'spawn', id: null, ...template.spawn, facing: 1 });
+    expect(engine.level.block).toMatchObject({
+      x: template.block.x,
+      y: template.block.y,
+      vx: 0,
+      vy: 0,
+      bound: false,
+    });
+    expect(engine.level.objective).toMatchObject({
+      phase: 'learn',
+      lessonComplete: false,
+      complete: false,
+      restored: false,
+      completedAt: null,
+      memoryMark: { revealed: false },
+    });
+    expect(engine.level.map[template.objective.memoryMark.ty][template.objective.memoryMark.tx]).toBe(Tile.SAND);
+    expect(engine.level.objective.restorationTiles.every(({ tx, ty }) => engine.level.map[ty][tx] === Tile.STONE)).toBe(true);
+    expect(engine.level.map.some((row) => row[engine.level.gateColumn] === Tile.GATE)).toBe(true);
+    expect(engine.soldiers).toEqual([]);
+    expect(engine.projectiles).toEqual([]);
+    expect(engine.particles).toEqual([]);
+    expect(engine.crumble.size).toBe(0);
+    expect(bank.set).toHaveBeenCalledOnce();
+    expect(bank.set.mock.calls[0][0]).toBe(identity.levelKey);
+    expect(bank.set.mock.calls[0][1]).toHaveLength(5);
+    expect(callbacks.mode).toHaveBeenLastCalledWith('play');
+    expect(callbacks.level).not.toHaveBeenCalled();
+    expect(callbacks.levelComplete).not.toHaveBeenCalled();
+    expect(engine.setHint).toHaveBeenLastCalledWith('The realm reforms. Begin the level anew.');
+    expect(save).toEqual(saveBeforeDeath);
+    expect(getOuterVeilContinueTarget(save)).toEqual({
+      kind: 'level',
+      levelKey: identity.levelKey,
+      campaignOrder: 4,
+    });
+    expect(repository.peekTemplate(3)).toBe(template);
+    expect(template.objective).toMatchObject({ phase: 'learn', complete: false, restored: false });
   });
 });

@@ -351,3 +351,45 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Add the combined fatal-damage/real-loader/save-non-advancement regression for Chapter 4, then begin the bounded natural-input quality pass for Chapter 5, Teeth Beneath Dust. Verify warning rhythm, Oathbind shelter, recovery fairness, life-over reset, Chapter 6 transition, and desktop/landscape/portrait presentation. Do not publish or author Inner Kingdom content.
+
+---
+
+# Reviewed continuation — Chapter 4 fatal-reset integration
+
+Updated: 2026-08-31 21:42 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Added the previously deferred fatal-damage regression for Chapter 4 using the real ten-chapter Outer Veil repository, the actual dynamic Level 4 loader, the real runtime clone path, and the real `GameEngine.loadLevel(index, true)` reset.
+- The combined test now proves the complete life-over edge: HP reaches zero, death is emitted once, the same stable Chapter 4 identity reloads, and player/checkpoint, Oathbind block, Memory Carve record, restored road, gate, transient actors, crumble state, and completion latch all return to authored defaults.
+- Death count and both campaign/level clocks retain their intentional values across reform; the current level is freshly cloned and the repository's authored template remains pristine.
+- Seeded a real save through Chapters 1-3 and wired the actual completion reducer to the engine callback. Fatal damage and reform emit no completion, leave the save byte-equivalent, and keep Continue on Chapter 4 rather than falsely advancing to Chapter 5.
+- Kept the test bounded and deterministic by stubbing only browser canvas creation and future prefetch scheduling; no production code or player-facing presentation changed.
+
+## Validation evidence
+
+- Focused Chapter 4 suite: **13 tests passed**.
+- Complete automated suite: **166 tests across 22 files passed**.
+- Production build: **54 modules transformed**; all authored chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only the expected Windows line-ending notice.
+- The forced reset rebaked exactly five render chunks for the stable key `outer-veil-04-weight-of-oaths` and ended with 4/4 health, a spawn checkpoint, a closed gate, hidden record, unbound home-position block, and no transient entities.
+- No browser pass was required because this milestone changes tests and evidence only, not player-facing code.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: exercise the real `damagePlayer`, `respawn`, authored repository loader, runtime clone, reset bake, and save reducer in one regression rather than extending the earlier mocked-loader reset test.
+- Accepted: keep Level 4's stable identity separate from its repository index and explicitly prove Continue remains on Chapter 4.
+- Accepted after review: use the full ten-chapter repository with a minimal engine harness. This preserves real campaign index 3 and tests the exact integrated identity while avoiding animation-loop, audio, and global event noise unrelated to reset semantics.
+- Rejected: constructing a full browser engine for this unit regression. It adds RAF/listener teardown risk without strengthening the loader, reset, or save assertions already exercised directly.
+
+## Remaining quality gaps
+
+- The natural-input quality pass is complete through Chapter 4 only; Chapters 5-10 remain outstanding.
+- Combined early/middle/final browser death acceptance, Continue after additional natural completions, realm Replay, and final-ending acceptance remain future integrated checks.
+- Portrait remains strongly letterboxed; music, cinematics, accessibility settings, and Inner Kingdom content remain unbuilt.
+
+## Exact next milestone
+
+Begin the bounded natural-input quality pass for Chapter 5, **Teeth Beneath Dust**. Verify its two-pulse warning language, Oathbind shelter lesson and combination, recovery fairness after a missed cycle, finite completion/restoration, fatal reset, real Chapter 6 transition, and desktop/landscape/portrait presentation. Fix only reproduced failures, preserve completed Chapter 1-4 behavior, and do not publish or author Inner Kingdom content.
