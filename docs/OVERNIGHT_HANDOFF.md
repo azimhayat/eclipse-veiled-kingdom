@@ -707,3 +707,38 @@ Scope: the user reproduced a solved skyboard that could not cut the command teth
 - Production build: **54 modules transformed**; Level 8 remains independently lazy-loaded.
 - `git diff --check` passed with only expected Windows line-ending notices.
 - No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+---
+
+# Stage I finale — reviewed duel foundation
+
+Updated: 2026-09-01 02:29 Asia/Dubai
+Scope: first bounded overnight milestone; data and deterministic state only. The playable Level 10 flow is intentionally unchanged until the fight is integrated and browser-tested.
+
+## Completed milestone
+
+- Preserved the verified pre-finale recovery point at commit `bcadb1b2a12f50b8709b852ddd6ec49150684f1f`, local backup branch/tag, and complete external Git bundle.
+- Audited the current Warden, engine input, damage/reset, save, presentation, audio, and responsive seams with three independent read-only reviews, then personally checked their cited code paths.
+- Added a schema-validated `objective.duel` contract separate from the legacy `level.boss` system and separate from the monumental Warden identity. It defines a permanent upper-walk arena, safe fight checkpoint, 18-point three-phase boss health model, combo/parry timing, attempt and aggregate statistics, and a non-lethal Dawnstroke finale.
+- Added a pure deterministic duel state module for full reset, attempt restart, clocks, damage accounting, phase thresholds, and final completion. Full realm cloning now resets every nested duel field through that single authority.
+- Kept existing Level 10 geometry, puzzles, visuals, completion, and public behavior untouched during this foundation milestone.
+
+## Validation evidence
+
+- New duel-state regressions cover restart cost preservation, 18 → 12 → 6 → 0 phase changes, non-lethal finale gating, clock expiry, damage totals, idempotence, and full reset.
+- Focused Warden, schema, lazy-runtime, and duel-state suites: **29 tests passed**.
+- Complete automated suite: **186 tests across 24 files passed**.
+- Production build: **55 modules transformed**; Level 10 remains independently lazy-loaded.
+- No browser pass was required because the milestone exposes no player-facing behavior yet.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: keep the Warden identity and fight state separate from the old generic boss/contact-damage system; preserve a fight-only checkpoint; prevent one swing from advancing multiple states; defer campaign completion and gate opening until the finale; give touch inputs generous sequential windows.
+- Accepted: audio preferences should use a dedicated local settings record rather than forcing campaign-save migration; the present audio unlock and lifecycle need defensive repair.
+- Accepted: the Chronicle requires a versioned save addition with raw metrics and explicit unknown values for migrated clears; current multi-session Stage time is not yet truthful and must not be mislabelled.
+- Rejected: replacing the approved health-bar duel with only three proof flags. The user explicitly approved a proper three-phase fight with player and Warden health. The implementation will still end in restoration, not death, and will not use the legacy boss system.
+
+## Exact next milestone
+
+Integrate the bridle-to-duel transition and fight-only checkpoint without yet adding final presentation or music. Add deterministic engine tests for keyboard/touch-safe combo, guard, heavy break, aerial strike, boss attack damage, death/retry, phase thresholds, and completion deferral. Then perform desktop and phone browser checks before committing the integration.

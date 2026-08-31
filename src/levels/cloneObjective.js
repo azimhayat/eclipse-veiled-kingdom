@@ -1,3 +1,5 @@
+import { resetWardenDuel } from '../warden-duel-state.js';
+
 function deepClone(value) {
   if (Array.isArray(value)) return value.map(deepClone);
   if (!value || typeof value !== 'object') return value;
@@ -186,6 +188,9 @@ export function cloneObjective(objective) {
       clone.bridle.exposed = false;
       clone.bridle.struck = false;
       clone.bridle.clock = 0;
+    }
+    if (clone.duel) {
+      resetWardenDuel(clone.duel);
     }
     if (clone.warden) {
       clone.warden.state = 'sleeping';

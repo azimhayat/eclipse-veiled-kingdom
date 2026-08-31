@@ -1414,6 +1414,41 @@ function validateWarden(level, issues) {
     || warden.w < TILE * 6 || warden.h < TILE * 8) {
     addIssue(issues, 'objective.warden', 'invalid_warden_identity', 'must begin as one large living guardian with stable identity and no health state');
   }
+
+  const duel = objective.duel;
+  const arena = duel?.arena;
+  const checkpoint = arena?.checkpoint;
+  const duelBoss = duel?.boss;
+  const duelPlayer = duel?.player;
+  const timing = duel?.timing;
+  const thresholds = duel?.thresholds;
+  const attempt = duel?.attempt;
+  const totals = duel?.totals;
+  if (!duel || duel.phase !== 'sealed' || duel.active !== false || duel.complete !== false
+    || !arena || arena.minTx !== 46 || arena.maxTx !== 67 || arena.feetTy !== 20
+    || !checkpoint || checkpoint.tx !== 48 || checkpoint.tx <= arena.minTx
+    || checkpoint.tx >= arena.maxTx || checkpoint.feetTy !== arena.feetTy
+    || ![-1, 1].includes(checkpoint.facing)
+    || !duelBoss || duelBoss.maxHp !== 18 || duelBoss.hp !== duelBoss.maxHp
+    || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle'
+    || duelBoss.actionClock !== 0 || duelBoss.sequenceIndex !== 0 || duelBoss.hitstun !== 0
+    || duelBoss.invulnerable !== false
+    || !duelPlayer || duelPlayer.comboStep !== 0 || duelPlayer.comboClock !== 0
+    || duelPlayer.guarding !== false || duelPlayer.parryClock !== 0
+    || !timing || !Number.isFinite(timing.comboWindow) || timing.comboWindow < .3
+    || !Number.isFinite(timing.parryWindow) || timing.parryWindow < .1
+    || !Number.isFinite(timing.guardianRecovery) || !Number.isFinite(timing.commandRecovery)
+    || !Number.isFinite(timing.eclipseRecovery)
+    || timing.guardianRecovery < timing.commandRecovery
+    || timing.commandRecovery < timing.eclipseRecovery || timing.eclipseRecovery < .5
+    || !thresholds || !Number.isInteger(thresholds.commandHp) || !Number.isInteger(thresholds.eclipseHp)
+    || thresholds.commandHp >= duelBoss.maxHp
+    || thresholds.commandHp <= thresholds.eclipseHp || thresholds.eclipseHp <= 0
+    || !attempt || attempt.count !== 0 || attempt.elapsed !== 0 || attempt.damageTaken !== 0
+    || !totals || totals.elapsed !== 0 || totals.damageTaken !== 0
+    || !duel.finale || duel.finale.ready !== false || duel.finale.struck !== false) {
+    addIssue(issues, 'objective.duel', 'invalid_warden_duel', 'must define one pristine three-phase fight, fair arena checkpoint, deterministic timing, and resettable attempt statistics');
+  }
   if (!objective.crownPath || objective.crownPath.id !== 'outer-veil-crown-path'
     || objective.crownPath.restored !== false) {
     addIssue(issues, 'objective.crownPath', 'invalid_warden_restoration', 'must begin with the first Crown Path unrestored');
@@ -1424,7 +1459,7 @@ function validateWarden(level, issues) {
     || objective.restorationTiles.some(({ tx, ty, tile }) => ty !== 20 || tx < 46 || tx > 73 || tile !== Tile.GLOW)) {
     addIssue(issues, 'objective.restorationTiles', 'unsafe_warden_restoration', 'must restore the complete twenty-eight-cell first Crown Path exactly once');
   }
-  for (const phase of ['listen', 'carve', 'anchor', 'ascend', 'unbind', 'first-path']) {
+  for (const phase of ['listen', 'carve', 'anchor', 'ascend', 'unbind', 'duel', 'finale', 'first-path']) {
     if (typeof objective.phaseHints?.[phase] !== 'string' || objective.phaseHints[phase].trim() === '') {
       addIssue(issues, `objective.phaseHints.${phase}`, 'invalid_phase_hint', 'must be a non-empty string');
     }
@@ -1434,7 +1469,7 @@ function validateWarden(level, issues) {
     || level.checkpoints?.length || level.relics?.length || level.ships?.length || level.boss
     || level.crushers?.length || level.movers?.length || level.water?.length || level.veilPlatforms?.length
     || JSON.stringify(level.gameplay?.enemyRoster) !== JSON.stringify([])) {
-    addIssue(issues, 'objective', 'warden_route_contamination', 'must remain one pristine continuous guardian transformation without adds, health, collectibles, or competing mechanisms');
+    addIssue(issues, 'objective', 'warden_route_contamination', 'must remain one pristine continuous guardian transformation without adds, collectibles, legacy boss state, or competing mechanisms');
   }
   if (level.map?.slice(12, 20).some((row) => row?.[level.gateColumn] !== Tile.GATE)) {
     addIssue(issues, 'gateColumn', 'invalid_warden_gate', 'must keep the Inner Kingdom path sealed until the command breaks');

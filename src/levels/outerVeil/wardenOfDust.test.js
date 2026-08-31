@@ -88,7 +88,7 @@ function engineHarness(level) {
 }
 
 describe('Outer Veil Level 10 production preview', () => {
-  it('authors the exact guardian identity as one four-ability objective, not a boss or fifth unlock', () => {
+  it('authors the exact guardian identity and a separate pristine duel contract without a fifth unlock', () => {
     const level = assertValidAuthoredLevel(createWardenOfDust(), identity);
     expect(level).toMatchObject({
       id: 10,
@@ -108,6 +108,15 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(level.abilityUnlock).toBeUndefined();
     expect(level.boss).toBeNull();
     expect(level.objective.warden).not.toHaveProperty('hp');
+    expect(level.objective.duel).toMatchObject({
+      phase: 'sealed', active: false, complete: false,
+      arena: { minTx: 46, maxTx: 67, feetTy: 20, checkpoint: { tx: 48, feetTy: 20, facing: 1 } },
+      boss: { maxHp: 18, hp: 18, phase: 'guardian', action: 'idle' },
+      player: { comboStep: 0, comboClock: 0, guarding: false, parryClock: 0 },
+      attempt: { count: 0, elapsed: 0, damageTaken: 0 },
+      totals: { elapsed: 0, damageTaken: 0 },
+      finale: { ready: false, struck: false },
+    });
     expect(level.checkpoints).toEqual([]);
     expect(level.relics).toEqual([]);
     expect(level.ships).toEqual([]);
@@ -293,6 +302,20 @@ describe('Outer Veil Level 10 production preview', () => {
     runtimeA.objective.heartstone.zone.x += TILE;
     runtimeA.objective.rememberedHand.landing.minTx += 1;
     runtimeA.objective.bridle.struck = true;
+    runtimeA.objective.duel.phase = 'eclipse';
+    runtimeA.objective.duel.active = true;
+    runtimeA.objective.duel.complete = true;
+    runtimeA.objective.duel.boss.hp = 1;
+    runtimeA.objective.duel.boss.action = 'sand-wave';
+    runtimeA.objective.duel.player.comboStep = 3;
+    runtimeA.objective.duel.player.guarding = true;
+    runtimeA.objective.duel.attempt.count = 4;
+    runtimeA.objective.duel.attempt.elapsed = 44;
+    runtimeA.objective.duel.attempt.damageTaken = 3;
+    runtimeA.objective.duel.totals.elapsed = 88;
+    runtimeA.objective.duel.totals.damageTaken = 7;
+    runtimeA.objective.duel.finale.ready = true;
+    runtimeA.objective.duel.finale.struck = true;
     runtimeA.objective.warden.kneeling = true;
     runtimeA.objective.restorationTiles[0].tile = Tile.AIR;
     runtimeA.map[25][22] = Tile.AIR;
@@ -301,6 +324,14 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(runtimeB.objective.heartstone.zone.x).toBe(template.objective.heartstone.zone.x);
     expect(runtimeB.objective.rememberedHand.landing.minTx).toBe(template.objective.rememberedHand.landing.minTx);
     expect(runtimeB.objective.bridle.struck).toBe(false);
+    expect(runtimeB.objective.duel).toMatchObject({
+      phase: 'sealed', active: false, complete: false,
+      boss: { hp: 18, phase: 'guardian', action: 'idle' },
+      player: { comboStep: 0, guarding: false },
+      attempt: { count: 0, elapsed: 0, damageTaken: 0 },
+      totals: { elapsed: 0, damageTaken: 0 },
+      finale: { ready: false, struck: false },
+    });
     expect(runtimeB.objective.warden.kneeling).toBe(false);
     expect(runtimeB.objective.restorationTiles[0].tile).toBe(Tile.GLOW);
     expect(runtimeB.map[25][22]).toBe(Tile.SAND);
@@ -352,6 +383,14 @@ describe('Outer Veil Level 10 production preview', () => {
         raised: false, restored: false,
       },
       bridle: { exposed: false, struck: false, clock: 0 },
+      duel: {
+        phase: 'sealed', active: false, complete: false,
+        boss: { hp: 18, phase: 'guardian', action: 'idle' },
+        player: { comboStep: 0, guarding: false },
+        attempt: { count: 0, elapsed: 0, damageTaken: 0 },
+        totals: { elapsed: 0, damageTaken: 0 },
+        finale: { ready: false, struck: false },
+      },
       warden: { state: 'sleeping', kneeling: false, commandBroken: false },
       crownPath: { restored: false },
     });
@@ -383,6 +422,8 @@ describe('Outer Veil Level 10 production preview', () => {
     broken.objective.heartstone.zone.w = 10;
     broken.map[20][46] = Tile.AIR;
     broken.objective.bridle.guardSeconds = .1;
+    broken.objective.duel.boss.hp = 1;
+    broken.objective.duel.arena.checkpoint.tx = broken.objective.duel.arena.maxTx;
     broken.objective.warden.w = TILE;
     broken.objective.restorationTiles.pop();
     broken.boss = { hp: 1 };
@@ -398,6 +439,7 @@ describe('Outer Veil Level 10 production preview', () => {
       'invalid_warden_heartstone',
       'unsafe_warden_landing',
       'invalid_warden_bridle',
+      'invalid_warden_duel',
       'invalid_warden_identity',
       'unsafe_warden_restoration',
       'warden_route_contamination',
