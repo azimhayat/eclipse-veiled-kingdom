@@ -1165,6 +1165,49 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
       ctx.restore();
     }
 
+    const loom = objective.windLoom;
+    if (loom && ['updraft', 'complete'].includes(objective.phase)) {
+      const ringX = loom.ring.tx * TILE;
+      const ringY = loom.ring.ty * TILE;
+      const launchY = loom.launch.feetTy * TILE;
+      const lifting = loom.state === 'lift';
+      const complete = loom.crossed || objective.complete;
+      const color = complete ? '#ffe28a' : lifting ? '#8ce8ff' : loom.state === 'warning' ? '#dfbd69' : '#71869b';
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = color;
+      ctx.fillStyle = complete
+        ? 'rgba(255,226,138,.14)'
+        : lifting ? 'rgba(140,232,255,.16)' : 'rgba(83,97,119,.08)';
+      ctx.shadowColor = color;
+      ctx.shadowBlur = complete || lifting ? 24 : 12;
+      ctx.lineWidth = complete || lifting ? 5 : 3;
+
+      ctx.beginPath();
+      ctx.ellipse(ringX, ringY, loom.ring.radius, loom.ring.radius * .38, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.setLineDash(lifting || complete ? [] : [12, 10]);
+      for (const offset of [-44, 0, 44]) {
+        ctx.beginPath();
+        ctx.moveTo(ringX + offset, launchY);
+        for (let step = 1; step <= 6; step += 1) {
+          const t = step / 6;
+          const sway = Math.sin(time * 4 + step * 1.3 + offset) * (lifting ? 13 : 7) * (1 - t);
+          ctx.lineTo(ringX + offset * (1 - t) + sway, launchY + (ringY - launchY) * t);
+        }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      ctx.font = '700 16px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = color;
+      ctx.fillText(complete ? 'SKY OPEN' : lifting ? 'RIDE' : loom.state === 'warning' ? 'WAIT' : 'RESET', ringX, ringY - 18);
+      ctx.restore();
+    }
+
     if (objective.skyRestored) {
       ctx.save();
       const gradient = ctx.createLinearGradient(13 * TILE, 0, 82 * TILE, 0);

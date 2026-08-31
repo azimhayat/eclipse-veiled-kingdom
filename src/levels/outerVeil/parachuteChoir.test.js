@@ -78,6 +78,7 @@ function engineHarness(level) {
     recordParachuteDefeat: GameEngine.prototype.recordParachuteDefeat,
     completeParachuteChoir: GameEngine.prototype.completeParachuteChoir,
     updateParachuteChoirObjective: GameEngine.prototype.updateParachuteChoirObjective,
+    updateParachuteUpdraft: GameEngine.prototype.updateParachuteUpdraft,
     updateParachuteSeesaw: GameEngine.prototype.updateParachuteSeesaw,
     raidAttackBox: GameEngine.prototype.raidAttackBox,
     updateRaidSoldier: GameEngine.prototype.updateRaidSoldier,
@@ -139,6 +140,10 @@ describe('Outer Veil Level 8 production preview', () => {
       id: 'cantor-skyboard', angle: 0, balanceSeconds: 0, balanced: false,
       maxAngle: .22, windAmplitude: .035, requiredBalanceSeconds: 1.1,
     });
+    expect(level.objective.windLoom).toMatchObject({
+      id: 'living-updraft', clock: 0, state: 'warning',
+      launched: false, crossed: false, attempts: 0,
+    });
   });
 
   it('uses encounter-local landing warnings and spawns both stable lesson IDs exactly once', () => {
@@ -174,6 +179,8 @@ describe('Outer Veil Level 8 production preview', () => {
     expect(GameEngine.prototype.objectiveStatus.call(engine).progressText).toBe('BREAK THE HIGH ANSWER');
     level.objective.phase = 'finale';
     expect(GameEngine.prototype.objectiveStatus.call(engine).progressText).toBe('SILENCE THE FALLING CADENCE');
+    level.objective.phase = 'updraft';
+    expect(GameEngine.prototype.objectiveStatus.call(engine).progressText).toBe('RIDE THE LIVING WIND');
     level.objective.phase = 'complete';
     level.objective.complete = true;
     expect(GameEngine.prototype.objectiveStatus.call(engine)).toMatchObject({
@@ -326,11 +333,13 @@ describe('Outer Veil Level 8 production preview', () => {
     expect(engine.player.x).toBeGreaterThan(37 * TILE);
   });
 
-  it('deploys two advancing pairs, never exceeds five spawns, and restores only after every stable ID falls', () => {
+  it('deploys all five stable voices, then requires the harmless cyan updraft before restoration', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
     const engine = engineHarness(level);
     level.objective.roster[0].status = 'defeated';
     level.objective.roster[1].status = 'defeated';
+    level.objective.windSails[0].unfurled = true;
+    level.objective.windSails[1].unfurled = true;
     level.objective.defeatedCount = 2;
     level.objective.spawnedCount = 2;
     level.objective.stages[0].active = true;
@@ -356,10 +365,39 @@ describe('Outer Veil Level 8 production preview', () => {
     defeatActive(engine, 'ground-bass');
     defeatActive(engine, 'falling-cadence');
     expect(level.objective).toMatchObject({
-      phase: 'complete', spawnedCount: 5, defeatedCount: 5,
-      skyRestored: true, complete: true, restored: true,
+      phase: 'updraft', spawnedCount: 5, defeatedCount: 5,
+      skyRestored: false, complete: false, restored: false,
     });
     expect(level.objective.windSails.every((sail) => sail.unfurled)).toBe(true);
+    expect(engine.gateOpen).toBe(false);
+
+    const loom = level.objective.windLoom;
+    engine.player.x = loom.ring.tx * TILE - engine.player.w / 2;
+    engine.player.y = loom.launch.feetTy * TILE - engine.player.h;
+    engine.player.grounded = true;
+    engine.player.vy = 0;
+    engine.input.climb = true;
+    engine.input.pressed.add('jump');
+    GameEngine.prototype.updateParachuteChoirObjective.call(engine, .2);
+    expect(loom).toMatchObject({ state: 'warning', launched: false, crossed: false, attempts: 1 });
+    expect(engine.player.vy).toBe(0);
+    expect(engine.gateOpen).toBe(false);
+
+    engine.input.pressed.add('jump');
+    GameEngine.prototype.updateParachuteChoirObjective.call(engine, loom.warningSeconds);
+    expect(loom).toMatchObject({ state: 'lift', launched: true, crossed: false, attempts: 2 });
+    expect(engine.player.vy).toBe(-1120);
+
+    engine.input.pressed.clear();
+    engine.player.x = loom.ring.tx * TILE - engine.player.w / 2;
+    engine.player.y = loom.ring.ty * TILE - engine.player.h / 2;
+    engine.player.grounded = false;
+    GameEngine.prototype.updateParachuteChoirObjective.call(engine, 1 / 60);
+    expect(level.objective).toMatchObject({
+      phase: 'complete', spawnedCount: 5, defeatedCount: 5,
+      skyRestored: true, complete: true, restored: true,
+      windLoom: { state: 'complete', launched: true, crossed: true, attempts: 2 },
+    });
     expect(engine.gateOpen).toBe(true);
     expect(engine.callbacks.gate).toHaveBeenCalledOnce();
     GameEngine.prototype.updateParachuteChoirObjective.call(engine, 30);
@@ -387,6 +425,7 @@ describe('Outer Veil Level 8 production preview', () => {
     const engine = engineHarness(level);
     level.objective.skycut.completed = true;
     level.objective.skycut.tether.cut = true;
+    level.objective.windLoom.crossed = true;
     level.objective.roster.forEach((entry) => { entry.status = 'defeated'; });
     level.objective.defeatedCount = level.objective.roster.length;
     engine.totalTime = 141;
@@ -423,6 +462,11 @@ describe('Outer Veil Level 8 production preview', () => {
     runtime.objective.skycut.seesaw.balanceSeconds = 1.1;
     runtime.objective.skycut.seesaw.balanced = true;
     runtime.objective.skycut.tether.cut = true;
+    runtime.objective.windLoom.clock = 2.2;
+    runtime.objective.windLoom.state = 'lift';
+    runtime.objective.windLoom.launched = true;
+    runtime.objective.windLoom.crossed = true;
+    runtime.objective.windLoom.attempts = 3;
     runtime.objective.windSails.forEach((sail) => { sail.unfurled = true; });
     runtime.objective.skyRestored = true;
     runtime.ships[0].x += 500;
@@ -451,6 +495,7 @@ describe('Outer Veil Level 8 production preview', () => {
         seesaw: { angle: 0, balanceSeconds: 0, balanced: false },
         tether: { cut: false },
       },
+      windLoom: { clock: 0, state: 'warning', launched: false, crossed: false, attempts: 0 },
     });
     expect(engine.level.objective.roster.every((entry) => entry.status === 'queued')).toBe(true);
     expect(engine.level.objective.stages.every((stage) => !stage.active && !stage.complete)).toBe(true);
@@ -494,6 +539,7 @@ describe('Outer Veil Level 8 production preview', () => {
     broken.objective.roster[4].kind = 'archer';
     broken.objective.stages[2].rosterIds.push('extra-voice');
     broken.objective.skycut.seesaw.requiredBalanceSeconds = 0;
+    broken.objective.windLoom.liftSeconds = .1;
     broken.spawnEvery = 1;
     broken.checkpoints.push({ x: 100, spawnX: 100, spawnY: 100, label: 'wrong' });
     const result = validateAuthoredLevel(broken, identity);
@@ -505,6 +551,7 @@ describe('Outer Veil Level 8 production preview', () => {
       'invalid_raid_stage',
       'invalid_raid_membership',
       'invalid_raid_seesaw',
+      'invalid_raid_updraft',
       'ambiguous_raid_checkpoint',
       'raid_route_contamination',
     ]));

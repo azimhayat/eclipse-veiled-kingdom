@@ -233,6 +233,10 @@ export class GameEngine {
         seesawBalanceSeconds: this.level.objective.skycut?.seesaw?.balanceSeconds || 0,
         seesawAngle: this.level.objective.skycut?.seesaw?.angle || 0,
         tetherCut: Boolean(this.level.objective.skycut?.tether?.cut),
+        windState: this.level.objective.windLoom?.state || null,
+        windLaunched: Boolean(this.level.objective.windLoom?.launched),
+        windRingCrossed: Boolean(this.level.objective.windLoom?.crossed),
+        windAttempts: this.level.objective.windLoom?.attempts || 0,
         skyRestored: Boolean(this.level.objective.skyRestored),
         soldierStates: this.soldiers.map((soldier) => ({
           id: soldier.id,
@@ -1311,6 +1315,7 @@ export class GameEngine {
         flank: objective.skycut?.seesaw?.balanced ? 'CUT THE COMMAND TETHER' : 'BALANCE THE SKYBOARD',
         chorus: 'BREAK THE HIGH ANSWER',
         finale: 'SILENCE THE FALLING CADENCE',
+        updraft: 'RIDE THE LIVING WIND',
         complete: 'THE SKY SINGS FOR THE LIVING',
       };
       return {
@@ -1706,7 +1711,13 @@ export class GameEngine {
         objective.phase = 'finale';
         this.setHint('MIRA · Their descent follows a Crown survey cadence. · AREN · Mine. I taught them where a city could not hide.', 6.5);
       } else if (stage.id === 'finale') {
-        this.completeParachuteChoir();
+        objective.phase = 'updraft';
+        objective.windLoom.clock = 0;
+        objective.windLoom.state = 'warning';
+        objective.windLoom.launched = false;
+        this.projectiles = [];
+        this.audio.play('gate');
+        this.setHint('FIVE SAILS ANSWER · climb beneath the sky-ring. Wait for cyan, then hold UP and press JUMP.', 6);
       }
     }
     this.pushHud(true);
@@ -1716,7 +1727,8 @@ export class GameEngine {
   completeParachuteChoir() {
     const objective = this.level.objective;
     if (objective?.type !== 'parachute-choir-restoration' || objective.complete
-      || objective.defeatedCount !== objective.roster.length || !objective.skycut?.completed) return false;
+      || objective.defeatedCount !== objective.roster.length || !objective.skycut?.completed
+      || !objective.windLoom?.crossed) return false;
     objective.complete = true;
     objective.restored = true;
     objective.skyRestored = true;
@@ -2078,6 +2090,11 @@ export class GameEngine {
       ship.y = approach(ship.y, target.ty * TILE, (objective.complete ? 320 : 95) * dt);
     }
 
+    if (objective.phase === 'updraft') {
+      this.updateParachuteUpdraft(dt);
+      return;
+    }
+
     if (objective.phase === 'flank') {
       const zone = objective.skycut.landing;
       const centerTx = (this.player.x + this.player.w / 2) / TILE;
@@ -2102,6 +2119,62 @@ export class GameEngine {
       const entry = objective.roster.find((item) => item.id === rosterId);
       if (entry?.status === 'queued' && elapsed >= entry.delay) this.spawnParachuteRaider(entry);
     }
+  }
+
+  updateParachuteUpdraft(dt = 0) {
+    const objective = this.level.objective;
+    const loom = objective?.type === 'parachute-choir-restoration'
+      ? objective.windLoom
+      : null;
+    if (!loom || objective.phase !== 'updraft' || loom.crossed) return false;
+
+    loom.clock += dt;
+    const pulse = loom.clock % loom.cycleSeconds;
+    loom.state = pulse < loom.warningSeconds
+      ? 'warning'
+      : pulse < loom.warningSeconds + loom.liftSeconds ? 'lift' : 'recovery';
+
+    const playerCenterX = this.player.x + this.player.w / 2;
+    const playerCenterY = this.player.y + this.player.h / 2;
+    const centerTx = playerCenterX / TILE;
+    const feetTy = (this.player.y + this.player.h) / TILE;
+    const inLaunch = centerTx >= loom.launch.minTx && centerTx <= loom.launch.maxTx
+      && Math.abs(feetTy - loom.launch.feetTy) <= 1.25;
+    const jumpAsked = this.input.climb && this.input.pressed.has('jump');
+
+    if (!loom.launched && inLaunch && jumpAsked) {
+      loom.attempts += 1;
+      if (loom.state !== 'lift') {
+        this.setHint('THE GOLD WIND PRESSES DOWN · wait for the column to turn cyan, then hold UP and press JUMP.', 3);
+        this.pushHud(true);
+        return false;
+      }
+      loom.launched = true;
+      this.player.vy = Math.min(this.player.vy, -1120);
+      this.player.grounded = false;
+      this.audio.play('jump');
+      this.burst(playerCenterX, this.player.y + this.player.h, '#8ce8ff', 18, 170);
+      this.setHint('THE LIVING WIND LIFTS · steer through the cyan sky-ring.', 3.5);
+      this.pushHud(true);
+    }
+
+    const ringX = loom.ring.tx * TILE;
+    const ringY = loom.ring.ty * TILE;
+    if (loom.launched && Math.hypot(playerCenterX - ringX, playerCenterY - ringY) <= loom.ring.radius) {
+      loom.crossed = true;
+      loom.state = 'complete';
+      this.burst(ringX, ringY, '#ffe28a', 32, 230);
+      this.audio.play('relic');
+      this.completeParachuteChoir();
+      return true;
+    }
+
+    if (loom.launched && this.player.grounded && feetTy >= loom.launch.feetTy - .1) {
+      loom.launched = false;
+      this.setHint('THE SAILS CATCH YOU SAFELY · wait for cyan and ride the centre of the ring.', 3.2);
+      this.pushHud(true);
+    }
+    return false;
   }
 
   updateParachuteSeesaw(dt = 0) {

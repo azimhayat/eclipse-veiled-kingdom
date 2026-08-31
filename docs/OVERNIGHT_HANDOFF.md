@@ -621,3 +621,39 @@ Scope: local test and evidence milestone only; public GitHub Pages remains untou
 ## Exact next milestone
 
 Chapter 5 reset and transition integration are now closed. Preserve the user-accepted Chapter 6 STRIKE behavior and begin the bounded Chapter 7 quality pass only after the saved Level 6 result is handed off.
+
+---
+
+# Reviewed continuation — Level 8 wind-balanced skyboard
+
+Updated: 2026-09-01 00:24 Asia/Dubai
+Scope: local Level 8 milestone only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Reworked the user-selected Level 8 command-tether platform into a real sloped one-way seesaw. Aren's position changes the walkable surface angle, while an authored crosswind keeps the unbalanced board moving.
+- Increased the maximum swing to 0.22 radians and requires 1.1 continuous seconds inside a narrow, visibly marked counter-position. Leaving stability rapidly drains progress; successful balance locks the board level before the existing Pilgrim's Grip spring and Dawnstroke tether cut.
+- Expanded the opening lesson from one First Voice to a finite two-paratrooper **Opening Duet**. The complete five-member roster is now deployed 2-1-2: two readable opening attackers, one travelling High Answer, then the two-member Falling Cadence.
+- Kept the earlier gold-top, blue-dark, segmented platform artwork. The new beam rotates that familiar treatment around a compact fulcrum instead of replacing the accepted hero, background, platform language, or remaining realm presentation.
+- Made the three challenges explicit in the HUD: **Break the Opening Duet**, **Balance the Skyboard / Cut the Command Tether**, and **Break the High Answer / Silence the Falling Cadence**. Defeating all five voices still unfurls five wind-sails, restores the sky, opens the eastern gate, and preserves the existing ending.
+- Added the requested third puzzle after the fifth defeat. The five recovered sails now form a harmless pulsing updraft beneath a broad sky-ring: gold means wait, cyan means hold Up and press Jump, and a miss returns Aren safely to the permanent terrace. Combat completion alone no longer opens the gate; only a cyan launch through the ring restores the sky and eastern exit.
+- Extended authored validation, runtime snapshots, deep objective cloning, and fatal reset coverage for pristine seesaw angle, balance progress, wind bounds, and locked state.
+- Saved the reviewed milestone locally as commit `034e643`; nothing was pushed or published.
+
+## Validation evidence
+
+- Complete automated suite: **179 tests across 23 files passed**.
+- Focused Level 8, rendering, and schema suites: **25 tests passed**, including maximum-wind counter-position solvability, real sloped collision, two stable opening spawns, 2-1-2 finite progression, named phase guidance, nearby tether gating, gold-window rejection, cyan lift, sky-ring completion, full restoration, and life-over reset.
+- Production build: **54 modules transformed**; Level 8 remains its own lazy-loaded production chunk.
+- `git diff --check` passed with only expected Windows line-ending notices; the working tree was clean after the local milestone commit.
+- Desktop, 844x390 landscape-phone, and 390x844 portrait-phone checks kept the opening identity, two-paratrooper instruction, hero, HUD, hints, canvas, and all seven touch controls visible. Portrait inspection showed both opening attackers and the familiar gold-dark skyboard in the playable frame.
+- The final named preview reloaded at `?previewLevel=parachute-choir&fresh=6`, 4/4 health, and **BREAK THE OPENING DUET** without routing or visible error fallback.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Remaining quality gap
+
+- The stronger wind-balanced version and living-updraft finale have deterministic engine, rendering, reset, and responsive-browser proof, but still need the user's uninterrupted natural-input clear. Do not claim human acceptance until the Opening Duet, counter-balance, Grip spring, tether strike, final three voices, cyan launch, sky-ring, and eastern door are completed in one fresh run.
+
+## Exact next milestone
+
+Open the revised Level 8 preview for the user. Fix only a reproduced interaction, balance-readability, updraft-timing, or difficulty issue; otherwise accept Level 8 and proceed to the bounded Level 9 quality pass. Keep all work local.

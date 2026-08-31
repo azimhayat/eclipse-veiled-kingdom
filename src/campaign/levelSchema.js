@@ -1143,7 +1143,7 @@ function validateParachuteChoir(level, issues) {
     addIssue(issues, 'objective.skycut.seesaw', 'invalid_raid_seesaw', 'must define one pristine six-tile walkable balance board over clear authored cells');
   }
 
-  const formationKeys = ['lesson', 'flank', 'chorus', 'finale', 'complete'];
+  const formationKeys = ['lesson', 'flank', 'chorus', 'finale', 'updraft', 'complete'];
   for (const phase of formationKeys) {
     const formation = objective.formations?.[phase];
     if (!Array.isArray(formation) || formation.length !== shipIds.size
@@ -1161,7 +1161,28 @@ function validateParachuteChoir(level, issues) {
     || objective.skyRestored !== false) {
     addIssue(issues, 'objective.windSails', 'invalid_raid_restoration', 'must define one pristine wind-sail for each finite voice');
   }
-  for (const phase of ['lesson', 'flank', 'chorus', 'finale', 'complete']) {
+  const loom = objective.windLoom;
+  const launch = loom?.launch;
+  const ring = loom?.ring;
+  if (!loom || loom.id !== 'living-updraft' || loom.clock !== 0 || loom.state !== 'warning'
+    || loom.launched !== false || loom.crossed !== false || loom.attempts !== 0
+    || !Number.isFinite(loom.cycleSeconds) || loom.cycleSeconds < 3 || loom.cycleSeconds > 5
+    || !Number.isFinite(loom.warningSeconds) || loom.warningSeconds < 1.1
+    || !Number.isFinite(loom.liftSeconds) || loom.liftSeconds < .9
+    || loom.warningSeconds + loom.liftSeconds >= loom.cycleSeconds - .6
+    || !launch || !Number.isFinite(launch.minTx) || !Number.isFinite(launch.maxTx)
+    || !Number.isInteger(launch.feetTy) || launch.minTx >= launch.maxTx
+    || !ring || !Number.isFinite(ring.tx) || !Number.isFinite(ring.ty)
+    || !Number.isFinite(ring.radius) || ring.radius < TILE || ring.radius > TILE * 2
+    || ring.tx < launch.minTx || ring.tx > launch.maxTx || ring.ty >= launch.feetTy - 2
+    || Math.ceil(launch.minTx) < 1 || Math.floor(launch.maxTx) >= WORLD_COLS - 1
+    || Array.from(
+      { length: Math.floor(launch.maxTx) - Math.ceil(launch.minTx) + 1 },
+      (_item, index) => level.map?.[launch.feetTy]?.[Math.ceil(launch.minTx) + index],
+    ).some((tile) => tile !== Tile.ONEWAY)) {
+    addIssue(issues, 'objective.windLoom', 'invalid_raid_updraft', 'must define one pristine, harmless, supported cyan updraft and broad in-bounds sky-ring');
+  }
+  for (const phase of ['lesson', 'flank', 'chorus', 'finale', 'updraft', 'complete']) {
     if (typeof objective.phaseHints?.[phase] !== 'string' || objective.phaseHints[phase].trim() === '') {
       addIssue(issues, `objective.phaseHints.${phase}`, 'invalid_phase_hint', 'must be a non-empty string');
     }

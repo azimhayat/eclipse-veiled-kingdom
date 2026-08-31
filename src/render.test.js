@@ -114,4 +114,19 @@ describe('Parachute Choir skyboard rendering', () => {
     expect(rotationIndex).toBeGreaterThan(pivotIndex);
     expect(ctx.calls.filter((call) => call[0] === 'fillRect' && call[3] === 8 && call[4] === 8)).toHaveLength(3);
   });
+
+  it('renders the final cyan updraft and broad sky-ring only during the third puzzle', () => {
+    const level = createParachuteChoir();
+    level.objective.phase = 'updraft';
+    level.objective.windLoom.state = 'lift';
+    const ctx = recordingContext();
+
+    drawLevelMechanics(ctx, level, 8, false);
+
+    const ring = level.objective.windLoom.ring;
+    expect(ctx.calls).toContainEqual([
+      'ellipse', ring.tx * TILE, ring.ty * TILE, ring.radius, ring.radius * .38, 0, 0, Math.PI * 2,
+    ]);
+    expect(ctx.calls).toContainEqual(['fillText', 'RIDE', ring.tx * TILE, ring.ty * TILE - 18]);
+  });
 });

@@ -115,6 +115,13 @@ export function cloneObjective(objective) {
       if (clone.skycut.tether) clone.skycut.tether.cut = false;
     }
     for (const sail of clone.windSails || []) sail.unfurled = false;
+    if (clone.windLoom) {
+      clone.windLoom.clock = 0;
+      clone.windLoom.state = 'warning';
+      clone.windLoom.launched = false;
+      clone.windLoom.crossed = false;
+      clone.windLoom.attempts = 0;
+    }
     clone.skyRestored = false;
   }
   if (clone.type === 'veil-gate-restoration') {
