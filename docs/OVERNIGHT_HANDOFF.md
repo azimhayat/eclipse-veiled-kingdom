@@ -657,3 +657,30 @@ Scope: local Level 8 milestone only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Open the revised Level 8 preview for the user. Fix only a reproduced interaction, balance-readability, updraft-timing, or difficulty issue; otherwise accept Level 8 and proceed to the bounded Level 9 quality pass. Keep all work local.
+
+---
+
+# Reviewed continuation — Level 8 High Answer strike recovery
+
+Updated: 2026-09-01 01:23 Asia/Dubai
+Scope: the user reported that the third paratrooper could not be killed with STRIKE; no other level presentation or geometry changed.
+
+## Completed milestone
+
+- Reproduced the third paratrooper, **High Answer**, at the edge of the real Dawnstroke reach. The first valid strike reduced it to one health, but the original 260-pixel-per-second hit knockback carried it beyond the unchanged second swing, making STRIKE appear broken on the narrow terrace.
+- Gave Parachute Choir's Dawnstroke a modest 68-pixel, 54-pixel-high combat arc and reduced finite raider knockback to 110. The enemy still requires its authored two hits, but a stationary follow-up now connects after the stun instead of forcing a chase off the terrace.
+- Added defensive reconciliation for the impossible live state where a roster entry remains active but its combat entity is missing. Only that active voice reforms; `spawnedCount`, `defeatedCount`, completed stages, and the five-member limit remain unchanged.
+- Drove an isolated browser regression through both High Answer strikes: first hit left one health; the second removed the entity, marked the roster entry defeated, advanced to **Falling Cadence**, and kept the finite count at 3/3 for that point in the route.
+- Drove the remaining state machine through five defeated voices, the cyan Living Wind ring, gate opening, and `mode: win` with 4/4 health using local developer controls. This is regression evidence, not an uninterrupted human-input acceptance run.
+
+## Validation evidence
+
+- Focused Level 8 suite: **15 tests passed**.
+- Complete automated suite: **181 tests across 23 files passed**.
+- Production build: **54 modules transformed**; Level 8 remains independently lazy-loaded.
+- `git diff --check` passed with only expected Windows line-ending notices.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Exact next milestone
+
+Reload Level 8 from a pristine 4/4 start and have the user confirm that two ordinary STRIKE presses defeat High Answer on the terrace. Then clear the final pair and accept the Living Wind ring through natural controls before declaring Level 8 complete.

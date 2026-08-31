@@ -78,6 +78,7 @@ function engineHarness(level) {
     recordParachuteDefeat: GameEngine.prototype.recordParachuteDefeat,
     completeParachuteChoir: GameEngine.prototype.completeParachuteChoir,
     updateParachuteChoirObjective: GameEngine.prototype.updateParachuteChoirObjective,
+    reformMissingParachuteRaiders: GameEngine.prototype.reformMissingParachuteRaiders,
     updateParachuteUpdraft: GameEngine.prototype.updateParachuteUpdraft,
     updateParachuteSeesaw: GameEngine.prototype.updateParachuteSeesaw,
     raidAttackBox: GameEngine.prototype.raidAttackBox,
@@ -418,6 +419,75 @@ describe('Outer Veil Level 8 production preview', () => {
     expect(soldier.x).toBeGreaterThanOrEqual(soldier.minX);
     expect(level.objective.roster[0].status).toBe('active');
     expect(level.objective.defeatedCount).toBe(0);
+  });
+
+  it('reforms one missing active voice without changing the finite encounter count', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    const objective = level.objective;
+    objective.phase = 'chorus';
+    objective.defeatedCount = 2;
+    objective.spawnedCount = 3;
+    objective.roster[0].status = 'defeated';
+    objective.roster[1].status = 'defeated';
+    objective.roster[2].status = 'active';
+    objective.roster[2].spawnedAt = 8;
+    objective.stages[0].active = true;
+    objective.stages[0].complete = true;
+    objective.stages[1].active = true;
+    objective.stages[1].startedAt = 8;
+
+    expect(engine.soldiers).toEqual([]);
+    expect(GameEngine.prototype.reformMissingParachuteRaiders.call(engine)).toBe(true);
+    expect(engine.soldiers.map((soldier) => soldier.rosterId)).toEqual(['high-answer']);
+    expect(objective).toMatchObject({ spawnedCount: 3, defeatedCount: 2 });
+    expect(objective.roster[2]).toMatchObject({ status: 'active', spawnedAt: 8 });
+
+    expect(GameEngine.prototype.reformMissingParachuteRaiders.call(engine)).toBe(false);
+    expect(engine.soldiers).toHaveLength(1);
+    expect(objective.spawnedCount).toBe(3);
+  });
+
+  it('keeps High Answer inside Dawnstroke reach for a reliable second strike', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    const objective = level.objective;
+    objective.phase = 'chorus';
+    objective.defeatedCount = 2;
+    objective.spawnedCount = 2;
+    objective.roster[0].status = 'defeated';
+    objective.roster[1].status = 'defeated';
+    objective.stages[0].active = true;
+    objective.stages[0].complete = true;
+    objective.stages[1].active = true;
+    objective.stages[1].startedAt = 4;
+    expect(GameEngine.prototype.spawnParachuteRaider.call(engine, objective.roster[2])).toBe(true);
+
+    const answer = engine.soldiers[0];
+    answer.mode = 'walk';
+    answer.x = 61 * TILE;
+    answer.y = 22 * TILE - answer.h;
+    answer.vy = 0;
+    answer.attackPhase = 'recovery';
+    answer.attackClock = .9;
+    engine.player.x = answer.x - 75;
+    engine.player.y = answer.y;
+    engine.player.facing = 1;
+
+    engine.player.attackTimer = .2;
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(answer.hp).toBe(1);
+    for (let frame = 0; frame < 24; frame += 1) {
+      GameEngine.prototype.updateRaidSoldier.call(engine, answer, 1 / 60);
+      answer.x += answer.vx / 60;
+    }
+
+    engine.player.attackTimer = .2;
+    engine.player.attackHits.clear();
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(engine.soldiers).toEqual([]);
+    expect(objective.roster[2].status).toBe('defeated');
+    expect(objective).toMatchObject({ phase: 'finale', defeatedCount: 3, spawnedCount: 3 });
   });
 
   it('emits exact preview identity at the door after restoration', () => {

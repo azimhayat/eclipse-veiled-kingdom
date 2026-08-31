@@ -1565,11 +1565,13 @@ export class GameEngine {
   resolveAttackHits() {
     const p = this.player;
     if (p.attackTimer <= .05) return;
+    const dawnstroke = this.level.objective?.type === 'parachute-choir-restoration';
+    const reach = dawnstroke ? 68 : 50;
     const hitbox = {
-      x: p.facing > 0 ? p.x + p.w - 2 : p.x - 48,
-      y: p.y + 3,
-      w: 50,
-      h: 42,
+      x: p.facing > 0 ? p.x + p.w - 2 : p.x - reach + 2,
+      y: p.y + (dawnstroke ? -3 : 3),
+      w: reach,
+      h: dawnstroke ? 54 : 42,
     };
     for (const soldier of this.soldiers) {
       if (p.attackHits.has(soldier.id) || !overlaps(hitbox, soldier)) continue;
@@ -1583,7 +1585,7 @@ export class GameEngine {
       }
       p.attackHits.add(soldier.id);
       soldier.hp -= 1;
-      soldier.vx = p.facing * 260;
+      soldier.vx = p.facing * (soldier.raidMember ? 110 : 260);
       if (soldier.raidMember || soldier.readableMelee) {
         soldier.attackPhase = 'stun';
         soldier.attackClock = .24;
@@ -1625,9 +1627,10 @@ export class GameEngine {
     return true;
   }
 
-  spawnParachuteRaider(entry) {
+  spawnParachuteRaider(entry, { reform = false } = {}) {
     const objective = this.level.objective;
-    if (objective?.type !== 'parachute-choir-restoration' || !entry || entry.status !== 'queued') return false;
+    const expectedStatus = reform ? 'active' : 'queued';
+    if (objective?.type !== 'parachute-choir-restoration' || !entry || entry.status !== expectedStatus) return false;
     const ship = this.level.ships.find((item) => item.id === entry.shipId);
     if (!ship) return false;
     const boundsByStage = {
@@ -1636,9 +1639,11 @@ export class GameEngine {
       finale: [62, 83],
     };
     const [minTx, maxTx] = boundsByStage[entry.stageId] || [2, 88];
-    entry.status = 'active';
-    entry.spawnedAt = objective.encounterClock;
-    objective.spawnedCount += 1;
+    if (!reform) {
+      entry.status = 'active';
+      entry.spawnedAt = objective.encounterClock;
+      objective.spawnedCount += 1;
+    }
     this.soldiers.push({
       id: entry.id,
       rosterId: entry.id,
@@ -1665,6 +1670,26 @@ export class GameEngine {
     });
     this.pushHud(true);
     return true;
+  }
+
+  reformMissingParachuteRaiders() {
+    const objective = this.level.objective;
+    if (objective?.type !== 'parachute-choir-restoration') return false;
+    const stage = objective.stages.find((item) => item.id === objective.phase);
+    if (!stage?.active || stage.complete) return false;
+
+    let reformed = false;
+    for (const rosterId of stage.rosterIds) {
+      const entry = objective.roster.find((item) => item.id === rosterId);
+      const present = this.soldiers.some((soldier) => soldier.rosterId === rosterId && soldier.hp > 0);
+      if (entry?.status !== 'active' || present) continue;
+      reformed = this.spawnParachuteRaider(entry, { reform: true }) || reformed;
+    }
+    if (reformed) {
+      this.setHint('THE CHOIR REFORMS · a missing active voice returns without changing the finite count.', 3.4);
+      this.pushHud(true);
+    }
+    return reformed;
   }
 
   strikeParachuteTether() {
@@ -2081,6 +2106,8 @@ export class GameEngine {
     const objective = this.level.objective;
     if (objective?.type !== 'parachute-choir-restoration') return;
     objective.encounterClock += dt;
+
+    this.reformMissingParachuteRaiders();
 
     const targets = objective.formations[objective.phase] || objective.formations.lesson;
     for (const ship of this.level.ships) {
