@@ -487,13 +487,28 @@ export class GameEngine {
     this.loadLevel(0, true);
   }
 
+  announceCurrentLevel(reason) {
+    const objective = this.objectiveStatus();
+    this.callbacks.level?.({
+      reason,
+      level: this.level.campaignOrder || this.level.id,
+      levelKey: this.level.levelKey || null,
+      name: this.level.name,
+      subtitle: this.level.subtitle,
+      storyLine: this.level.storyLine,
+      mechanic: this.level.mechanic,
+      objectiveTitle: objective.title,
+      abilityUnlock: this.level.abilityUnlock ? { ...this.level.abilityUnlock } : null,
+    });
+  }
+
   start(demo = false) {
     if (this.mode === 'win' || this.mode === 'dead' || this.levelIndex !== 0 || this.totalTime > 0) this.resetCampaign();
     this.demo = demo;
     this.mode = 'play';
     this.clearInputs();
     this.callbacks.mode?.('play');
-    this.callbacks.level?.(this.level.campaignOrder || this.level.id, this.level.name, this.level.subtitle, this.level.storyLine);
+    this.announceCurrentLevel('start');
     this.setHint(this.level.gameplay?.openingHint || this.level.mechanic || 'The inner paths demand every skill.');
     this.pushHud(true);
     this.scheduleNextLevel();
@@ -546,7 +561,6 @@ export class GameEngine {
     this.transitionRetryBlocked = false;
     this.hintHoldUntil = 0;
     this.setHint(this.level.gameplay?.openingHint || this.level.mechanic || 'The inner paths demand every skill.');
-    this.callbacks.level?.(this.level.campaignOrder || this.level.id, this.level.name, this.level.subtitle, this.level.storyLine);
     this.pushHud(true);
     this.scheduleNextLevel();
   }
@@ -606,6 +620,7 @@ export class GameEngine {
       this.loadLevel(index);
       this.mode = 'play';
       this.callbacks.mode?.('play');
+      this.announceCurrentLevel('transition');
       this.callbacks.transition?.(this.level.id, this.level.name);
       this.transitionTargetIndex = null;
       return true;

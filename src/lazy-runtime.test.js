@@ -12,7 +12,7 @@ function deferred() {
 }
 
 function transitionHarness(prepareAuthoredLevel) {
-  const callbacks = { mode: vi.fn(), transition: vi.fn() };
+  const callbacks = { mode: vi.fn(), transition: vi.fn(), level: vi.fn() };
   const engine = {
     running: true,
     repository: {
@@ -21,7 +21,7 @@ function transitionHarness(prepareAuthoredLevel) {
       entryAt: (index) => ({ title: `Level ${index + 1}` }),
     },
     levelIndex: 0,
-    level: { id: 1, name: 'Level 1' },
+    level: { id: 1, name: 'Level 1', relics: [] },
     mode: 'play',
     callbacks,
     transitionGeneration: 0,
@@ -40,8 +40,11 @@ function transitionHarness(prepareAuthoredLevel) {
     setHint: vi.fn(),
     loadLevel: vi.fn((index) => {
       engine.levelIndex = index;
-      engine.level = { id: index + 1, name: `Level ${index + 1}` };
+      engine.level = { id: index + 1, name: `Level ${index + 1}`, relics: [] };
     }),
+    objectiveStatus: GameEngine.prototype.objectiveStatus,
+    announceCurrentLevel: GameEngine.prototype.announceCurrentLevel,
+    relicCount: () => 0,
     cancelLevelPrefetch: GameEngine.prototype.cancelLevelPrefetch,
     cancelLevelTransition: GameEngine.prototype.cancelLevelTransition,
     transitionToLevel: GameEngine.prototype.transitionToLevel,
@@ -100,6 +103,10 @@ describe('lazy runtime transitions', () => {
     expect(engine.levelIndex).toBe(1);
     expect(engine.loadLevel).toHaveBeenCalledOnce();
     expect(engine.callbacks.transition).toHaveBeenCalledOnce();
+    expect(engine.callbacks.level).toHaveBeenCalledOnce();
+    expect(engine.callbacks.level).toHaveBeenCalledWith(expect.objectContaining({
+      reason: 'transition', level: 2, name: 'Level 2', objectiveTitle: 'Recover three relics',
+    }));
     expect(engine.callbacks.mode).toHaveBeenLastCalledWith('play');
   });
 
@@ -273,5 +280,89 @@ describe('lazy runtime transitions', () => {
     expect(engine.mode).toBe('title');
     expect(engine.clearInputs).toHaveBeenCalledOnce();
     expect(engine.callbacks.mode).toHaveBeenCalledWith('title');
+  });
+
+  it('replays from a completed run with exactly one visible Level 1 announcement', () => {
+    const engine = {
+      mode: 'win',
+      levelIndex: 9,
+      totalTime: 82,
+      demo: false,
+      resetCampaign: vi.fn(function reset() {
+        this.levelIndex = 0;
+        this.totalTime = 0;
+      }),
+      clearInputs: vi.fn(),
+      callbacks: { mode: vi.fn() },
+      announceCurrentLevel: vi.fn(),
+      setHint: vi.fn(),
+      pushHud: vi.fn(),
+      scheduleNextLevel: vi.fn(),
+      level: { gameplay: { openingHint: 'Begin again.' } },
+    };
+
+    GameEngine.prototype.start.call(engine, false);
+    expect(engine.resetCampaign).toHaveBeenCalledOnce();
+    expect(engine.announceCurrentLevel).toHaveBeenCalledOnce();
+    expect(engine.announceCurrentLevel).toHaveBeenCalledWith('start');
+    expect(engine.callbacks.mode).toHaveBeenCalledWith('play');
+  });
+
+  it('does not announce a chapter when the current realm reforms after death', () => {
+    const engine = {
+      levelIndex: 4,
+      levelTime: 17,
+      mode: 'dead',
+      cancelLevelTransition: vi.fn(),
+      loadLevel: vi.fn(),
+      clearInputs: vi.fn(),
+      callbacks: { mode: vi.fn(), level: vi.fn() },
+      setHint: vi.fn(),
+      pushHud: vi.fn(),
+    };
+
+    GameEngine.prototype.respawn.call(engine);
+    expect(engine.loadLevel).toHaveBeenCalledWith(4, true);
+    expect(engine.callbacks.level).not.toHaveBeenCalled();
+    expect(engine.levelTime).toBe(17);
+  });
+
+  it('keeps the low-level runtime loader presentation-silent', () => {
+    const level = {
+      id: 3,
+      levelKey: 'outer-veil-03-broken-procession',
+      name: 'The Broken Procession',
+      spawn: { x: 40, y: 60 },
+      map: [[0]],
+      gateColumn: 0,
+      relics: [],
+      gameplay: { openingHint: 'Read the fallen witnesses.' },
+    };
+    const callbacks = { level: vi.fn(), hud: vi.fn(), hint: vi.fn() };
+    const engine = {
+      repository: {
+        has: () => true,
+        retainAround: vi.fn(),
+        createRuntime: () => structuredClone(level),
+        windowKeys: () => [level.levelKey],
+        keyAt: () => level.levelKey,
+      },
+      bank: { retain: vi.fn(), has: () => true, set: vi.fn() },
+      callbacks,
+      camera: { x: 0, y: 0 },
+      crumble: new Map(),
+      makePlayer: GameEngine.prototype.makePlayer,
+      cancelLevelPrefetch: vi.fn(),
+      setHint: GameEngine.prototype.setHint,
+      pushHud: vi.fn(),
+      scheduleNextLevel: vi.fn(),
+      lastHint: '',
+    };
+
+    GameEngine.prototype.loadLevel.call(engine, 0);
+    expect(engine.levelKey).toBeUndefined();
+    expect(engine.level.levelKey).toBe(level.levelKey);
+    expect(callbacks.level).not.toHaveBeenCalled();
+    expect(callbacks.hint).toHaveBeenCalledWith('Read the fallen witnesses.');
   });
 });

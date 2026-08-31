@@ -209,3 +209,51 @@ Integrate the complete **Outer Veil pack, Levels 1-10**, into one lazy campaign 
 ## Exact next milestone
 
 Run the first integrated Outer Veil quality pass without changing campaign architecture: complete a natural-input desktop journey across Levels 1-10, use the existing per-level evidence to investigate only reproduced transition/difficulty failures, and add a mobile-safe mastery/objective presentation that never stacks over the chapter story or gameplay hint. Recheck Continue after at least two natural chapter completions, replay after realm completion, all five mastery announcements, life-over on an early/middle/final chapter, and the desktop/landscape/portrait ending. Do not author Inner Kingdom levels or publish the game in this milestone.
+
+---
+
+# Reviewed continuation — mastery and objective presentation
+
+Updated: 2026-08-31 20:27 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Replaced the single chapter timer with one exclusive entry sequence: chapter → optional **MASTERY REMEMBERED** → **CURRENT OBJECTIVE** → live gameplay hint. Only one presentation card can exist, and the context hint is absent from the DOM until the sequence finishes.
+- Added exact input-aware copy for all five remembered masteries: Memory Carve, Oathbind, Pilgrim's Grip, Sanctum Recall, and Dawnstroke. The input mode follows the same coarse-pointer, no-hover, or 900px breakpoint that exposes touch controls; Pilgrim's Grip correctly distinguishes keyboard `W` from touch `UP`.
+- Kept the authored mastery names, descriptions, and objective titles as authority. Dawnstroke retains the authored blue-recovery language.
+- Moved chapter-entry emission out of the low-level runtime loader. Begin, Replay, natural transition, and direct Continue announce the visible destination once; death reform, reset, and return-to-title are presentation-silent.
+- Added timer generations and cancellation on loading, death, title return, and teardown so an old chapter cannot reveal a stale mastery over a newer level.
+- Preserved prototype behavior: non-production sessions receive only their existing chapter presentation and legacy transition hint.
+- Added compact cyan-gold mastery and objective cards for short landscape layouts. Each queued card receives a new React key so its reveal animation restarts instead of inheriting a completed animation.
+
+## Validation evidence
+
+- Complete automated suite: **158 tests across 22 files passed**.
+- New coverage proves all five mastery names/orders, no invented masteries on Chapters 1/3/5/9/10, keyboard/touch copy, malformed-event rejection, one transition announcement, one Replay announcement, death-reform silence, and real `loadLevel()` silence.
+- Production build: **54 modules transformed**; all ten production levels and all ten prototypes remain separately lazy-loaded outside the main bundle.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Desktop 1440×900 browser: Buried Dawn presented chapter then objective then restored its live gameplay hint; no hint existed during either card and the document remained exactly 1440×900 without overflow.
+- Desktop Level 2 integrated entry: **Memory Carve** appeared as `MASTERY REMEMBERED · 1 OF 5`, used keyboard copy, restarted the reveal animation at a three-second duration, hid the hint, and kept desktop touch controls absent.
+- Agent responsive geometry review: revised Level 1 at 844×390 measured x24/y95/w440/h79 above touch controls beginning at y258; at 390×844 it measured x24/y161/w342/h136 above controls at y712. The context hint was absent while the card existed.
+- The responsive browser connection blocked the final post-reload landscape/portrait recheck after resizing. The viewport override was cleared. Mobile correctness is therefore supported by the agent's live geometry pass plus breakpoint/copy tests, not claimed as a second fresh root browser pass.
+- No push, deployment, purchase, paid API, credential access, or public-site mutation occurred.
+
+## Agent findings accepted or rejected
+
+- Accepted: one serialized presentation lane, authored destination-level unlock data, loader-silent reset semantics, timer cancellation, per-card remount keys, input breakpoint parity, and suppressing the generic production transition hint.
+- Accepted and fixed: use `blue recovery` for Dawnstroke, matching the authored Level 8 mechanic and engine feedback.
+- Accepted and strengthened: a real-loader regression test now guards against chapter announcements returning inside `loadLevel()`; Replay and successful transition are each proven to announce once.
+- Deferred: a full React timer test for stale-card cancellation. Runtime generations cancel stale queues by construction, but the repository has no component-test environment yet.
+- Rejected: announcing masteries from the completion event. That event describes the chapter being left; the newly entered level's authored `abilityUnlock` is the correct authority.
+
+## Remaining quality gaps
+
+- A natural-input uninterrupted desktop Levels 1-10 journey remains outstanding. The repository transition chain and individual levels are proven separately, but the integrated human difficulty curve still needs one continuous playthrough.
+- The final post-change landscape and portrait root browser pass was blocked by the browser connection policy during this run; repeat it from a fresh supported local tab before publication.
+- Continue after two natural completions and life-over on an early, middle, and final integrated chapter still need one combined acceptance session.
+- Realm music, transition cinematics, accessibility settings, portrait art direction, and the actual Inner Kingdom remain unbuilt.
+
+## Exact next milestone
+
+Run the first uninterrupted natural-input desktop journey across integrated Levels 1-10. Record only reproduced transition or difficulty failures; do not redesign proven levels speculatively. In the same clean browser session, recheck landscape 844×390 and portrait 390×844 mastery cards, Continue after Chapters 2 and 4, life-over reset on early/middle/final chapters, realm Replay, the final ending, and browser logs. Do not author Inner Kingdom levels or publish the game.

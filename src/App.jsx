@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameEngine } from './engine.js';
+import { buildLevelPresentation, detectPresentationInput } from './level-presentation.js';
 import { TILE, VIEW_H, VIEW_W } from './levels/constants.js';
 import { bakeAllLevels } from './render.js';
 import { releaseRenderedLevel, RenderedLevelCache } from './rendered-level-cache.js';
@@ -97,7 +98,9 @@ export default function App() {
   const [previewPresentation, setPreviewPresentation] = useState(null);
   const [outerProgress, setOuterProgress] = useState(null);
   const [results, setResults] = useState({ time: 0, deaths: 0, targetTime: null });
-  const [chapterCard, setChapterCard] = useState(null);
+  const [presentationCard, setPresentationCard] = useState(null);
+  const presentationTimerRef = useRef(null);
+  const presentationGenerationRef = useRef(0);
   const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null });
 
   useEffect(() => {
@@ -175,12 +178,32 @@ export default function App() {
   useEffect(() => {
     if (!resourcesRef.current || !canvasRef.current || engineRef.current) return undefined;
     const { assets, repository, firstLevel, bank, sessionKind: activeSessionKind } = resourcesRef.current;
-    let chapterTimer;
     let demoRespawnTimer;
-    const announceLevel = (level, name, subtitle, storyLine) => {
-      window.clearTimeout(chapterTimer);
-      setChapterCard({ level, name, subtitle: subtitle || name, storyLine });
-      chapterTimer = window.setTimeout(() => setChapterCard(null), 3200);
+    const clearPresentation = ({ hide = true } = {}) => {
+      presentationGenerationRef.current += 1;
+      window.clearTimeout(presentationTimerRef.current);
+      presentationTimerRef.current = null;
+      if (hide) setPresentationCard(null);
+    };
+    const announceLevel = (entry) => {
+      clearPresentation();
+      const cards = buildLevelPresentation(entry, {
+        productionCampaign: activeSessionKind === 'production-campaign',
+        inputMode: detectPresentationInput(window),
+      });
+      if (cards.length === 0) return;
+      const generation = presentationGenerationRef.current;
+      const show = (index) => {
+        if (presentationGenerationRef.current !== generation) return;
+        const card = cards[index] || null;
+        setPresentationCard(card ? { ...card, sequenceId: generation, sequenceIndex: index } : null);
+        if (!card) {
+          presentationTimerRef.current = null;
+          return;
+        }
+        presentationTimerRef.current = window.setTimeout(() => show(index + 1), card.durationMs);
+      };
+      show(0);
     };
     const engine = new GameEngine(canvasRef.current, assets, [firstLevel], bank, {
       hud: setHud,
@@ -193,8 +216,12 @@ export default function App() {
           return paused ? 'pause' : 'play';
         });
       },
-      mode: (mode) => setScreen(mode),
+      mode: (mode) => {
+        if (mode !== 'play') clearPresentation();
+        setScreen(mode);
+      },
       death: ({ deaths, demo }) => {
+        clearPresentation();
         setResults((current) => ({ ...current, deaths }));
         if (demo) {
           window.clearTimeout(demoRespawnTimer);
@@ -241,7 +268,9 @@ export default function App() {
         }
         setScreen('win');
       },
-      transition: (level, name) => setHint(`LEVEL ${level} · ${name.toUpperCase()}`),
+      transition: (level, name) => {
+        if (activeSessionKind !== 'production-campaign') setHint(`LEVEL ${level} · ${name.toUpperCase()}`);
+      },
     }, repository);
     engineRef.current = engine;
     if (import.meta.env.DEV) {
@@ -269,7 +298,7 @@ export default function App() {
       void prepareDemo().catch((error) => console.error('Could not prepare demo route', error));
     }
     return () => {
-      window.clearTimeout(chapterTimer);
+      clearPresentation({ hide: false });
       window.clearTimeout(demoRespawnTimer);
       engine.destroy();
       engineRef.current = null;
@@ -304,6 +333,10 @@ export default function App() {
   };
 
   const returnToTitle = () => {
+    presentationGenerationRef.current += 1;
+    window.clearTimeout(presentationTimerRef.current);
+    presentationTimerRef.current = null;
+    setPresentationCard(null);
     engineRef.current?.returnToTitle();
     setScreen('title');
   };
@@ -400,13 +433,25 @@ export default function App() {
               >Ⅱ</button>
             </div>
           </header>
-          {screen === 'play' && <div className="context-hint">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
-          {screen === 'play' && chapterCard && (
-            <div className="chapter-card" aria-live="polite">
+          {screen === 'play' && !presentationCard && <div className="context-hint">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && presentationCard && (
+            <div
+              key={`${presentationCard.sequenceId}-${presentationCard.sequenceIndex}-${presentationCard.kind}`}
+              className={`chapter-card presentation-card presentation-${presentationCard.kind}`}
+              data-presentation-kind={presentationCard.kind}
+              aria-live="polite"
+              role="status"
+              style={{ '--presentation-duration': `${presentationCard.durationMs}ms` }}
+            >
               <div className="chapter-rule" />
-              <div className="chapter-kicker">{productionCampaign ? 'Realm I · ' : ''}Chapter {String(chapterCard.level).padStart(2, '0')}{productionCampaign ? ' of 10' : ''} · {chapterCard.name}</div>
-              <div className="chapter-title">{chapterCard.subtitle}</div>
-              {chapterCard.storyLine && <div className="chapter-story">{chapterCard.storyLine}</div>}
+              <div className="chapter-kicker">{presentationCard.kicker}</div>
+              <div className="chapter-title">{presentationCard.title}</div>
+              {presentationCard.detail && <div className="chapter-story">{presentationCard.detail}</div>}
+              {presentationCard.input && (
+                <div className="presentation-input">
+                  <span>{presentationCard.inputLabel}</span>{presentationCard.input}
+                </div>
+              )}
             </div>
           )}
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (

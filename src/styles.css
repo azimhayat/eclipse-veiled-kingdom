@@ -251,7 +251,52 @@ h1 span { color: var(--gold); display: block; }
   width: min(480px, calc(100vw - 48px));
   pointer-events: none;
   text-shadow: 0 3px 18px rgba(0,0,0,.92);
-  animation: chapter-reveal 3.2s ease both;
+  animation: chapter-reveal var(--presentation-duration, 3.2s) ease both;
+}
+
+.presentation-mastery,
+.presentation-objective {
+  width: min(520px, calc(100vw - 48px));
+  padding: 18px 20px 20px;
+  border: 1px solid rgba(232,197,106,.2);
+  background: linear-gradient(115deg, rgba(3,7,16,.88), rgba(14,18,26,.58));
+  box-shadow: 0 18px 60px rgba(0,0,0,.28);
+  backdrop-filter: blur(12px);
+}
+
+.presentation-mastery {
+  border-color: rgba(112,225,255,.32);
+  background: linear-gradient(115deg, rgba(4,14,23,.92), rgba(19,25,31,.62));
+}
+
+.presentation-mastery .chapter-rule {
+  background: linear-gradient(90deg, #8eeaff, rgba(142,234,255,0));
+  box-shadow: 0 0 14px rgba(94,219,255,.62);
+}
+
+.presentation-mastery .chapter-kicker { color: #8eeaff; }
+.presentation-objective .chapter-title { font-size: clamp(22px, 3.2vw, 40px); }
+
+.presentation-input {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  margin-top: 13px;
+  color: rgba(255,255,255,.82);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: .025em;
+}
+
+.presentation-input span {
+  flex: none;
+  padding: 3px 6px;
+  border: 1px solid rgba(142,234,255,.3);
+  color: #a7efff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
 }
 
 .chapter-rule {
@@ -419,4 +464,16 @@ h1 span { color: var(--gold); display: block; }
   .result { padding: 10px; }
   .touch-controls { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
   .hud { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  .chapter-card {
+    top: 24%;
+    left: max(24px, env(safe-area-inset-left));
+    width: min(440px, calc(100vw - 48px));
+  }
+  .presentation-mastery,
+  .presentation-objective { padding: 11px 14px 13px; }
+  .chapter-rule { margin-bottom: 8px; }
+  .chapter-kicker { font-size: 8px; }
+  .chapter-title { margin-top: 4px; font-size: clamp(18px, 6.2vh, 26px); }
+  .chapter-story { max-width: 400px; margin-top: 6px; font-size: 10px; line-height: 1.3; }
+  .presentation-input { margin-top: 7px; font-size: 10px; line-height: 1.25; }
 }
