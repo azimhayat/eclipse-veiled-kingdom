@@ -394,11 +394,12 @@ export class GameEngine {
     try {
       await this.repository.loadTemplate(index);
     } catch (error) {
-      this.repository.retainAround(previousIndex);
+      // A stale preparation must never overwrite retention chosen by a newer
+      // transition. The active owner restores its own window synchronously.
+      if (!cancelled()) this.repository.retainAround(previousIndex);
       throw error;
     }
     if (cancelled()) {
-      this.repository.retainAround(this.levelIndex);
       return null;
     }
 
@@ -407,12 +408,10 @@ export class GameEngine {
     if (this.bank.has(key)) return level;
     const chunks = await bakeLevelIncrementally(level, { signal, shouldCancel: cancelled });
     if (!chunks) {
-      this.repository.retainAround(this.levelIndex);
       return null;
     }
     if (cancelled()) {
       releaseRenderedLevel(chunks);
-      this.repository.retainAround(this.levelIndex);
       return null;
     }
     this.bank.set(key, chunks);
@@ -1399,7 +1398,7 @@ export class GameEngine {
       mark.revealed = true;
       this.burst(tx * TILE + TILE / 2, ty * TILE + TILE / 2, '#80e7ff', 24, 170);
       this.audio.play('relic');
-      this.setHint(`${mark.revealText} · cross the blade's sightline to read Witness III`, 5);
+      this.setHint(`${mark.revealText} · continue east through the blade's sightline`, 5);
       this.pushHud(true);
       return true;
     }
@@ -2678,7 +2677,7 @@ export class GameEngine {
     const inZone = this.player.grounded && centerTx >= zone.minTx && centerTx <= zone.maxTx && feetTy === zone.feetTy;
     if (!inZone) return;
     if (current.requiresMemoryMark && !objective.memoryMark?.revealed) {
-      this.setHint('THE BETRAYAL POSE IS BURIED · carve the cyan blade in the jump arc.', 3.2);
+      this.setHint('THE BETRAYAL POSE IS BURIED · face the cyan seal on the recovery road and carve it.', 3.2);
       return;
     }
 

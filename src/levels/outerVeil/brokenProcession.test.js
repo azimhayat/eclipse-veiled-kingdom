@@ -68,8 +68,9 @@ function visitStation(engine, station) {
 function carveBetrayal(engine) {
   const mark = engine.level.objective.memoryMark;
   engine.player.x = mark.tx * TILE - engine.player.w - 7;
-  engine.player.y = mark.ty * TILE + 4;
+  engine.player.y = 27 * TILE - engine.player.h;
   engine.player.facing = 1;
+  engine.player.grounded = true;
   GameEngine.prototype.dig.call(engine);
 }
 
@@ -99,7 +100,30 @@ describe('Outer Veil Level 3 production preview', () => {
     for (const [start, end] of [[12, 23], [25, 36], [39, 53], [55, 68], [70, 82]]) {
       for (let tx = start; tx <= end; tx += 1) expect(level.map[27][tx]).toBe(Tile.STONE);
     }
+    expect(level.objective.stations.every((item) => item.observeZone.feetTy === 27)).toBe(true);
+    expect(level.objective.memoryMark).toMatchObject({ tx: 48, ty: 26, revealed: false });
+    expect(level.map[26][48]).toBe(Tile.SAND);
     expect(level.door.y).toBe(22 * TILE);
+  });
+
+  it('reads the ordered testimony from the recovery road with one reachable carve', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createBrokenProcession(), identity));
+    const engine = engineHarness(level);
+    const [first, second, third, fourth, fifth] = level.objective.stations;
+
+    visitStation(engine, first);
+    visitStation(engine, second);
+    expect(engine.objectiveStatus()).toMatchObject({ current: 2, target: 6, complete: false });
+
+    carveBetrayal(engine);
+    expect(level.objective.memoryMark.revealed).toBe(true);
+    expect(level.map[26][48]).toBe(Tile.AIR);
+
+    visitStation(engine, third);
+    visitStation(engine, fourth);
+    visitStation(engine, fifth);
+    expect(engine.objectiveStatus()).toMatchObject({ current: 6, target: 6, complete: true });
+    expect(engine.gateOpen).toBe(true);
   });
 
   it('gives each preview a unique route, stable identity, campaign ID, and ending copy', async () => {
@@ -160,7 +184,7 @@ describe('Outer Veil Level 3 production preview', () => {
     expect(level.map[mark.ty][mark.tx]).toBe(Tile.AIR);
     expect(mark.revealed).toBe(true);
     expect(engine.setHint).toHaveBeenLastCalledWith(
-      expect.stringContaining("cross the blade's sightline to read Witness III"),
+      expect.stringContaining("continue east through the blade's sightline"),
       5,
     );
     expect(engine.setHint.mock.calls.at(-1)[0]).not.toMatch(/DOWN|S$/);

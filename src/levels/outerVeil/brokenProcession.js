@@ -39,9 +39,9 @@ export function createBrokenProcession() {
   fill(map, 44, 23, 3, 1, Tile.ONEWAY);
   fill(map, 49, 21, 4, 1, Tile.ONEWAY);
   fill(map, 51, 24, 3, 1, Tile.ONEWAY);
-  // The seal is a body-height wall beside the high witness platform so the
-  // existing horizontal Memory Carve action can read it.
-  fill(map, 48, 20, 1, 1, Tile.SAND);
+  // The cyan seal interrupts the safe recovery road at body height. It makes
+  // the required Memory Carve readable without demanding a precision jump.
+  fill(map, 48, 26, 1, 1, Tile.SAND);
 
   loweredRecovery(map, 55, 68);
   fill(map, 55, 24, 4, 1, Tile.ONEWAY);
@@ -101,7 +101,7 @@ export function createBrokenProcession() {
           baseTy: 24.9,
           pose: 'kneel',
           rotation: -.38,
-          observeZone: { minTx: 21.6, maxTx: 23.4, feetTy: 24 },
+          observeZone: { minTx: 18, maxTx: 23.5, feetTy: 27 },
           text: 'MIRA · The king faces sunrise, but his own guard faces him.',
         }),
         station({
@@ -112,7 +112,7 @@ export function createBrokenProcession() {
           baseTy: 23.8,
           pose: 'warning',
           rotation: .33,
-          observeZone: { minTx: 34.2, maxTx: 36.8, feetTy: 23 },
+          observeZone: { minTx: 31.5, maxTx: 37.5, feetTy: 27 },
           text: 'AREN · The watch points toward the throne, not the walls.',
         }),
         station({
@@ -123,7 +123,7 @@ export function createBrokenProcession() {
           baseTy: 23.7,
           pose: 'blade',
           rotation: -.56,
-          observeZone: { minTx: 49.4, maxTx: 52.8, feetTy: 21 },
+          observeZone: { minTx: 49, maxTx: 53.5, feetTy: 27 },
           requiresMemoryMark: true,
           text: 'MIRA · The archive calls this a defense.  AREN · Defenders face outward. Every blade here faces the crown.',
         }),
@@ -135,7 +135,7 @@ export function createBrokenProcession() {
           baseTy: 24.4,
           pose: 'crown',
           rotation: .4,
-          observeZone: { minTx: 67, maxTx: 68.8, feetTy: 23 },
+          observeZone: { minTx: 62.5, maxTx: 69, feetTy: 27 },
           text: 'MIRA · Serath stands over the heir with the crown inverted.',
         }),
         station({
@@ -146,7 +146,7 @@ export function createBrokenProcession() {
           baseTy: 24.5,
           pose: 'erase',
           rotation: -.28,
-          observeZone: { minTx: 81, maxTx: 82.8, feetTy: 23 },
+          observeZone: { minTx: 77.5, maxTx: 83, feetTy: 27 },
           text: 'AREN · The scribes are cutting our names away while the guard watches the archive.',
         }),
       ],
@@ -154,7 +154,7 @@ export function createBrokenProcession() {
         id: 'buried-betrayal-blade',
         role: 'memory-carve-combination',
         tx: 48,
-        ty: 20,
+        ty: 26,
         revealed: false,
         revealText: 'The sand releases the hidden blade. The defenders were facing the crown.',
       },
@@ -180,7 +180,7 @@ export function createBrokenProcession() {
       tutorialCues: [
         { minX: 8, maxX: 24, text: 'WITNESS I · cross the statue’s sightline to read its pose' },
         { minX: 28, maxX: 37, text: 'WITNESS II · the watch points inward, not toward an enemy' },
-        { minX: 43, maxX: 53, text: 'WITNESS III · jump, face the cyan seal, and press K / SHIFT' },
+        { minX: 43, maxX: 53, text: 'WITNESS III · face the cyan road seal and press K / SHIFT or DIG' },
         { minX: 74, maxX: 83, text: 'FINAL WITNESS · follow the last fallen pose to the gate' },
       ],
       deterministicRoute: [

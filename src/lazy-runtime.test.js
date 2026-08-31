@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AuthoredLevelRepository } from './campaign/AuthoredLevelRepository.js';
 import { GameEngine } from './engine.js';
 
 function deferred() {
@@ -53,6 +54,57 @@ function transitionHarness(prepareAuthoredLevel) {
 }
 
 describe('lazy runtime transitions', () => {
+  it('does not let a cancelled adjacent prefetch evict a direct destination', async () => {
+    const second = deferred();
+    const third = deferred();
+    const catalog = [
+      { levelKey: 'first' },
+      { levelKey: 'second' },
+      { levelKey: 'third' },
+    ];
+    const makeLevel = (levelKey, id) => ({
+      id,
+      levelKey,
+      map: [[0]],
+      relics: [],
+      block: {},
+      plate: {},
+      door: {},
+      ships: [],
+      checkpoints: [],
+    });
+    const repository = new AuthoredLevelRepository({
+      catalog,
+      loadLevel: (key) => {
+        if (key === 'second') return second.promise;
+        if (key === 'third') return third.promise;
+        return Promise.resolve(makeLevel('first', 1));
+      },
+      decorate: (level) => level,
+    });
+    await repository.loadTemplate(0);
+    repository.retainAround(0);
+    const engine = {
+      running: true,
+      levelIndex: 0,
+      repository,
+      bank: { has: () => true },
+    };
+    const staleController = new AbortController();
+    const stalePrefetch = GameEngine.prototype.prepareAuthoredLevel.call(engine, 1, {
+      signal: staleController.signal,
+    });
+    const directDestination = GameEngine.prototype.prepareAuthoredLevel.call(engine, 2);
+
+    staleController.abort();
+    second.resolve(makeLevel('second', 2));
+    await expect(stalePrefetch).resolves.toBeNull();
+    third.resolve(makeLevel('third', 3));
+
+    await expect(directDestination).resolves.toMatchObject({ id: 3, levelKey: 'third' });
+    expect(repository.has(2)).toBe(true);
+  });
+
   it('retains a non-adjacent demo destination before its lazy module resolves', async () => {
     let retained = new Set(['level-1', 'level-2']);
     const templates = new Map([['level-1', { id: 1 }]]);

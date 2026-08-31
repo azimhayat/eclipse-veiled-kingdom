@@ -257,3 +257,49 @@ Scope: local working tree only; public GitHub Pages remains untouched.
 ## Exact next milestone
 
 Run the first uninterrupted natural-input desktop journey across integrated Levels 1-10. Record only reproduced transition or difficulty failures; do not redesign proven levels speculatively. In the same clean browser session, recheck landscape 844×390 and portrait 390×844 mastery cards, Continue after Chapters 2 and 4, life-over reset on early/middle/final chapters, realm Replay, the final ending, and browser logs. Do not author Inner Kingdom levels or publish the game.
+
+---
+
+# Reviewed continuation — Level 3 route and direct-load repair
+
+Updated: 2026-08-31 21:12 Asia/Dubai
+Scope: local working tree only; public GitHub Pages remains untouched.
+
+## Completed milestone
+
+- Repaired the fresh Chapter 3 load race. A cancelled Chapter 2 prefetch can no longer overwrite the retention window owned by a newer direct Chapter 3 transition.
+- Added a deterministic overlapping-import regression using the real authored repository: cancel and resolve Chapter 2 first, then resolve Chapter 3 and prove the Chapter 3 runtime remains cached and constructible.
+- Moved all five ordered testimony sightlines onto the safe recovery road and widened their horizontal reading windows. The decorative upper platforms remain available, but the required story route no longer depends on exact-height landings.
+- Moved the single cyan betrayal seal to body height on the recovery road. After Witnesses I and II, it forms an obvious stop that can be opened with the existing DIG / K / SHIFT action without a precision jump.
+- Rewrote the Witness III cue and blocked-state hint to describe the real interaction and direction of travel.
+- Added a realistic standing carve helper and an end-to-end objective regression proving floor testimony 1→2, one reachable carve, testimony 3→5, `COUP 6/6`, and one open gate.
+- Preserved ordered testimony, the early-carve veto, stable identity, story text, optional traversal geometry, checkpoints, full-life reset semantics, and the six-part objective target.
+
+## Validation evidence
+
+- Focused regressions: **20 tests across 2 files passed**.
+- Complete automated suite: **160 tests across 22 files passed**.
+- Production build: **54 modules transformed**; the production levels remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- Fresh-page direct `startAt(2)` opened exact key `outer-veil-03-broken-procession` at pristine `COUP 0/6`; the prior `has not been loaded` browser error did not recur.
+- Real engine-input browser run: walking and ordinary step jumps reached the cyan seal at `COUP 2/6`; DIG revealed the mark; continuing east observed Witnesses III, IV, and V; the objective reached `6/6` and the gate opened. No objective state was injected.
+- Browser reset acceptance after completion restored all five witnesses to unread, the cyan seal to SAND and unrevealed, `COUP 0/6`, 4/4 health, and a closed gate at the Chapter 3 spawn.
+- Completed Chapter 3 remained readable at the default desktop panel, 844×390 landscape, and 390×844 portrait. HUD, hint, canvas, and all touch controls remained visible; the temporary viewport override was reset.
+- Browser warning/error log was empty after the fresh load, complete route, responsive checks, and reset.
+
+## Agent findings accepted or rejected
+
+- Accepted: stale or cancelled async preparations must not mutate global repository retention after an await. Active transitions, resets, and loaders already establish their retention windows synchronously.
+- Accepted: the exact elevated `feetTy` values were the deterministic reason a safe-floor player stayed at `COUP 0/6`; the required testimony now uses the recovery road.
+- Accepted after adaptation: the audit proposed a three-step climb to preserve an elevated carve. The final implementation instead places the required cyan seal on the recovery road, because it provides the same Memory Carve combination while removing the fussy high-platform stance reproduced in live play.
+- Rejected: keeping Witness III as a precision-only elevated read. It was technically reachable but not sufficiently readable or touch-friendly for the first cross-level ability combination.
+
+## Remaining quality gaps
+
+- The uninterrupted natural-input Levels 1-10 desktop journey is still outstanding; this run deliberately fixed and fully replayed only the reproduced Chapter 3 failures.
+- Portrait remains strongly letterboxed by design, although the Chapter 3 HUD, gameplay, hint, and controls are functional and uncropped.
+- Continue after multiple natural completions, combined early/middle/final death acceptance, realm Replay, final ending, music, cinematics, accessibility, and the actual Inner Kingdom remain future work.
+
+## Exact next milestone
+
+Resume the integrated natural-input quality pass at Chapter 4. Preserve the repaired Chapter 3 route unless a new real-player failure is reproduced. Verify Chapter 4 Oathbind flow, Continue persistence after its completion, and then advance one bounded chapter at a time with full tests and responsive checks. Do not publish or author Inner Kingdom content.
