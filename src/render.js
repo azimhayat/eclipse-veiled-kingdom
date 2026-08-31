@@ -1,4 +1,6 @@
-import { CHUNK_COLS, CHUNK_COUNT, CHUNK_W, TILE, Tile, VIEW_H, VIEW_W, WORLD_COLS, WORLD_H, WORLD_W } from './levels.js';
+import { CHUNK_COLS, CHUNK_COUNT, CHUNK_W, TILE, Tile, VIEW_H, VIEW_W, WORLD_COLS, WORLD_H, WORLD_W } from './levels/constants.js';
+import { releaseRenderedLevel } from './rendered-level-cache.js';
+import { getTimedTeethState } from './teeth-timing.js';
 
 const roundRect = (ctx, x, y, w, h, r) => {
   ctx.beginPath();
@@ -8,6 +10,72 @@ const roundRect = (ctx, x, y, w, h, r) => {
 function seeded(n) {
   const x = Math.sin(n * 91.731) * 43758.5453;
   return x - Math.floor(x);
+}
+
+function drawProcessionStatue(ctx, item, { observed, restored, time }) {
+  const x = item.tx * TILE;
+  const y = item.baseTy * TILE;
+  const restorationProgress = restored ? Math.min(1, Math.max(0, (time - (item.restoredAt || 0)) / 1.1)) : 0;
+  const rotation = item.requiresMemoryMark
+    ? item.rotation * (1 - restorationProgress)
+    : item.rotation;
+  const lit = observed || restored;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = lit ? 'rgba(241,201,107,.72)' : 'rgba(34,41,57,.92)';
+  ctx.strokeStyle = lit ? '#f1c96b' : '#677087';
+  ctx.lineWidth = 4;
+  ctx.shadowColor = lit ? '#f1c96b' : 'transparent';
+  ctx.shadowBlur = lit ? 18 : 0;
+  roundRect(ctx, -34, -9, 68, 9, 3);
+  ctx.fill();
+  ctx.rotate(rotation);
+  ctx.fillStyle = lit ? '#8b6a35' : '#343b4d';
+  roundRect(ctx, -18, -73, 36, 55, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, -91, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-8, -19); ctx.lineTo(-12, 0);
+  ctx.moveTo(8, -19); ctx.lineTo(12, 0);
+  if (item.pose === 'kneel') {
+    ctx.moveTo(-13, -60); ctx.lineTo(-34, -48);
+    ctx.moveTo(13, -60); ctx.lineTo(29, -76);
+    ctx.moveTo(-8, -19); ctx.lineTo(-27, -5); ctx.lineTo(-10, 0);
+  } else if (item.pose === 'warning') {
+    ctx.moveTo(-13, -60); ctx.lineTo(-35, -76); ctx.lineTo(-21, -94);
+    ctx.moveTo(13, -60); ctx.lineTo(31, -47);
+  } else if (item.pose === 'blade') {
+    ctx.moveTo(-13, -59); ctx.lineTo(-30, -43);
+    ctx.moveTo(13, -59); ctx.lineTo(51, -62);
+    ctx.moveTo(32, -63); ctx.lineTo(67, -80);
+  } else if (item.pose === 'crown') {
+    ctx.moveTo(-15, -59); ctx.lineTo(14, -42);
+    ctx.moveTo(15, -59); ctx.lineTo(-14, -42);
+    ctx.moveTo(-18, -105); ctx.lineTo(0, -116); ctx.lineTo(18, -105);
+  } else if (item.pose === 'erase') {
+    ctx.moveTo(-15, -59); ctx.lineTo(-31, -41);
+    ctx.moveTo(15, -59); ctx.lineTo(34, -72);
+    ctx.moveTo(28, -77); ctx.lineTo(42, -88);
+  } else {
+    ctx.moveTo(-14, -58); ctx.lineTo(-27, -39);
+    ctx.moveTo(14, -58); ctx.lineTo(27, -39);
+    ctx.strokeRect(-24, -45, 48, 24);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = "600 9px 'Outfit'";
+  ctx.letterSpacing = '1px';
+  ctx.fillStyle = lit ? 'rgba(255,226,145,.88)' : 'rgba(177,188,207,.48)';
+  ctx.fillText(item.label.toUpperCase(), x, y + 18);
+  ctx.restore();
 }
 
 export function drawTile(ctx, tile, x, y, seed = 0) {
@@ -164,10 +232,9 @@ export function drawTile(ctx, tile, x, y, seed = 0) {
   ctx.restore();
 }
 
-export function bakeLevel(level) {
-  const chunks = [];
-  for (let chunkIndex = 0; chunkIndex < CHUNK_COUNT; chunkIndex += 1) {
-    const canvas = document.createElement('canvas');
+function bakeLevelChunk(level, chunkIndex) {
+  const canvas = document.createElement('canvas');
+  try {
     canvas.width = CHUNK_W;
     canvas.height = WORLD_H;
     const ctx = canvas.getContext('2d', { alpha: true });
@@ -180,36 +247,109 @@ export function bakeLevel(level) {
         drawTile(ctx, level.map[y][worldX], localX * TILE, y * TILE, worldX * 37 + y * 73 + level.id * 101);
       }
     }
-    chunks.push(canvas);
+    return canvas;
+  } catch (error) {
+    releaseRenderedLevel(canvas);
+    throw error;
+  }
+}
+
+export function bakeLevel(level) {
+  const chunks = [];
+  for (let chunkIndex = 0; chunkIndex < CHUNK_COUNT; chunkIndex += 1) {
+    chunks.push(bakeLevelChunk(level, chunkIndex));
   }
   return chunks;
 }
 
-export async function bakeAllLevels(levels, onProgress) {
+function yieldToNextFrame(signal) {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const useAnimationFrame = typeof requestAnimationFrame === 'function';
+    let handle;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const abort = () => {
+      if (useAnimationFrame) cancelAnimationFrame(handle);
+      else clearTimeout(handle);
+      finish();
+    };
+
+    signal?.addEventListener('abort', abort, { once: true });
+    handle = useAnimationFrame
+      ? requestAnimationFrame(finish)
+      : setTimeout(finish, 0);
+  });
+}
+
+/**
+ * Paints one canvas chunk per browser frame. Cancellation returns `null` and
+ * explicitly releases every canvas already produced by this bake.
+ */
+export async function bakeLevelIncrementally(level, {
+  signal,
+  shouldCancel = () => false,
+  yieldControl = ({ signal: activeSignal }) => yieldToNextFrame(activeSignal),
+} = {}) {
+  const chunks = [];
+  const cancelled = () => Boolean(signal?.aborted || shouldCancel());
+
+  try {
+    for (let chunkIndex = 0; chunkIndex < CHUNK_COUNT; chunkIndex += 1) {
+      if (cancelled()) {
+        releaseRenderedLevel(chunks);
+        return null;
+      }
+      await yieldControl({ signal, chunkIndex, chunkCount: CHUNK_COUNT });
+      if (cancelled()) {
+        releaseRenderedLevel(chunks);
+        return null;
+      }
+      chunks.push(bakeLevelChunk(level, chunkIndex));
+    }
+
+    if (cancelled()) {
+      releaseRenderedLevel(chunks);
+      return null;
+    }
+    return chunks;
+  } catch (error) {
+    releaseRenderedLevel(chunks);
+    throw error;
+  }
+}
+
+export async function bakeAllLevels(levels, onProgress, { isCancelled } = {}) {
   const bank = new Map();
   let painted = 0;
   const total = levels.length * CHUNK_COUNT;
+  const releasePartial = (chunks = []) => {
+    for (const rendered of [...bank.values(), chunks]) {
+      for (const canvas of rendered) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    }
+    bank.clear();
+  };
   for (const level of levels) {
     const chunks = [];
     for (let chunkIndex = 0; chunkIndex < CHUNK_COUNT; chunkIndex += 1) {
-      const canvas = document.createElement('canvas');
-      canvas.width = CHUNK_W;
-      canvas.height = WORLD_H;
-      const ctx = canvas.getContext('2d', { alpha: true });
-      ctx.imageSmoothingEnabled = false;
-      const firstCol = chunkIndex * CHUNK_COLS;
-      for (let y = 0; y < level.map.length; y += 1) {
-        for (let localX = 0; localX < CHUNK_COLS; localX += 1) {
-          const worldX = firstCol + localX;
-          if (worldX < WORLD_COLS) drawTile(ctx, level.map[y][worldX], localX * TILE, y * TILE, worldX * 37 + y * 73 + level.id * 101);
-        }
+      if (isCancelled?.()) {
+        releasePartial(chunks);
+        return null;
       }
-      chunks.push(canvas);
+      chunks.push(bakeLevelChunk(level, chunkIndex));
       painted += 1;
       onProgress?.(painted / total);
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
-    bank.set(level.id, chunks);
+    bank.set(level.levelKey || level.id, chunks);
   }
   return bank;
 }
@@ -274,6 +414,937 @@ export function drawBackdrop(ctx, image, camera, time, level) {
 }
 
 export function drawLevelMechanics(ctx, level, time, gateOpen) {
+  if (level.objective?.type === 'memory-carve') {
+    const marks = level.objective.marks || [];
+    const complete = Boolean(level.objective.complete);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = complete ? 'rgba(255,216,106,.88)' : 'rgba(103,226,255,.34)';
+    ctx.lineWidth = complete ? 5 : 2;
+    ctx.shadowColor = complete ? '#ffd86a' : '#67e2ff';
+    ctx.shadowBlur = complete ? 22 : 10;
+    ctx.beginPath();
+    marks.forEach((mark, index) => {
+      const x = mark.tx * TILE + TILE / 2;
+      const y = mark.ty * TILE + TILE / 2;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    for (const mark of marks) {
+      const x = mark.tx * TILE + TILE / 2;
+      const y = mark.ty * TILE + TILE / 2;
+      const pulse = .78 + Math.sin(time * 3.4 + mark.tx) * .2;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      ctx.globalAlpha = mark.revealed ? 1 : pulse;
+      ctx.strokeStyle = mark.revealed ? '#ffd86a' : '#8deaff';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = mark.revealed ? 22 : 14;
+      ctx.strokeRect(-8, -8, 16, 16);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  if (level.objective?.type === 'procession-restoration') {
+    const objective = level.objective;
+    const stations = objective.stations || [];
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.strokeStyle = 'rgba(241,201,107,.42)';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#f1c96b';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    const observed = stations.filter((item) => item.observed);
+    observed.forEach((item, index) => {
+      const x = item.tx * TILE;
+      const y = item.baseTy * TILE - 4;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    for (const item of stations) {
+      drawProcessionStatue(ctx, item, {
+        observed: item.observed,
+        restored: false,
+        time,
+      });
+    }
+
+    if (objective.finalMonument) {
+      drawProcessionStatue(ctx, {
+        ...objective.finalMonument,
+        requiresMemoryMark: true,
+        restoredAt: objective.completedAt,
+      }, {
+        observed: objective.complete,
+        restored: objective.restored,
+        time,
+      });
+    }
+
+    const mark = objective.memoryMark;
+    if (mark) {
+      const x = mark.tx * TILE + TILE / 2;
+      const y = mark.ty * TILE + TILE / 2;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = mark.revealed ? '#f1c96b' : '#87e6ff';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = mark.revealed ? 22 : 14 + Math.sin(time * 4) * 4;
+      ctx.strokeRect(-9, -9, 18, 18);
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'oathbind-restoration') {
+    const objective = level.objective;
+    const lesson = objective.lessonZone;
+    const seal = objective.finalSeal;
+    const mark = objective.memoryMark;
+    const monument = objective.finalMonument;
+    const pulse = .72 + Math.sin(time * 3.2) * .2;
+
+    if (lesson) {
+      ctx.save();
+      ctx.globalAlpha = objective.lessonComplete ? .92 : pulse;
+      ctx.fillStyle = objective.lessonComplete ? 'rgba(241,201,107,.38)' : 'rgba(110,226,255,.22)';
+      ctx.strokeStyle = objective.lessonComplete ? '#f1c96b' : '#82e8ff';
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = objective.lessonComplete ? 20 : 12;
+      roundRect(ctx, lesson.x, lesson.y, lesson.w, lesson.h, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.translate(lesson.x + lesson.w / 2, lesson.y - 22);
+      ctx.rotate(Math.PI / 4);
+      ctx.strokeRect(-8, -8, 16, 16);
+      ctx.restore();
+    }
+
+    if (mark) {
+      ctx.save();
+      ctx.translate(mark.tx * TILE + TILE / 2, mark.ty * TILE + TILE / 2);
+      ctx.rotate(Math.PI / 4);
+      ctx.globalAlpha = mark.revealed ? 1 : pulse;
+      ctx.strokeStyle = mark.revealed ? '#f1c96b' : '#82e8ff';
+      ctx.lineWidth = 4;
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = mark.revealed ? 22 : 14;
+      ctx.strokeRect(-9, -9, 18, 18);
+      ctx.restore();
+    }
+
+    if (seal) {
+      ctx.save();
+      ctx.globalAlpha = objective.complete ? .9 : .32;
+      ctx.strokeStyle = objective.complete ? '#ffe18a' : '#bca061';
+      ctx.lineWidth = objective.complete ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(lesson.x + lesson.w / 2, lesson.y - 5);
+      ctx.lineTo(seal.x + seal.w / 2, seal.y - 5);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (monument) {
+      const restored = objective.restored;
+      const elapsed = restored ? Math.max(0, time - (objective.completedAt || time)) : 0;
+      const rise = restored ? Math.min(1, elapsed / 1.1) : 0;
+      const rotation = monument.rotation * (1 - rise);
+      const x = monument.tx * TILE;
+      const y = monument.baseTy * TILE;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.strokeStyle = restored ? '#f7d574' : '#6f7482';
+      ctx.fillStyle = restored ? 'rgba(247,213,116,.2)' : 'rgba(34,39,54,.72)';
+      ctx.shadowColor = restored ? '#f7d574' : 'transparent';
+      ctx.shadowBlur = restored ? 22 : 0;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -118);
+      ctx.moveTo(-58, -94);
+      ctx.lineTo(58, -94);
+      ctx.stroke();
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(side * 47, -94);
+        ctx.lineTo(side * 47, -54);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(side * 47, -45, 23, 0, Math.PI, false);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(-22, 0);
+      ctx.lineTo(22, 0);
+      ctx.stroke();
+      ctx.fillStyle = restored ? '#ffe39a' : '#9a9daa';
+      ctx.font = "600 10px 'Outfit'";
+      ctx.textAlign = 'center';
+      ctx.fillText(monument.label.toUpperCase(), 0, 18);
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'timed-teeth-restoration') {
+    const objective = level.objective;
+    for (const hazard of objective.hazards || []) {
+      const state = getTimedTeethState(objective.timing, hazard, objective.hazardClock);
+      const startX = hazard.startTx * TILE;
+      const width = (hazard.endTx - hazard.startTx + 1) * TILE;
+      const baseY = hazard.baseTy * TILE;
+      const extension = state.state === 'warning'
+        ? Math.max(.08, state.extension)
+        : state.extension;
+      const toothHeight = 44 * extension;
+      const settled = state.state === 'bound' || state.state === 'restored';
+
+      ctx.save();
+      if (state.state === 'warning') {
+        const pulse = .38 + Math.sin(objective.hazardClock * Math.PI * 5) * .22;
+        ctx.fillStyle = `rgba(244,184,80,${pulse})`;
+        ctx.shadowColor = '#f3b04c';
+        ctx.shadowBlur = 18;
+        for (let x = startX + 12; x < startX + width; x += 24) {
+          ctx.beginPath();
+          ctx.arc(x, baseY - 18 - (x % 3) * 4, 3 + state.progress * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.fillStyle = settled
+        ? 'rgba(241,205,111,.82)'
+        : state.active
+          ? '#d86f4e'
+          : '#565365';
+      ctx.strokeStyle = settled ? '#ffe39a' : state.active ? '#ffb169' : '#9b7d67';
+      ctx.shadowColor = settled ? '#efc96c' : state.active ? '#d85d42' : 'transparent';
+      ctx.shadowBlur = settled || state.active ? 16 : 0;
+      for (let x = startX; x < startX + width; x += 24) {
+        if (settled) {
+          ctx.fillRect(x + 3, baseY - 7, 18, 7);
+          continue;
+        }
+        ctx.beginPath();
+        ctx.moveTo(x + 3, baseY);
+        ctx.lineTo(x + 12, baseY - toothHeight);
+        ctx.lineTo(x + 21, baseY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const shelter = objective.oathShelter;
+    if (shelter && level.block) {
+      ctx.save();
+      ctx.strokeStyle = shelter.boundOnce ? '#ffe39a' : '#82e8ff';
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = shelter.boundOnce ? 22 : 12;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(level.block.x + level.block.w / 2, level.block.y - 18, 11, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const monument = objective.finalMonument;
+    if (monument) {
+      const x = monument.tx * TILE;
+      const y = monument.baseTy * TILE;
+      const open = objective.restored ? 1 : 0;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = open ? '#f6d576' : '#6b6170';
+      ctx.fillStyle = open ? 'rgba(246,213,118,.2)' : 'rgba(25,25,38,.7)';
+      ctx.shadowColor = open ? '#f6d576' : 'transparent';
+      ctx.shadowBlur = open ? 24 : 0;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(-54, -20 - open * 34);
+      ctx.quadraticCurveTo(0, -92 - open * 20, 54, -20 - open * 34);
+      ctx.moveTo(-54, -8 + open * 14);
+      ctx.quadraticCurveTo(0, 22 + open * 24, 54, -8 + open * 14);
+      ctx.stroke();
+      ctx.font = "600 10px 'Outfit'";
+      ctx.textAlign = 'center';
+      ctx.fillStyle = open ? '#ffe39a' : '#96909c';
+      ctx.fillText(monument.label.toUpperCase(), 0, 18);
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'bell-tower-restoration') {
+    const objective = level.objective;
+    for (const window of objective.lightWindows || []) {
+      const x = window.tx * TILE;
+      const y = window.ty * TILE;
+      ctx.save();
+      ctx.strokeStyle = window.lit ? '#8feaff' : '#55586b';
+      ctx.fillStyle = window.lit ? 'rgba(143,234,255,.2)' : 'rgba(17,20,33,.58)';
+      ctx.shadowColor = window.lit ? '#8feaff' : 'transparent';
+      ctx.shadowBlur = window.lit ? 24 : 0;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x - 18, y + 22);
+      ctx.quadraticCurveTo(x, y - 18, x + 18, y + 22);
+      ctx.lineTo(x + 18, y + 58);
+      ctx.lineTo(x - 18, y + 58);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    for (const section of objective.collapse?.sections || []) {
+      const warningProgress = section.state === 'warning'
+        ? Math.min(1, section.timer / objective.collapse.warningSeconds)
+        : 0;
+      const goneProgress = section.state === 'gone'
+        ? Math.min(1, section.timer / objective.collapse.goneSeconds)
+        : 0;
+      const shake = section.state === 'warning'
+        ? Math.sin(section.timer * 46) * warningProgress * 4
+        : 0;
+      const fall = section.state === 'gone' ? goneProgress * goneProgress * 150 : 0;
+      ctx.save();
+      ctx.translate(shake, fall);
+      ctx.globalAlpha = section.state === 'gone' ? 1 - goneProgress : 1;
+      ctx.fillStyle = section.state === 'restored'
+        ? 'rgba(245,213,113,.9)'
+        : section.state === 'warning'
+          ? 'rgba(210,142,68,.9)'
+          : section.state === 'spent'
+            ? 'rgba(87,100,119,.9)'
+            : 'rgba(64,77,101,.94)';
+      ctx.strokeStyle = section.state === 'restored' ? '#ffe69a' : section.state === 'warning' ? '#ffc069' : '#8edbe8';
+      ctx.shadowColor = ctx.strokeStyle;
+      ctx.shadowBlur = section.state === 'warning' || section.state === 'restored' ? 17 : 7;
+      roundRect(ctx, section.x, section.y + 2, section.w, section.h, 5);
+      ctx.fill();
+      ctx.stroke();
+      if (section.state === 'warning') {
+        ctx.strokeStyle = '#ffe08a';
+        ctx.lineWidth = 2;
+        for (let x = section.x + 18; x < section.x + section.w - 8; x += 25) {
+          ctx.beginPath();
+          ctx.moveTo(x, section.y + 3);
+          ctx.lineTo(x + 7 + warningProgress * 5, section.y + section.h);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    const bell = objective.bell;
+    if (bell) {
+      const x = bell.tx * TILE;
+      const baseY = bell.baseTy * TILE;
+      const restored = bell.restored;
+      const swing = restored ? Math.sin(time * 4.8) * .11 : 0;
+      const ropeX = 70.5 * TILE;
+      ctx.save();
+      ctx.strokeStyle = restored ? 'rgba(133,236,255,.88)' : objective.memoryBrace?.revealed ? 'rgba(91,210,232,.58)' : 'rgba(95,91,105,.34)';
+      ctx.shadowColor = restored ? '#8cecff' : 'transparent';
+      ctx.shadowBlur = restored ? 20 : 0;
+      ctx.lineWidth = restored ? 5 : 3;
+      ctx.beginPath();
+      ctx.moveTo(ropeX, 15 * TILE);
+      ctx.lineTo(ropeX, 48);
+      ctx.quadraticCurveTo(74 * TILE, 24, x, 18);
+      ctx.stroke();
+
+      ctx.translate(x, baseY - 9);
+      ctx.rotate(swing);
+      ctx.strokeStyle = restored ? '#ffe096' : '#77717c';
+      ctx.fillStyle = restored ? 'rgba(218,167,70,.92)' : 'rgba(68,62,72,.9)';
+      ctx.shadowColor = restored ? '#f6d06f' : 'transparent';
+      ctx.shadowBlur = restored ? 28 : 0;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, -126);
+      ctx.lineTo(0, -93);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-47, -34);
+      ctx.quadraticCurveTo(-39, -92, 0, -101);
+      ctx.quadraticCurveTo(39, -92, 47, -34);
+      ctx.quadraticCurveTo(0, -18, -47, -34);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -24, 8, 0, Math.PI * 2);
+      ctx.fillStyle = restored ? '#fff0b6' : '#9b929b';
+      ctx.fill();
+      if (!restored) {
+        ctx.strokeStyle = '#2c2832';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-12, -91);
+        ctx.lineTo(4, -66);
+        ctx.lineTo(-5, -42);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      if (restored) {
+        const wave = (time * 140) % 260;
+        ctx.save();
+        ctx.strokeStyle = `rgba(143,234,255,${Math.max(0, 1 - wave / 260)})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(x, baseY - 64, 58 + wave, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  if (level.objective?.type === 'sanctum-lamp-restoration') {
+    const objective = level.objective;
+    const lamp = objective.lamp;
+    const lampX = lamp.tx * TILE;
+    const lampY = lamp.baseTy * TILE;
+
+    for (const field of objective.returnFields || []) {
+      const gradient = ctx.createLinearGradient(field.x, field.y, field.x, field.y + field.h);
+      gradient.addColorStop(0, field.role === 'return' ? 'rgba(122,232,239,.48)' : 'rgba(107,201,224,.28)');
+      gradient.addColorStop(1, 'rgba(29,19,56,.72)');
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.shadowColor = '#75dce8';
+      ctx.shadowBlur = field.role === 'return' ? 24 : 12;
+      ctx.fillRect(field.x, field.y, field.w, field.h);
+      ctx.strokeStyle = field.role === 'return' ? 'rgba(162,245,243,.86)' : 'rgba(117,220,232,.55)';
+      ctx.lineWidth = field.role === 'return' ? 4 : 2;
+      for (let x = field.x + 10; x < field.x + field.w; x += 22) {
+        const drift = Math.sin(time * 2.8 + x * .025) * 8;
+        ctx.beginPath();
+        ctx.moveTo(x + drift, field.y + field.h);
+        ctx.quadraticCurveTo(x - 14, field.y + field.h * .52, x + drift * .4, field.y + 8);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.translate(lampX, lampY);
+    ctx.strokeStyle = lamp.bound ? (objective.returnProven ? '#ffe394' : '#8cebef') : '#656777';
+    ctx.fillStyle = lamp.bound ? 'rgba(31,46,61,.9)' : 'rgba(25,26,39,.9)';
+    ctx.shadowColor = lamp.bound ? ctx.strokeStyle : 'transparent';
+    ctx.shadowBlur = lamp.bound ? 30 : 0;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-54, 0);
+    ctx.lineTo(-54, -102);
+    ctx.quadraticCurveTo(0, -158, 54, -102);
+    ctx.lineTo(54, 0);
+    ctx.stroke();
+    roundRect(ctx, -26, -92, 52, 72, 18);
+    ctx.fill();
+    ctx.stroke();
+    if (lamp.bound) {
+      const pulse = 1 + Math.sin(time * 4.2) * .09;
+      ctx.scale(pulse, pulse);
+      ctx.fillStyle = objective.returnProven ? '#ffe39a' : '#82e8ef';
+      ctx.beginPath();
+      ctx.moveTo(0, -76);
+      ctx.quadraticCurveTo(-20, -55, 0, -34);
+      ctx.quadraticCurveTo(20, -55, 0, -76);
+      ctx.fill();
+      if (objective.returnProven) {
+        ctx.fillStyle = '#f8fbff';
+        ctx.beginPath();
+        ctx.arc(0, -50, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.strokeStyle = '#72bac8';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-8, -44);
+      ctx.lineTo(7, -64);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    const arch = objective.arch;
+    if (arch) {
+      ctx.save();
+      ctx.fillStyle = lamp.bound ? 'rgba(241,207,113,.78)' : 'rgba(99,102,117,.5)';
+      ctx.shadowColor = lamp.bound ? '#f1cf71' : 'transparent';
+      ctx.shadowBlur = lamp.bound ? 14 : 0;
+      for (let index = 0; index < 4; index += 1) {
+        const y = (23.8 - index * 1.02) * TILE;
+        ctx.beginPath();
+        ctx.ellipse(42.72 * TILE, y, 7, 12, -.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    const witness = objective.witness;
+    if (witness) {
+      const x = witness.tx * TILE;
+      const y = witness.baseTy * TILE;
+      ctx.save();
+      ctx.strokeStyle = witness.reached ? '#f2d277' : '#6f7d8e';
+      ctx.shadowColor = witness.reached ? '#f2d277' : 'transparent';
+      ctx.shadowBlur = witness.reached ? 22 : 0;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(x - 58, y);
+      ctx.lineTo(x - 46, y - 122);
+      ctx.quadraticCurveTo(x, y - 154, x + 46, y - 122);
+      ctx.lineTo(x + 58, y);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 31, y - 93);
+      ctx.quadraticCurveTo(x - 3, y - 119, x + 29, y - 80);
+      ctx.moveTo(x - 24, y - 61);
+      ctx.quadraticCurveTo(x + 5, y - 40, x + 33, y - 70);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const canopy = objective.canopy;
+    if (canopy) {
+      ctx.save();
+      ctx.globalAlpha = canopy.restored ? .92 : .16;
+      ctx.strokeStyle = canopy.restored ? '#f5d77d' : '#607286';
+      ctx.shadowColor = canopy.restored ? '#f5d77d' : 'transparent';
+      ctx.shadowBlur = canopy.restored ? 24 : 0;
+      ctx.lineWidth = canopy.restored ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(canopy.x, canopy.y + canopy.h);
+      ctx.quadraticCurveTo(canopy.x + canopy.w / 2, canopy.y - 90, canopy.x + canopy.w, canopy.y + canopy.h);
+      ctx.stroke();
+      const stars = [[.12,.68],[.27,.43],[.42,.55],[.58,.3],[.73,.48],[.88,.64]];
+      for (let index = 0; index < stars.length; index += 1) {
+        const [sx, sy] = stars[index];
+        const x = canopy.x + canopy.w * sx;
+        const y = canopy.y + canopy.h * sy;
+        if (index) {
+          const [px, py] = stars[index - 1];
+          ctx.beginPath();
+          ctx.moveTo(canopy.x + canopy.w * px, canopy.y + canopy.h * py);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = canopy.restored ? '#fff0b0' : '#6f8498';
+        ctx.beginPath();
+        ctx.arc(x, y, canopy.restored ? 5 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    for (const column of objective.lightColumns || []) {
+      const x = column.tx * TILE;
+      const y = column.ty * TILE;
+      ctx.save();
+      ctx.globalAlpha = column.lit ? .82 : .14;
+      ctx.strokeStyle = column.lit ? '#8cebef' : '#5d6678';
+      ctx.fillStyle = column.lit ? 'rgba(140,235,239,.14)' : 'rgba(35,39,53,.22)';
+      ctx.shadowColor = column.lit ? '#8cebef' : 'transparent';
+      ctx.shadowBlur = column.lit ? 18 : 0;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x - 20, y + 82);
+      ctx.lineTo(x - 20, y + 15);
+      ctx.quadraticCurveTo(x, y - 20, x + 20, y + 15);
+      ctx.lineTo(x + 20, y + 82);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'parachute-choir-restoration') {
+    const objective = level.objective;
+    const activeStage = objective.stages?.find((stage) => stage.id === objective.phase && stage.active && !stage.complete);
+    if (activeStage) {
+      const elapsed = objective.encounterClock - activeStage.startedAt;
+      for (const rosterId of activeStage.rosterIds) {
+        const member = objective.roster.find((item) => item.id === rosterId);
+        if (!member || member.status !== 'queued' || elapsed >= member.delay) continue;
+        const tx = Math.floor(member.dropTx);
+        const landingTy = level.map.findIndex((row) => [Tile.STONE, Tile.GLOW, Tile.ONEWAY].includes(row[tx]));
+        const x = member.dropTx * TILE;
+        const y = landingTy * TILE;
+        const warning = Math.max(0, Math.min(1, elapsed / member.delay));
+        ctx.save();
+        ctx.strokeStyle = '#f2c568';
+        ctx.fillStyle = `rgba(224,92,62,${.08 + warning * .12})`;
+        ctx.shadowColor = '#f0b74d';
+        ctx.shadowBlur = 12 + warning * 14;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath();
+        ctx.ellipse(x, y - 3, 34 + warning * 9, 10 + warning * 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(x, y - 22);
+        ctx.lineTo(x, y - 68 - warning * 26);
+        ctx.moveTo(x - 10, y - 56 - warning * 26);
+        ctx.lineTo(x, y - 68 - warning * 26);
+        ctx.lineTo(x + 10, y - 56 - warning * 26);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    const skycut = objective.skycut;
+    if (skycut?.tether) {
+      const tetherX = skycut.tether.tx * TILE;
+      const tetherY = skycut.tether.baseTy * TILE - 78;
+      ctx.save();
+      ctx.strokeStyle = skycut.tether.cut ? 'rgba(120,225,237,.34)' : '#f1c767';
+      ctx.shadowColor = skycut.tether.cut ? 'transparent' : '#f1c767';
+      ctx.shadowBlur = skycut.tether.cut ? 0 : 18;
+      ctx.lineWidth = skycut.tether.cut ? 2 : 5;
+      ctx.setLineDash(skycut.tether.cut ? [9, 14] : []);
+      ctx.beginPath();
+      ctx.moveTo(tetherX, 6 * TILE);
+      ctx.quadraticCurveTo(tetherX + 35, 14 * TILE, tetherX, tetherY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = skycut.tether.cut ? '#70929a' : '#ffe49a';
+      ctx.beginPath();
+      ctx.moveTo(tetherX - 15, tetherY - 5);
+      ctx.lineTo(tetherX, tetherY + 13);
+      ctx.lineTo(tetherX + 15, tetherY - 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    for (const sail of objective.windSails || []) {
+      const x = sail.tx * TILE;
+      const y = sail.ty * TILE;
+      ctx.save();
+      ctx.globalAlpha = sail.unfurled ? .9 : .16;
+      ctx.strokeStyle = sail.unfurled ? '#f3d47a' : '#687486';
+      ctx.fillStyle = sail.unfurled ? 'rgba(120,225,233,.22)' : 'rgba(29,35,50,.24)';
+      ctx.shadowColor = sail.unfurled ? '#8be4eb' : 'transparent';
+      ctx.shadowBlur = sail.unfurled ? 18 : 0;
+      ctx.lineWidth = sail.unfurled ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 56, y + 52);
+      ctx.quadraticCurveTo(x, y - 38 - Math.sin(time * 2 + sail.tx) * 6, x + 56, y + 52);
+      ctx.quadraticCurveTo(x, y + 20, x - 56, y + 52);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - 42, y + 45);
+      ctx.lineTo(x - 28, y + 96);
+      ctx.moveTo(x + 42, y + 45);
+      ctx.lineTo(x + 28, y + 96);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (objective.skyRestored) {
+      ctx.save();
+      const gradient = ctx.createLinearGradient(13 * TILE, 0, 82 * TILE, 0);
+      gradient.addColorStop(0, 'rgba(116,226,236,0)');
+      gradient.addColorStop(.18, 'rgba(116,226,236,.18)');
+      gradient.addColorStop(.5, 'rgba(248,214,121,.27)');
+      gradient.addColorStop(.82, 'rgba(116,226,236,.18)');
+      gradient.addColorStop(1, 'rgba(116,226,236,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(13 * TILE, 15 * TILE, 69 * TILE, 5 * TILE);
+      ctx.strokeStyle = 'rgba(255,230,151,.68)';
+      ctx.shadowColor = '#f4d579';
+      ctx.shadowBlur = 22;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(13 * TILE, 18 * TILE);
+      ctx.bezierCurveTo(32 * TILE, 12 * TILE, 61 * TILE, 12 * TILE, 82 * TILE, 18 * TILE);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'veil-gate-restoration') {
+    const objective = level.objective;
+    const gateX = level.gateColumn * TILE + TILE / 2;
+    const gateBaseY = 26 * TILE;
+    const restored = objective.gateRestored;
+    const pulse = .76 + Math.sin(time * 3.2) * .16;
+
+    const seat = objective.counterweight?.zone;
+    if (seat) {
+      ctx.save();
+      ctx.fillStyle = objective.counterweight.bound ? 'rgba(112,231,241,.32)' : 'rgba(112,231,241,.12)';
+      ctx.strokeStyle = objective.counterweight.bound ? '#8cebf1' : 'rgba(118,205,220,.58)';
+      ctx.shadowColor = objective.counterweight.bound ? '#80e7ff' : 'transparent';
+      ctx.shadowBlur = objective.counterweight.bound ? 18 : 0;
+      ctx.lineWidth = 3;
+      ctx.setLineDash(objective.counterweight.bound ? [] : [9, 7]);
+      ctx.fillRect(seat.x, seat.y - 18, seat.w, seat.h + 18);
+      ctx.strokeRect(seat.x, seat.y - 18, seat.w, seat.h + 18);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.strokeStyle = restored ? '#ffe394' : 'rgba(166,126,77,.7)';
+    ctx.fillStyle = restored ? 'rgba(241,205,105,.09)' : 'rgba(18,19,32,.42)';
+    ctx.shadowColor = restored ? '#f5cf69' : 'rgba(117,74,48,.6)';
+    ctx.shadowBlur = restored ? 34 : 12;
+    ctx.lineWidth = restored ? 7 : 5;
+    ctx.beginPath();
+    ctx.moveTo(gateX - 155, gateBaseY);
+    ctx.lineTo(gateX - 155, gateBaseY - 390);
+    ctx.quadraticCurveTo(gateX, gateBaseY - 570, gateX + 155, gateBaseY - 390);
+    ctx.lineTo(gateX + 155, gateBaseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    for (let ring = 1; ring <= 3; ring += 1) {
+      const inset = ring * 28;
+      ctx.beginPath();
+      ctx.moveTo(gateX - 155 + inset, gateBaseY);
+      ctx.lineTo(gateX - 155 + inset, gateBaseY - 365 + inset * .34);
+      ctx.quadraticCurveTo(gateX, gateBaseY - 535 + inset, gateX + 155 - inset, gateBaseY - 365 + inset * .34);
+      ctx.lineTo(gateX + 155 - inset, gateBaseY);
+      ctx.stroke();
+    }
+    if (restored) {
+      const glow = ctx.createLinearGradient(gateX - 150, 0, gateX + 150, 0);
+      glow.addColorStop(0, 'rgba(111,228,239,0)');
+      glow.addColorStop(.5, `rgba(255,225,137,${.12 + pulse * .12})`);
+      glow.addColorStop(1, 'rgba(111,228,239,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(gateX - 150, gateBaseY - 480, 300, 480);
+    }
+    ctx.restore();
+
+    for (const banner of objective.relayBanners || []) {
+      const x = banner.tx * TILE;
+      const y = banner.baseTy * TILE;
+      ctx.save();
+      ctx.globalAlpha = banner.restored ? .94 : .24;
+      ctx.strokeStyle = banner.restored ? '#ffe18a' : '#6e6670';
+      ctx.fillStyle = banner.restored ? 'rgba(117,226,235,.25)' : 'rgba(34,33,47,.65)';
+      ctx.shadowColor = banner.restored ? '#83e4ec' : 'transparent';
+      ctx.shadowBlur = banner.restored ? 24 : 0;
+      ctx.lineWidth = banner.restored ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y - 170);
+      ctx.lineTo(x + (banner.id.startsWith('west') ? 72 : -72), y - 148);
+      ctx.lineTo(x, y - 98);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const sunstone = objective.sunstone;
+    if (sunstone) {
+      const x = sunstone.tx * TILE;
+      const y = sunstone.baseTy * TILE - 72;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(time * (sunstone.struck ? .6 : .12));
+      ctx.strokeStyle = sunstone.struck ? '#fff0aa' : sunstone.exposed ? '#f0c868' : '#726157';
+      ctx.fillStyle = sunstone.struck ? '#f5d470' : '#10121d';
+      ctx.shadowColor = sunstone.exposed ? '#e9c363' : 'transparent';
+      ctx.shadowBlur = sunstone.exposed ? 20 + pulse * 10 : 0;
+      ctx.lineWidth = sunstone.exposed ? 5 : 3;
+      ctx.beginPath();
+      for (let point = 0; point < 16; point += 1) {
+        const radius = point % 2 ? 23 : 36;
+        const angle = -Math.PI / 2 + point * Math.PI / 8;
+        const px = Math.cos(angle) * radius;
+        const py = Math.sin(angle) * radius;
+        if (point === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  if (level.objective?.type === 'warden-restoration') {
+    const objective = level.objective;
+    const warden = objective.warden;
+    const breath = objective.breath;
+    const restored = objective.complete;
+    const pulse = .72 + Math.sin(time * 3.1) * .18;
+    const centerX = warden.x;
+    const feetY = warden.feetY;
+    const kneel = warden.kneeling ? 112 : 0;
+
+    // The guardian is a persistent monumental silhouette, not the legacy
+    // health-bar boss. It stays present after release so the victory reads as
+    // restoration rather than a despawned corpse.
+    ctx.save();
+    ctx.globalAlpha = restored ? .78 : .66;
+    ctx.fillStyle = restored ? 'rgba(104,101,83,.72)' : 'rgba(25,25,34,.9)';
+    ctx.strokeStyle = restored ? '#f3d47d' : 'rgba(121,223,235,.55)';
+    ctx.shadowColor = restored ? '#f1ce72' : '#73dce9';
+    ctx.shadowBlur = restored ? 34 : 18;
+    ctx.lineWidth = restored ? 7 : 5;
+    ctx.beginPath();
+    ctx.moveTo(centerX - 188, feetY);
+    ctx.quadraticCurveTo(centerX - 174, feetY - 330 + kneel, centerX - 92, feetY - 430 + kneel);
+    ctx.quadraticCurveTo(centerX - 58, feetY - 525 + kneel, centerX, feetY - 536 + kneel);
+    ctx.quadraticCurveTo(centerX + 61, feetY - 525 + kneel, centerX + 98, feetY - 425 + kneel);
+    ctx.quadraticCurveTo(centerX + 178, feetY - 312 + kneel, centerX + 194, feetY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.lineWidth = 3;
+    ctx.globalAlpha *= .72;
+    for (let band = 0; band < 6; band += 1) {
+      const y = feetY - 74 - band * 64 + kneel * (band / 7);
+      ctx.beginPath();
+      ctx.moveTo(centerX - 120 + band * 6, y);
+      ctx.bezierCurveTo(centerX - 35, y - 22, centerX + 34, y + 17, centerX + 126 - band * 5, y - 5);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = restored ? '#ffe493' : '#7fe3ed';
+    ctx.shadowBlur = 24;
+    ctx.beginPath();
+    ctx.arc(centerX - 28, feetY - 449 + kneel, restored ? 10 : 7 + pulse * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const zone = objective.heartstone?.zone;
+    if (zone) {
+      ctx.save();
+      ctx.fillStyle = objective.heartstone.bound ? 'rgba(118,229,238,.3)' : 'rgba(118,229,238,.1)';
+      ctx.strokeStyle = objective.heartstone.bound ? '#8cebf1' : 'rgba(126,217,229,.64)';
+      ctx.shadowColor = objective.heartstone.bound ? '#80e7ff' : 'transparent';
+      ctx.shadowBlur = objective.heartstone.bound ? 20 : 0;
+      ctx.lineWidth = 4;
+      ctx.setLineDash(objective.heartstone.bound ? [] : [10, 8]);
+      ctx.fillRect(zone.x, zone.y - 20, zone.w, zone.h + 20);
+      ctx.strokeRect(zone.x, zone.y - 20, zone.w, zone.h + 20);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    if (['listen', 'anchor'].includes(objective.phase)) {
+      const cycleClock = breath.clock % breath.cycleSeconds;
+      const active = objective.phase === 'anchor'
+        && cycleClock >= breath.warningSeconds
+        && cycleClock < breath.warningSeconds + breath.activeSeconds;
+      const warning = objective.phase === 'listen' || cycleClock < breath.warningSeconds;
+      const edgeY = 26 * TILE - 10;
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = active ? '#ee755f' : warning ? '#80e7ef' : 'rgba(126,220,230,.36)';
+      ctx.fillStyle = active ? 'rgba(224,92,66,.16)' : 'rgba(110,224,235,.09)';
+      ctx.shadowColor = active ? '#e75f4e' : '#79e3ec';
+      ctx.shadowBlur = active ? 26 : 16;
+      ctx.lineWidth = active ? 9 : 6;
+      ctx.beginPath();
+      ctx.moveTo(20 * TILE, edgeY);
+      for (let tx = 20; tx <= 63; tx += 1) {
+        ctx.lineTo(tx * TILE, edgeY - 9 - Math.sin(tx * .8 + time * 5) * (active ? 17 : 9));
+      }
+      ctx.lineTo(63 * TILE, 26 * TILE);
+      ctx.lineTo(20 * TILE, 26 * TILE);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const hand = objective.rememberedHand;
+    if (hand?.raised) {
+      const ribX = hand.rib.tx * TILE + TILE / 2;
+      ctx.save();
+      ctx.strokeStyle = hand.restored ? '#ffe393' : '#e8c36e';
+      ctx.shadowColor = hand.restored ? '#ffe08a' : '#d5a756';
+      ctx.shadowBlur = 26;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(ribX, hand.rib.bottomTy * TILE + 30);
+      ctx.quadraticCurveTo(ribX - 52, 23 * TILE, ribX, hand.rib.topTy * TILE + 12);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      for (let finger = 0; finger < 4; finger += 1) {
+        ctx.beginPath();
+        ctx.moveTo(ribX - 10, 20 * TILE + 18);
+        ctx.lineTo((47.5 + finger * 2) * TILE, 20 * TILE - 10 - finger * 7);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const bridle = objective.bridle;
+    if (bridle?.exposed) {
+      const cycle = bridle.guardSeconds + bridle.recoverySeconds;
+      const recovery = objective.phase === 'unbind' && bridle.clock % cycle >= bridle.guardSeconds;
+      const x = bridle.tx * TILE;
+      const y = bridle.baseTy * TILE - 72;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.sin(time * 1.7) * .08);
+      ctx.fillStyle = bridle.struck ? '#26262b' : recovery ? '#75e3ed' : '#d8a950';
+      ctx.strokeStyle = bridle.struck ? '#6b6560' : recovery ? '#bff8fa' : '#ffd67b';
+      ctx.shadowColor = bridle.struck ? 'transparent' : recovery ? '#78e7f1' : '#e6aa49';
+      ctx.shadowBlur = bridle.struck ? 0 : 24;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(0, -42);
+      ctx.lineTo(36, 0);
+      ctx.lineTo(0, 42);
+      ctx.lineTo(-36, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (restored) {
+      ctx.save();
+      const dawn = ctx.createLinearGradient(46 * TILE, 0, 74 * TILE, 0);
+      dawn.addColorStop(0, 'rgba(111,228,239,0)');
+      dawn.addColorStop(.34, 'rgba(111,228,239,.14)');
+      dawn.addColorStop(.64, 'rgba(255,224,134,.3)');
+      dawn.addColorStop(1, 'rgba(255,224,134,0)');
+      ctx.fillStyle = dawn;
+      ctx.fillRect(46 * TILE, 8 * TILE, 28 * TILE, 12 * TILE);
+      ctx.strokeStyle = 'rgba(255,230,151,.86)';
+      ctx.shadowColor = '#f4d579';
+      ctx.shadowBlur = 30;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(46 * TILE, 20 * TILE - 8);
+      ctx.bezierCurveTo(54 * TILE, 17.6 * TILE, 65 * TILE, 18.8 * TILE, 74 * TILE, 14 * TILE);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   for (const zone of level.water || []) {
     const grad = ctx.createLinearGradient(zone.x, zone.y, zone.x, zone.y + zone.h);
     grad.addColorStop(0, 'rgba(105,211,231,.36)');
@@ -493,28 +1564,44 @@ export function drawDoor(ctx, door, open, time) {
 
 export function drawBlockAndPlate(ctx, block, plate, active) {
   ctx.save();
-  ctx.shadowColor = active ? '#e8c56a' : 'transparent';
-  ctx.shadowBlur = active ? 18 : 0;
-  ctx.fillStyle = active ? '#e8c56a' : '#725e43';
-  roundRect(ctx, plate.x, plate.y, plate.w, plate.h, 5);
-  ctx.fill();
-  ctx.strokeStyle = '#f5d47d';
-  ctx.stroke();
+  if (plate && !plate.disabled) {
+    ctx.shadowColor = active ? '#e8c56a' : 'transparent';
+    ctx.shadowBlur = active ? 18 : 0;
+    ctx.fillStyle = active ? '#e8c56a' : '#725e43';
+    roundRect(ctx, plate.x, plate.y, plate.w, plate.h, 5);
+    ctx.fill();
+    ctx.strokeStyle = '#f5d47d';
+    ctx.stroke();
+  }
   ctx.shadowBlur = 0;
+  if (block.bound) {
+    ctx.shadowColor = '#82e8ff';
+    ctx.shadowBlur = 18;
+  }
   const grad = ctx.createLinearGradient(block.x, block.y, block.x + block.w, block.y + block.h);
-  grad.addColorStop(0, '#596079');
-  grad.addColorStop(.45, '#30384e');
+  grad.addColorStop(0, block.bound ? '#477184' : '#596079');
+  grad.addColorStop(.45, block.bound ? '#25465c' : '#30384e');
   grad.addColorStop(1, '#151b2d');
   ctx.fillStyle = grad;
   roundRect(ctx, block.x, block.y, block.w, block.h, 5);
   ctx.fill();
-  ctx.strokeStyle = '#b99247';
+  ctx.strokeStyle = block.bound ? '#82e8ff' : '#b99247';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(block.x + block.w / 2, block.y + block.h / 2, 10, 0, Math.PI * 2);
-  ctx.strokeStyle = '#d8b45d';
+  ctx.strokeStyle = block.bound ? '#d4f8ff' : '#d8b45d';
   ctx.stroke();
+  if (block.bound) {
+    ctx.beginPath();
+    ctx.moveTo(block.x + 7, block.y + block.h - 7);
+    ctx.lineTo(block.x + block.w - 7, block.y + 7);
+    ctx.moveTo(block.x + 7, block.y + 7);
+    ctx.lineTo(block.x + block.w - 7, block.y + block.h - 7);
+    ctx.strokeStyle = 'rgba(139,236,255,.7)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -554,6 +1641,56 @@ export function drawSoldier(ctx, soldier, time) {
   const facing = soldier.facing || 1;
   ctx.scale(facing, 1);
   if (soldier.kind === 'shield') ctx.scale(1.12, 1.12);
+  if ((soldier.raidMember || soldier.readableMelee) && soldier.mode !== 'para') {
+    const phase = soldier.attackPhase;
+    if (phase === 'windup') {
+      const progress = 1 - Math.max(0, soldier.attackClock) / Math.max(.01, soldier.telegraphSeconds);
+      ctx.save();
+      ctx.strokeStyle = '#f17a55';
+      ctx.fillStyle = 'rgba(241,122,85,.12)';
+      ctx.shadowColor = '#ef654c';
+      ctx.shadowBlur = 12 + progress * 14;
+      ctx.lineWidth = 3 + progress * 2;
+      ctx.beginPath();
+      ctx.moveTo(11, -40);
+      ctx.lineTo(34 + progress * 20, -30);
+      ctx.lineTo(14, -16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(24, 1);
+      ctx.quadraticCurveTo(42, -11, 63 + (soldier.kind === 'spear' ? 25 : 0), 1);
+      ctx.stroke();
+      ctx.restore();
+    } else if (phase === 'active') {
+      ctx.save();
+      ctx.strokeStyle = '#fff0b0';
+      ctx.shadowColor = '#f06d50';
+      ctx.shadowBlur = 20;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(18, -25, soldier.kind === 'spear' ? 74 : 52, -.65, .55);
+      ctx.stroke();
+      ctx.restore();
+    } else if (phase === 'landing' || phase === 'recovery' || phase === 'stun') {
+      ctx.save();
+      ctx.strokeStyle = phase === 'stun' ? '#ffe091' : '#86e1eb';
+      ctx.globalAlpha = .75;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 7]);
+      ctx.beginPath();
+      ctx.arc(0, -25, 28, -.2, Math.PI + .2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(-12, -66);
+      ctx.lineTo(0, -58);
+      ctx.lineTo(12, -66);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
   if (soldier.mode === 'para') {
     ctx.strokeStyle = 'rgba(210,220,235,.7)';
     ctx.lineWidth = 1;
@@ -602,6 +1739,12 @@ export function drawSoldier(ctx, soldier, time) {
       ctx.beginPath(); ctx.arc(25, -29, 9, -1.1, 1.1); ctx.stroke();
     }
   }
+  if ((soldier.raidMember || soldier.readableMelee) && soldier.maxHp > 1) {
+    ctx.fillStyle = 'rgba(4,7,15,.72)';
+    ctx.fillRect(-15, -70, 30, 4);
+    ctx.fillStyle = '#f0c767';
+    ctx.fillRect(-15, -70, 30 * Math.max(0, soldier.hp / soldier.maxHp), 4);
+  }
   ctx.restore();
 }
 
@@ -632,34 +1775,34 @@ export function drawHero(ctx, player, time, heroSheet) {
     const running = player.grounded && Math.abs(player.vx) > 25;
     let col = 0;
     let row = 0;
-    let drawSize = 142;
+    let drawSize = 116;
     let offsetX = 0;
     let offsetY = 7;
 
     if (player.attackTimer > 0) {
       col = 0;
       row = 1;
-      drawSize = 156;
+      drawSize = 126;
       offsetX = -2;
     } else if (player.digTimer > 0) {
       col = 1;
       row = 1;
-      drawSize = 150;
+      drawSize = 122;
       offsetY = 4;
-    } else if (player.climbing) {
+    } else if (player.climbing || (!player.grounded && player.wallSide)) {
       col = 2;
       row = 1;
-      drawSize = 146;
+      drawSize = 120;
       offsetY = 2;
     } else if (!player.grounded) {
       col = 2;
       row = 0;
-      drawSize = 150;
+      drawSize = 122;
       offsetY = 1;
     } else if (running) {
       col = 1;
       row = 0;
-      drawSize = 148;
+      drawSize = 120;
       offsetX = -2;
       offsetY = 4 - Math.abs(Math.sin(time * 15)) * 2;
     }

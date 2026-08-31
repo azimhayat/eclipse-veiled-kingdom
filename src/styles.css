@@ -36,8 +36,8 @@ button { font: inherit; }
 
 .game-canvas {
   position: absolute;
-  width: max(100vw, 177.7778vh);
-  height: max(56.25vw, 100vh);
+  width: min(100vw, 177.7778vh);
+  height: min(56.25vw, 100vh);
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -63,7 +63,7 @@ button { font: inherit; }
   position: absolute;
   inset: 0;
   z-index: -2;
-  background: url('/assets/title-still.png') center / cover no-repeat;
+  background: var(--title-art) center / cover no-repeat;
   filter: saturate(.88) brightness(.62);
   transform: scale(1.02);
 }
@@ -243,6 +243,56 @@ h1 span { color: var(--gold); display: block; }
   pointer-events: none;
 }
 
+.chapter-card {
+  position: absolute;
+  z-index: 14;
+  left: clamp(24px, 6vw, 92px);
+  top: 27%;
+  width: min(480px, calc(100vw - 48px));
+  pointer-events: none;
+  text-shadow: 0 3px 18px rgba(0,0,0,.92);
+  animation: chapter-reveal 3.2s ease both;
+}
+
+.chapter-rule {
+  width: 72px;
+  height: 1px;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, var(--gold-bright), rgba(232,197,106,0));
+  box-shadow: 0 0 12px rgba(232,197,106,.55);
+}
+
+.chapter-kicker {
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+}
+
+.chapter-title {
+  margin-top: 7px;
+  color: #fff4d6;
+  font: 500 clamp(28px, 4.2vw, 54px)/1 'Cinzel', serif;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.chapter-story {
+  max-width: 430px;
+  margin-top: 12px;
+  color: rgba(255,255,255,.7);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: .04em;
+}
+
+@keyframes chapter-reveal {
+  0% { opacity: 0; transform: translateY(12px); filter: blur(5px); }
+  12%, 72% { opacity: 1; transform: translateY(0); filter: blur(0); }
+  100% { opacity: 0; transform: translateY(-8px); filter: blur(2px); }
+}
+
 .boss-hud {
   position: absolute;
   z-index: 12;
@@ -299,6 +349,7 @@ h1 span { color: var(--gold); display: block; }
 .result { background: #090e20; padding: 16px; }
 .result strong { display: block; color: var(--gold-bright); font-family: 'Cinzel', serif; font-size: 22px; }
 .result span { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.45); }
+.save-warning { margin: -8px 0 20px; color: #f1b28b; font-size: 12px; letter-spacing: .04em; }
 
 .help-grid { text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 9px 18px; margin: 22px 0 28px; font-size: 13px; }
 .help-grid div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 7px; }
@@ -326,12 +377,46 @@ h1 span { color: var(--gold); display: block; }
 .game-canvas:focus { outline: none; }
 
 @media (max-width: 680px) {
-  .hud { grid-template-columns: 1fr 1fr; padding-inline: 12px; }
-  .hud-center { display: none; }
+  .hud { grid-template-columns: 1fr auto; padding-inline: 12px; }
+  .hud-center { position: absolute; top: 58px; left: 12px; display: flex; align-items: center; }
+  .relic-count { font-size: 10px; }
   .hud-left { gap: 8px; }
   .hud-level { font-size: 12px; }
   .health { width: 86px; }
   .timer { display: none; }
   .title-subtitle { font-size: 13px; }
   .overlay-card { padding: 28px 22px; }
+  .chapter-card { top: 19%; }
+  .chapter-story { max-width: 320px; font-size: 11px; }
+  .context-hint {
+    width: max-content;
+    max-width: calc(100vw - 20px);
+    white-space: normal;
+    text-align: center;
+    line-height: 1.35;
+  }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .title-layout {
+    align-items: center;
+    padding: max(12px, env(safe-area-inset-top)) max(30px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(30px, env(safe-area-inset-left));
+  }
+  .title-content { width: min(700px, 88vw); }
+  .title-content .eyebrow { margin-bottom: 8px; font-size: 9px; }
+  .title-content h1 { font-size: clamp(32px, 9vh, 44px); line-height: .94; }
+  .title-subtitle { max-width: 620px; margin: 10px 0 14px; font-size: 11px; line-height: 1.35; }
+  .title-actions { gap: 8px; }
+  .title-actions .primary,
+  .title-actions .secondary { min-height: 36px; padding-inline: 14px; font-size: 10px; }
+  .best-time { margin-top: 10px; font-size: 9px; }
+  .overlay { overflow-y: auto; padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+  .overlay-card { max-height: calc(100vh - 20px); overflow-y: auto; padding: 20px; }
+  .overlay-card .eyebrow { margin-bottom: 8px; }
+  .overlay-card h2 { font-size: 23px; }
+  .overlay-card p { margin-bottom: 14px; line-height: 1.4; }
+  .results { margin: 14px 0; }
+  .result { padding: 10px; }
+  .touch-controls { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  .hud { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
 }

@@ -1,12 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GameEngine } from './engine.js';
-import { TILE, VIEW_H, VIEW_W, createLevels } from './levels.js';
+import { TILE, VIEW_H, VIEW_W } from './levels/constants.js';
 import { bakeAllLevels } from './render.js';
+import { releaseRenderedLevel, RenderedLevelCache } from './rendered-level-cache.js';
+import {
+  getOuterVeilContinueTarget,
+  loadCampaignSave,
+  persistCampaignSave,
+  recordLegacyPrototypeCompletion,
+  recordProductionLevelCompletion,
+} from './save-data.js';
+import { AuthoredLevelRepository } from './campaign/AuthoredLevelRepository.js';
+import {
+  createProductionPreviewRepository,
+  getProductionPreviewDescriptor,
+  PRODUCTION_PREVIEW_KEYS,
+} from './campaign/productionPreview.js';
+import {
+  createOuterVeilCampaignRepository,
+  OUTER_VEIL_COMPLETION,
+} from './campaign/outerVeilCampaign.js';
+import {
+  resolveDevelopmentSession,
+  sessionUsesPersistentSave,
+  shouldPersistCampaignCompletion,
+  shouldPersistProductionProgress,
+} from './campaign/sessionRoute.js';
 
 const ASSET_URLS = {
   title: `${import.meta.env.BASE_URL}assets/title-still.png`,
   background: `${import.meta.env.BASE_URL}assets/kingdom-panorama.png`,
-  atlas: `${import.meta.env.BASE_URL}assets/character-prop-atlas.png`,
+  outerVeilBackground: `${import.meta.env.BASE_URL}assets/outer-veil-buried-dawn-v1.png`,
   hero: `${import.meta.env.BASE_URL}assets/hero-sheet-v2.png`,
 };
 
@@ -28,10 +52,9 @@ function formatTime(seconds) {
   return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
 }
 
-function readBest() {
+function getBrowserStorage() {
   try {
-    const value = JSON.parse(localStorage.getItem('eotvk-save-v1') || 'null');
-    return value?.campaignLevels === 10 && typeof value?.bestTime === 'number' ? value.bestTime : null;
+    return typeof window === 'undefined' ? null : window.localStorage;
   } catch {
     return null;
   }
@@ -40,7 +63,9 @@ function readBest() {
 function TouchButton({ action, label, className = '', engineRef }) {
   const set = (active, event) => {
     event.preventDefault();
-    if (active) event.currentTarget.setPointerCapture?.(event.pointerId);
+    if (active) {
+      try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* synthetic and cancelled pointers need no capture */ }
+    }
     engineRef.current?.setInput(action, active);
   };
   return (
@@ -59,19 +84,46 @@ export default function App() {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const resourcesRef = useRef(null);
+  const saveRef = useRef(null);
   const [screen, setScreen] = useState('boot');
   const [ready, setReady] = useState(false);
   const [bootLabel, setBootLabel] = useState('Loading the veil');
   const [progress, setProgress] = useState(0);
   const [hint, setHint] = useState('');
   const [muted, setMuted] = useState(true);
-  const [bestTime, setBestTime] = useState(readBest);
-  const [results, setResults] = useState({ time: 0, deaths: 0 });
-  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null });
+  const [bestTime, setBestTime] = useState(null);
+  const [saveWarning, setSaveWarning] = useState('');
+  const [sessionKind, setSessionKind] = useState('prototype-campaign');
+  const [previewPresentation, setPreviewPresentation] = useState(null);
+  const [outerProgress, setOuterProgress] = useState(null);
+  const [results, setResults] = useState({ time: 0, deaths: 0, targetTime: null });
+  const [chapterCard, setChapterCard] = useState(null);
+  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null });
 
   useEffect(() => {
     let cancelled = false;
     async function preload() {
+      const route = resolveDevelopmentSession(window.location.search, {
+        dev: import.meta.env.DEV,
+        previewKeys: PRODUCTION_PREVIEW_KEYS,
+      });
+      if (route.kind === 'error') {
+        setBootLabel(`${route.message} Remove the conflicting address option and reload.`);
+        setProgress(1);
+        return;
+      }
+      const preview = route.kind === 'production-preview';
+      setSessionKind(route.kind);
+      setPreviewPresentation(preview ? getProductionPreviewDescriptor(route.previewLevel)?.completion : null);
+      if (sessionUsesPersistentSave(route.kind)) {
+        const { save } = loadCampaignSave({ storage: getBrowserStorage() });
+        saveRef.current = save;
+        if (route.kind === 'production-campaign') {
+          setOuterProgress(save.progress);
+          setBestTime(save.records.realmsByKey?.['outer-veil']?.bestTimeSeconds ?? null);
+        } else setBestTime(save.records.legacyPrototype?.bestTimeSeconds ?? null);
+      }
+
       const entries = Object.entries(ASSET_URLS);
       const loaded = {};
       for (let i = 0; i < entries.length; i += 1) {
@@ -90,16 +142,28 @@ export default function App() {
       }
       if (cancelled) return;
       setProgress(.58);
-      setBootLabel('Painting the kingdom');
-      const levels = createLevels();
-      const bank = await bakeAllLevels(levels, (value) => {
-        if (!cancelled) setProgress(.58 + value * .42);
-      });
+      setBootLabel('Preparing the first path');
+      const repository = preview
+        ? createProductionPreviewRepository(route.previewLevel)
+        : route.kind === 'production-campaign'
+          ? createOuterVeilCampaignRepository()
+          : new AuthoredLevelRepository();
+      if (!repository) throw new Error('The requested production preview is not available.');
+      await repository.loadTemplate(0);
       if (cancelled) return;
-      resourcesRef.current = { assets: loaded, levels, bank };
+      const firstLevel = repository.createRuntime(0);
+      const initialBank = await bakeAllLevels([firstLevel], (value) => {
+        if (!cancelled) setProgress(.58 + value * .42);
+      }, { isCancelled: () => cancelled });
+      if (cancelled || !initialBank) {
+        if (initialBank) for (const chunks of initialBank.values()) releaseRenderedLevel(chunks);
+        return;
+      }
+      const bank = new RenderedLevelCache({ entries: initialBank });
+      resourcesRef.current = { assets: loaded, repository, firstLevel, bank, sessionKind: route.kind };
       setProgress(1);
       setReady(true);
-      setScreen('title');
+      setScreen(preview ? 'loading' : 'title');
     }
     preload().catch((error) => {
       console.error(error);
@@ -110,10 +174,18 @@ export default function App() {
 
   useEffect(() => {
     if (!resourcesRef.current || !canvasRef.current || engineRef.current) return undefined;
-    const { assets, levels, bank } = resourcesRef.current;
-    const engine = new GameEngine(canvasRef.current, assets, levels, bank, {
+    const { assets, repository, firstLevel, bank, sessionKind: activeSessionKind } = resourcesRef.current;
+    let chapterTimer;
+    let demoRespawnTimer;
+    const announceLevel = (level, name, subtitle, storyLine) => {
+      window.clearTimeout(chapterTimer);
+      setChapterCard({ level, name, subtitle: subtitle || name, storyLine });
+      chapterTimer = window.setTimeout(() => setChapterCard(null), 3200);
+    };
+    const engine = new GameEngine(canvasRef.current, assets, [firstLevel], bank, {
       hud: setHud,
       hint: setHint,
+      level: announceLevel,
       pause: () => {
         setScreen((current) => {
           const paused = current !== 'pause';
@@ -125,53 +197,105 @@ export default function App() {
       death: ({ deaths, demo }) => {
         setResults((current) => ({ ...current, deaths }));
         if (demo) {
-          window.setTimeout(() => engine.respawn(), 900);
+          window.clearTimeout(demoRespawnTimer);
+          demoRespawnTimer = window.setTimeout(() => engine.respawn(), 900);
         } else setScreen('dead');
       },
-      win: ({ time, deaths }) => {
-        setResults({ time, deaths });
-        const previous = readBest();
-        if (previous === null || time < previous) {
-          localStorage.setItem('eotvk-save-v1', JSON.stringify({
-            campaignLevels: 10,
-            bestTime: time,
-            achievedAt: new Date().toISOString(),
-          }));
-          setBestTime(time);
+      levelComplete: ({
+        campaignId,
+        sessionKind: completedSessionKind,
+        levelKey,
+        levelTime,
+        campaignTime,
+      }) => {
+        if (!shouldPersistProductionProgress({ sessionKind: completedSessionKind, campaignId })) return;
+        const completedAt = new Date().toISOString();
+        const currentSave = saveRef.current || loadCampaignSave({ storage: getBrowserStorage() }).save;
+        const updated = recordProductionLevelCompletion(currentSave, {
+          levelKey,
+          levelTime,
+          campaignTime,
+          completedAt,
+        });
+        if (!updated) return;
+        const result = persistCampaignSave({ storage: getBrowserStorage(), save: updated });
+        saveRef.current = result.save || updated;
+        setOuterProgress(saveRef.current.progress);
+        setBestTime(saveRef.current.records.realmsByKey?.['outer-veil']?.bestTimeSeconds ?? null);
+        setSaveWarning(result.persisted ? '' : 'Progress is held for this session only · browser storage is unavailable.');
+      },
+      win: ({ time, deaths, campaignId, sessionKind: completedSessionKind, completedLevels, targetTime }) => {
+        setResults({ time, deaths, targetTime });
+        if (shouldPersistCampaignCompletion({
+          sessionKind: completedSessionKind,
+          campaignId,
+          completedLevels,
+        })) {
+          const completedAt = new Date().toISOString();
+          const currentSave = saveRef.current || loadCampaignSave({ storage: getBrowserStorage() }).save;
+          const updated = recordLegacyPrototypeCompletion(currentSave, { time, completedAt });
+          const result = persistCampaignSave({ storage: getBrowserStorage(), save: updated });
+          saveRef.current = result.save || updated;
+          setBestTime(saveRef.current.records.legacyPrototype?.bestTimeSeconds ?? null);
+          setSaveWarning(result.persisted ? '' : 'Record saved for this session only · browser storage is unavailable.');
         }
         setScreen('win');
       },
       transition: (level, name) => setHint(`LEVEL ${level} · ${name.toUpperCase()}`),
-    });
+    }, repository);
     engineRef.current = engine;
     if (import.meta.env.DEV) {
-      const demoLevel = Number(new URLSearchParams(window.location.search).get('demoLevel'));
-      if (Number.isInteger(demoLevel) && demoLevel >= 1 && demoLevel <= 10) {
-        engine.start(true);
-        if (demoLevel > 1) engine.loadLevel(demoLevel - 1);
-        setScreen('play');
-      }
-      if (new URLSearchParams(window.location.search).get('demoBoss') === '1') {
-        engine.start(true);
-        engine.loadLevel(9);
-        engine.level.relics.forEach((relic) => { relic.collected = true; });
-        engine.openGate();
-        engine.player.x = 62 * TILE;
-        engine.player.y = 24 * TILE - engine.player.h;
-        engine.level.boss.active = true;
-        engine.pushHud(true);
-        setScreen('play');
-      }
+      const params = new URLSearchParams(window.location.search);
+      const demoLevel = Number(params.get('demoLevel'));
+      const prepareDemo = async () => {
+        if (activeSessionKind === 'production-preview') {
+          engine.start(false);
+          setScreen('play');
+        } else if (params.get('demoBoss') === '1') {
+          await engine.startAt(9, { demo: true });
+          if (!engine.running || engine.levelIndex !== 9) return;
+          engine.level.relics.forEach((relic) => { relic.collected = true; });
+          engine.openGate();
+          engine.player.x = 62 * TILE;
+          engine.player.y = 24 * TILE - engine.player.h;
+          engine.level.boss.active = true;
+          engine.pushHud(true);
+          setScreen('play');
+        } else if (Number.isInteger(demoLevel) && demoLevel >= 1 && demoLevel <= 10) {
+          await engine.startAt(demoLevel - 1, { demo: true });
+          if (engine.running) setScreen('play');
+        }
+      };
+      void prepareDemo().catch((error) => console.error('Could not prepare demo route', error));
     }
     return () => {
+      window.clearTimeout(chapterTimer);
+      window.clearTimeout(demoRespawnTimer);
       engine.destroy();
       engineRef.current = null;
     };
   }, [ready]);
 
   const start = (demo = false) => {
+    setSaveWarning('');
     engineRef.current?.start(demo);
     setScreen('play');
+  };
+
+  const startOuterVeilAt = async (index) => {
+    setSaveWarning('');
+    setScreen(index === 0 ? 'play' : 'loading');
+    const opened = await engineRef.current?.startAt(index, { demo: false });
+    if (opened) setScreen('play');
+  };
+
+  const continueOuterVeil = () => {
+    const target = getOuterVeilContinueTarget(saveRef.current);
+    if (target.kind === 'realm-slot') {
+      setScreen('realm-slot');
+      return;
+    }
+    void startOuterVeilAt(target.campaignOrder - 1);
   };
 
   const resume = () => {
@@ -180,17 +304,22 @@ export default function App() {
   };
 
   const returnToTitle = () => {
-    if (engineRef.current) {
-      engineRef.current.mode = 'title';
-      engineRef.current.clearInputs();
-    }
+    engineRef.current?.returnToTitle();
     setScreen('title');
   };
 
   const toggleMute = () => setMuted(engineRef.current?.toggleMute() ?? true);
+  const productionCampaign = sessionKind === 'production-campaign';
+  const outerContinueTarget = productionCampaign && saveRef.current
+    ? getOuterVeilContinueTarget(saveRef.current)
+    : null;
 
   return (
-    <main className="app" aria-label="Eclipse of the Veiled Kingdom">
+    <main
+      className="app"
+      aria-label="Eclipse of the Veiled Kingdom"
+      style={{ '--title-art': `url("${ASSET_URLS.title}")` }}
+    >
       <div className="game-stage">
         <canvas ref={canvasRef} className="game-canvas" width={VIEW_W} height={VIEW_H} tabIndex={0} aria-label="Game world" />
       </div>
@@ -209,26 +338,47 @@ export default function App() {
         <section className="title-screen">
           <div className="title-layout">
             <div className="title-content">
-              <div className="eyebrow">A kingdom buried · an eclipse awake</div>
+              <div className="eyebrow">{productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
               <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
-              <p className="title-subtitle">Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.</p>
+              <p className="title-subtitle">{productionCampaign
+                ? 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
+                : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
               <div className="title-actions">
-                <button className="primary" disabled={progress < 1} onClick={() => start(false)}>Enter the ruins</button>
-                <button className="secondary" onClick={() => start(true)}>Watch a run</button>
+                {productionCampaign ? (
+                  <>
+                    <button className="primary" disabled={progress < 1} onClick={continueOuterVeil}>
+                      {outerContinueTarget?.kind === 'realm-slot'
+                        ? 'Continue to Inner Kingdom'
+                        : outerContinueTarget?.campaignOrder > 1
+                          ? `Continue · Chapter ${String(outerContinueTarget.campaignOrder).padStart(2, '0')}`
+                          : 'Begin Buried Dawn'}
+                    </button>
+                    {outerContinueTarget?.campaignOrder > 1 || outerContinueTarget?.kind === 'realm-slot'
+                      ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>Replay Outer Veil</button>
+                      : null}
+                  </>
+                ) : (
+                  <>
+                    <button className="primary" disabled={progress < 1} onClick={() => start(false)}>Enter the ruins</button>
+                    <button className="secondary" onClick={() => start(true)}>Watch a run</button>
+                  </>
+                )}
                 <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
               </div>
-              <div className="best-time">{bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
+              <div className="best-time">{productionCampaign
+                ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${bestTime === null ? '' : ` · best realm ${formatTime(bestTime)}`}`
+                : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
             </div>
           </div>
         </section>
       )}
 
-      {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win') && (
+      {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win' || screen === 'loading' || screen === 'load-error') && (
         <>
           <header className="hud">
             <div className="hud-left">
               <div>
-                <div className="hud-kicker">LVL {hud.level}</div>
+              <div className="hud-kicker">{sessionKind === 'production-preview' ? 'PRODUCTION PREVIEW · ' : productionCampaign ? 'OUTER VEIL · ' : ''}LVL {hud.level}</div>
                 <div className="hud-level">{hud.levelName}</div>
               </div>
               <div className="health">
@@ -237,15 +387,28 @@ export default function App() {
               </div>
             </div>
             <div className="hud-center">
-              <span className="diamond" /><span className="relic-count">RELICS {hud.relics}/3</span>
+              <span className="diamond" /><span className="relic-count">{hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent}/${hud.objectiveTarget}`}</span>
               <span className="timer">{formatTime(hud.time)}</span>
             </div>
             <div className="hud-right">
               <button className="icon-button" aria-label={muted ? 'Unmute audio' : 'Mute audio'} onClick={toggleMute}>{muted ? '◇' : '◆'}</button>
-              <button className="icon-button" aria-label="Pause" onClick={() => { engineRef.current?.pause(true); setScreen('pause'); }}>Ⅱ</button>
+              <button
+                className="icon-button"
+                aria-label="Pause"
+                disabled={screen !== 'play'}
+                onClick={() => { engineRef.current?.pause(true); setScreen('pause'); }}
+              >Ⅱ</button>
             </div>
           </header>
           {screen === 'play' && <div className="context-hint">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && chapterCard && (
+            <div className="chapter-card" aria-live="polite">
+              <div className="chapter-rule" />
+              <div className="chapter-kicker">{productionCampaign ? 'Realm I · ' : ''}Chapter {String(chapterCard.level).padStart(2, '0')}{productionCampaign ? ' of 10' : ''} · {chapterCard.name}</div>
+              <div className="chapter-title">{chapterCard.subtitle}</div>
+              {chapterCard.storyLine && <div className="chapter-story">{chapterCard.storyLine}</div>}
+            </div>
+          )}
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">
               <span>VEILED GUARDIAN</span>
@@ -300,7 +463,7 @@ export default function App() {
             <p>Your place in the kingdom is held.</p>
             <div className="overlay-actions">
               <button className="primary" onClick={resume}>Continue</button>
-              <button className="secondary" onClick={returnToTitle}>Title screen</button>
+              <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Title screen'}</button>
             </div>
           </div>
         </section>
@@ -311,10 +474,35 @@ export default function App() {
           <div className="overlay-card">
             <div className="eyebrow">The kingdom remembers</div>
             <h2>You have fallen</h2>
-            <p>This realm will reform: relics, mechanisms, enemies, and gates return to their starting state.</p>
+            <p>This realm will reform: objectives, hazards, mechanisms, health, and gates return to their starting state.</p>
             <div className="overlay-actions">
               <button className="primary" onClick={() => engineRef.current?.respawn()}>Restart realm</button>
-              <button className="secondary" onClick={returnToTitle}>Abandon journey</button>
+              <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Abandon journey'}</button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {screen === 'loading' && (
+        <section className="overlay path-loading" aria-live="polite">
+          <div className="overlay-card">
+            <div className="sigil" />
+            <div className="eyebrow">The kingdom is reforming</div>
+            <h2>Opening the next path</h2>
+            <p>The current realm remains safely held while the next one is prepared.</p>
+          </div>
+        </section>
+      )}
+
+      {screen === 'load-error' && (
+        <section className="overlay" role="alert">
+          <div className="overlay-card">
+            <div className="eyebrow">The veil resisted</div>
+            <h2>The next path could not open</h2>
+            <p>Your completed realm is safely frozen. Reload the game to retry the download, or return to the title screen.</p>
+            <div className="overlay-actions">
+              <button className="primary" onClick={() => window.location.reload()}>Reload game</button>
+              <button className="secondary" onClick={returnToTitle}>Title screen</button>
             </div>
           </div>
         </section>
@@ -323,16 +511,50 @@ export default function App() {
       {screen === 'win' && (
         <section className="overlay">
           <div className="overlay-card">
-            <div className="eyebrow">The eclipse is broken</div>
-            <h2>Kingdom unveiled</h2>
-            <p>All ten realms are free. Light reaches the buried halls once more, and your path has become part of the ruins.</p>
+            <div className="eyebrow">{sessionKind === 'production-preview'
+              ? previewPresentation?.eyebrow
+              : productionCampaign ? OUTER_VEIL_COMPLETION.eyebrow : 'The eclipse is broken'}</div>
+            <h2>{sessionKind === 'production-preview'
+              ? previewPresentation?.heading
+              : productionCampaign ? OUTER_VEIL_COMPLETION.heading : 'Kingdom unveiled'}</h2>
+            <p>{sessionKind === 'production-preview'
+              ? previewPresentation?.body
+              : productionCampaign
+                ? OUTER_VEIL_COMPLETION.body
+                : 'All ten realms are free. Light reaches the buried halls once more, and your path has become part of the ruins.'}</p>
+            {saveWarning && <div className="save-warning" role="status">{saveWarning}</div>}
             <div className="results">
               <div className="result"><strong>{formatTime(results.time)}</strong><span>Journey time</span></div>
               <div className="result"><strong>{results.deaths}</strong><span>Falls</span></div>
             </div>
             <div className="overlay-actions">
-              <button className="primary" onClick={() => start(false)}>Journey again</button>
-              <button className="secondary" onClick={returnToTitle}>Title screen</button>
+              {productionCampaign ? (
+                <>
+                  <button className="primary" onClick={() => setScreen('realm-slot')}>View the revealed path</button>
+                  <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>Replay Outer Veil</button>
+                  <button className="secondary" onClick={returnToTitle}>Title screen</button>
+                </>
+              ) : (
+                <>
+                  <button className="primary" onClick={() => start(false)}>{sessionKind === 'production-preview' ? 'Replay level' : 'Journey again'}</button>
+                  <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Title screen'}</button>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {screen === 'realm-slot' && (
+        <section className="overlay">
+          <div className="overlay-card realm-slot-card">
+            <div className="eyebrow">{OUTER_VEIL_COMPLETION.nextSlot.label}</div>
+            <h2>{OUTER_VEIL_COMPLETION.nextSlot.chapter}</h2>
+            <p>The Warden’s restored road now points beneath the second veil. This realm slot is unlocked, but its chapters have not been authored yet.</p>
+            <div className="save-warning" role="status">{OUTER_VEIL_COMPLETION.nextSlot.status}</div>
+            <div className="overlay-actions">
+              <button className="primary" onClick={() => { void startOuterVeilAt(0); }}>Replay Outer Veil</button>
+              <button className="secondary" onClick={returnToTitle}>Return to title</button>
             </div>
           </div>
         </section>

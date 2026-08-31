@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GameEngine, KEY_ACTIONS, PHYSICS } from './engine.js';
-import { Tile, WORLD_COLS, WORLD_ROWS, createLevels } from './levels.js';
+import { cloneLevel, Tile, WORLD_COLS, WORLD_ROWS, createLevels } from './levels.js';
 
 describe('Eclipse of the Veiled Kingdom', () => {
   it('keeps the authored physics contract', () => {
@@ -53,6 +53,15 @@ describe('Eclipse of the Veiled Kingdom', () => {
 
   it('contains the required Outer Veil interaction chain', () => {
     const outer = createLevels()[0];
+    expect(outer).toMatchObject({
+      subtitle: 'Buried Dawn',
+      backgroundKey: 'outerVeilBackground',
+    });
+    expect(outer.relics.map((relic) => relic.label)).toEqual([
+      'Dawn Fragment',
+      'Cartographer Seal',
+      'Oath Shard',
+    ]);
     expect(outer.map[26].slice(11, 14).every((tile) => tile === Tile.SPIKE)).toBe(true);
     expect(outer.map[21][16]).toBe(Tile.SAND);
     expect(outer.map[20][16]).toBe(Tile.ONEWAY);
@@ -80,20 +89,27 @@ describe('Eclipse of the Veiled Kingdom', () => {
   });
 
   it('rebuilds the current realm when the player respawns', () => {
+    const template = createLevels()[6];
     const engine = {
       levelIndex: 6,
-      levels: createLevels().map((level) => ({ ...level })),
+      level: cloneLevel(template),
+      repository: { createRuntime: vi.fn(() => cloneLevel(template)) },
+      cancelLevelTransition: vi.fn(),
       loadLevel: vi.fn(),
       clearInputs: vi.fn(),
       callbacks: { mode: vi.fn() },
       setHint: vi.fn(),
       pushHud: vi.fn(),
     };
-    engine.levels[6].relics[0].collected = true;
+    engine.level.relics[0].collected = true;
+    engine.loadLevel.mockImplementation((index) => {
+      engine.level = engine.repository.createRuntime(index);
+    });
 
     GameEngine.prototype.respawn.call(engine);
 
-    expect(engine.levels[6].relics.every((relic) => !relic.collected)).toBe(true);
+    expect(engine.level.relics.every((relic) => !relic.collected)).toBe(true);
+    expect(engine.cancelLevelTransition).toHaveBeenCalledOnce();
     expect(engine.loadLevel).toHaveBeenCalledWith(6, true);
     expect(engine.mode).toBe('play');
   });
