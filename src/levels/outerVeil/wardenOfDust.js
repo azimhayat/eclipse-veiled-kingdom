@@ -116,8 +116,8 @@ export function createWardenOfDust() {
           checkpoint: { tx: 48, feetTy: 20, facing: 1 },
         },
         boss: {
-          maxHp: 18,
-          hp: 18,
+          maxHp: 48,
+          hp: 48,
           phase: 'guardian',
           action: 'idle',
           attackKind: 'high',
@@ -126,6 +126,10 @@ export function createWardenOfDust() {
           hitstun: 0,
           invulnerable: false,
           attackConsumed: true,
+          openingEarned: false,
+          recoveryHits: 0,
+          armored: false,
+          armorBreakReady: false,
           target: {
             x: 58.5 * TILE,
             y: 20 * TILE - 72,
@@ -137,9 +141,12 @@ export function createWardenOfDust() {
           comboClock: 0,
           guarding: false,
           parryClock: 0,
+          guardLessonComplete: false,
         },
         timing: {
           introSeconds: 1.15,
+          phaseShiftSeconds: 1.8,
+          regroupSeconds: 3.2,
           comboWindow: .85,
           parryWindow: .18,
           guardianTelegraph: 1.05,
@@ -151,8 +158,8 @@ export function createWardenOfDust() {
           eclipseRecovery: 1.15,
         },
         thresholds: {
-          commandHp: 12,
-          eclipseHp: 6,
+          commandHp: 32,
+          eclipseHp: 16,
         },
         attempt: {
           count: 0,

@@ -175,6 +175,23 @@ describe('Warden duel rendering', () => {
     expect(recovery.calls).toContainEqual(['set:strokeStyle', '#78e7f1']);
   });
 
+  it('draws the Command armour as a solid ring and its exposed seam as a broken ring', () => {
+    const level = createWardenOfDust();
+    level.objective.phase = 'duel';
+    level.objective.duel.active = true;
+    level.objective.duel.boss.phase = 'command';
+    level.objective.duel.boss.armored = true;
+    const held = recordingContext();
+    drawLevelMechanics(held, level, 8, false);
+    expect(held.calls).toContainEqual(['setLineDash', [18, 7]]);
+    expect(held.calls).toContainEqual(['arc', 0, 0, 50, 0, Math.PI * 2]);
+
+    level.objective.duel.boss.armorBreakReady = true;
+    const exposed = recordingContext();
+    drawLevelMechanics(exposed, level, 8.2, false);
+    expect(exposed.calls).toContainEqual(['setLineDash', [5, 13]]);
+  });
+
   it('keeps the sweep warning local while the sand wave marks the complete sealed arena', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';

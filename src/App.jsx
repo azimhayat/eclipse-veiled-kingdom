@@ -93,21 +93,40 @@ function getBrowserStorage() {
 }
 
 function TouchButton({ action, label, className = '', engineRef }) {
+  const assistiveReleaseRef = useRef(null);
+  const lastKeyboardRef = useRef(0);
   const set = (active, event) => {
-    event.preventDefault();
-    if (active) {
+    event?.preventDefault();
+    if (active && event?.pointerId !== undefined) {
       try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* synthetic and cancelled pointers need no capture */ }
     }
     engineRef.current?.setInput(action, active);
   };
+  useEffect(() => () => window.clearTimeout(assistiveReleaseRef.current), []);
+  const keyboard = (active, event) => {
+    if (!['Enter', ' '].includes(event.key)) return;
+    lastKeyboardRef.current = Date.now();
+    set(active, event);
+  };
+  const assistiveClick = (event) => {
+    if (event.detail !== 0 || Date.now() - lastKeyboardRef.current < 300) return;
+    set(true, event);
+    window.clearTimeout(assistiveReleaseRef.current);
+    assistiveReleaseRef.current = window.setTimeout(() => engineRef.current?.setInput(action, false), 130);
+  };
   return (
     <button
+      type="button"
       className={`touch-button ${className}`}
       aria-label={label}
       onPointerDown={(event) => set(true, event)}
       onPointerUp={(event) => set(false, event)}
       onPointerCancel={(event) => set(false, event)}
       onLostPointerCapture={(event) => set(false, event)}
+      onKeyDown={(event) => keyboard(true, event)}
+      onKeyUp={(event) => keyboard(false, event)}
+      onBlur={(event) => set(false, event)}
+      onClick={assistiveClick}
     >{label}</button>
   );
 }
@@ -119,7 +138,7 @@ function AudioControls({ settings, onToggleMute, onMusicVolume, onEffectsVolume,
     <section className={`audio-controls${compact ? ' audio-controls-compact' : ''}`} aria-label="Audio settings">
       <div className="audio-controls-heading">
         <span>Soundscape</span>
-        <button className="audio-mute" type="button" onClick={onToggleMute} aria-pressed={settings.muted}>
+        <button className="audio-mute" type="button" onClick={onToggleMute} aria-label="Mute all audio" aria-pressed={settings.muted}>
           {settings.muted ? 'Unmute' : 'Mute all'}
         </button>
       </div>
@@ -155,6 +174,7 @@ export default function App() {
   const canvasRef = useRef(null);
   const titlePrimaryRef = useRef(null);
   const chronicleHeadingRef = useRef(null);
+  const overlayHeadingRef = useRef(null);
   const engineRef = useRef(null);
   const resourcesRef = useRef(null);
   const saveRef = useRef(null);
@@ -178,11 +198,14 @@ export default function App() {
   const [presentationCard, setPresentationCard] = useState(null);
   const presentationTimerRef = useRef(null);
   const presentationGenerationRef = useRef(0);
-  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN' });
+  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN', wardenFightActive: false });
 
   useEffect(() => {
     if (screen === 'win') chronicleHeadingRef.current?.focus({ preventScroll: true });
     if (screen === 'title' && ready) titlePrimaryRef.current?.focus({ preventScroll: true });
+    if (['help', 'pause', 'dead', 'load-error', 'realm-slot'].includes(screen)) {
+      overlayHeadingRef.current?.focus({ preventScroll: true });
+    }
   }, [screen, chronicleView, ready]);
 
   useEffect(() => {
@@ -560,7 +583,7 @@ export default function App() {
       style={{ '--title-art': `url("${ASSET_URLS.title}")` }}
     >
       <div className="game-stage" aria-hidden={screen !== 'play'}>
-        <canvas ref={canvasRef} className="game-canvas" width={VIEW_W} height={VIEW_H} tabIndex={screen === 'play' ? 0 : -1} aria-label="Game world" />
+        <canvas ref={canvasRef} className="game-canvas" width={VIEW_W} height={VIEW_H} tabIndex={screen === 'play' ? 0 : -1} aria-label="Game world" aria-describedby="game-status" />
       </div>
 
       {screen === 'boot' && (
@@ -633,15 +656,15 @@ export default function App() {
               </div>
               <div className="health">
                 <div className="health-label"><span>HEALTH</span><span>{hud.hp}/{hud.maxHp}</span></div>
-                <div className="health-track"><div className="health-value" style={{ width: `${(hud.hp / hud.maxHp) * 100}%` }} /></div>
+                <div className="health-track" role="progressbar" aria-label="Hero health" aria-valuemin="0" aria-valuemax={hud.maxHp} aria-valuenow={hud.hp}><div className="health-value" style={{ width: `${(hud.hp / hud.maxHp) * 100}%` }} /></div>
               </div>
             </div>
             <div className="hud-center">
-              <span className="diamond" /><span className="relic-count">{hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent}/${hud.objectiveTarget}`}</span>
+              <span className="diamond" /><span className="relic-count" aria-live="polite" aria-atomic="true">{hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent}/${hud.objectiveTarget}`}</span>
               <span className="timer">{formatTime(hud.time)}</span>
             </div>
             <div className="hud-right">
-              <button className="icon-button" disabled={screen !== 'play'} aria-label={audioSettings.muted ? 'Unmute audio' : 'Mute audio'} aria-pressed={audioSettings.muted} onClick={toggleMute}>{audioSettings.muted ? '◇' : '◆'}</button>
+              <button className="icon-button" disabled={screen !== 'play'} aria-label="Mute all audio" aria-pressed={audioSettings.muted} onClick={toggleMute}>{audioSettings.muted ? '◇' : '◆'}</button>
               <button
                 className="icon-button"
                 aria-label="Pause"
@@ -650,7 +673,12 @@ export default function App() {
               >Ⅱ</button>
             </div>
           </header>
-          {screen === 'play' && !presentationCard && <div className="context-hint">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && !presentationCard && <div className="context-hint" role="status" aria-live="polite" aria-atomic="true">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && (
+            <div className="sr-only" id="game-status">
+              Level {hud.level}: {hud.levelName}. Hero health {hud.hp} of {hud.maxHp}. Objective: {hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent} of ${hud.objectiveTarget}`}.
+            </div>
+          )}
           {screen === 'play' && presentationCard && (
             <div
               key={`${presentationCard.sequenceId}-${presentationCard.sequenceIndex}-${presentationCard.kind}`}
@@ -674,11 +702,11 @@ export default function App() {
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">
               <span>{hud.bossLabel}</span>
-              <div><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
+              <div role="progressbar" aria-label="Warden command strength" aria-valuemin="0" aria-valuemax={hud.bossMaxHp} aria-valuenow={hud.bossHp}><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
             </div>
           )}
           {screen === 'play' && (
-            <div className="touch-controls" aria-label="Touch controls">
+            <div className="touch-controls" role="group" aria-label="Touch controls">
               <div className="touch-cluster touch-move">
                 <TouchButton engineRef={engineRef} action="climb" label="Up" className="touch-up" />
                 <TouchButton engineRef={engineRef} action="left" label="←" className="touch-left" />
@@ -696,10 +724,10 @@ export default function App() {
       )}
 
       {screen === 'help' && (
-        <section className="overlay">
+        <section className="overlay" role="dialog" aria-modal="true" aria-labelledby="help-heading">
           <div className="overlay-card">
             <div className="eyebrow">Scavenger field notes</div>
-            <h2>How to play</h2>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="help-heading">How to play</h2>
             <div className="help-grid">
               <div><span>Move</span><kbd>A / D · ← / →</kbd></div>
               <div><span>Jump</span><kbd>SPACE</kbd></div>
@@ -718,10 +746,10 @@ export default function App() {
       )}
 
       {screen === 'pause' && (
-        <section className="overlay">
+        <section className="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
           <div className="overlay-card">
             <div className="eyebrow">The veil is still</div>
-            <h2>Journey paused</h2>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="pause-heading">Journey paused</h2>
             <p>Your place in the kingdom is held.</p>
             <AudioControls
               compact
@@ -739,13 +767,15 @@ export default function App() {
       )}
 
       {screen === 'dead' && (
-        <section className="overlay">
+        <section className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="death-heading" aria-describedby="death-copy">
           <div className="overlay-card">
             <div className="eyebrow">The kingdom remembers</div>
-            <h2>You have fallen</h2>
-            <p>This realm will reform: objectives, hazards, mechanisms, health, and gates return to their starting state.</p>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="death-heading">You have fallen</h2>
+            <p id="death-copy">{hud.wardenFightActive
+              ? 'The Warden duel will restart at its sealed arena. Every solved Level 10 vow remains restored.'
+              : 'This realm will reform: objectives, hazards, mechanisms, health, and gates return to their starting state.'}</p>
             <div className="overlay-actions">
-              <button className="primary" onClick={() => engineRef.current?.respawn()}>Restart realm</button>
+              <button className="primary" onClick={() => engineRef.current?.respawn()}>{hud.wardenFightActive ? 'Restart Warden duel' : 'Restart realm'}</button>
               <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Abandon journey'}</button>
             </div>
           </div>
@@ -764,10 +794,10 @@ export default function App() {
       )}
 
       {screen === 'load-error' && (
-        <section className="overlay" role="alert">
+        <section className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="load-error-heading">
           <div className="overlay-card">
             <div className="eyebrow">The veil resisted</div>
-            <h2>The next path could not open</h2>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="load-error-heading">The next path could not open</h2>
             <p>Your completed realm is safely frozen. Reload the game to retry the download, or return to the title screen.</p>
             <div className="overlay-actions">
               <button className="primary" onClick={() => window.location.reload()}>Reload game</button>
@@ -836,7 +866,7 @@ export default function App() {
                   <dl className="chronicle-grid">
                     <div><dt>Levels restored</dt><dd>10 / 10</dd></div>
                     <div><dt>Total Stage I time</dt><dd>{formatRecordedTime(chronicle?.metrics.totalTimeSeconds)}</dd></div>
-                    <div><dt>Falls / retries</dt><dd>{Number.isInteger(chronicle?.metrics.retries) ? chronicle.metrics.retries : 'Not recorded'}</dd></div>
+                    <div><dt>Falls</dt><dd>{Number.isInteger(chronicle?.metrics.retries) ? chronicle.metrics.retries : 'Not recorded'}</dd></div>
                     <div><dt>Warden attempts</dt><dd>{Number.isInteger(chronicle?.metrics.wardenAttempts) ? chronicle.metrics.wardenAttempts : 'Not recorded'}</dd></div>
                     <div><dt>Warden damage taken</dt><dd>{Number.isInteger(chronicle?.metrics.damageTaken) ? chronicle.metrics.damageTaken : 'Not recorded'}</dd></div>
                     <div><dt>Total Warden combat time · all attempts</dt><dd>{formatRecordedTime(chronicle?.metrics.wardenCombatTimeSeconds)}</dd></div>
@@ -878,10 +908,10 @@ export default function App() {
       )}
 
       {screen === 'realm-slot' && (
-        <section className="overlay">
+        <section className="overlay" role="dialog" aria-modal="true" aria-labelledby="realm-slot-heading">
           <div className="overlay-card realm-slot-card">
             <div className="eyebrow">{OUTER_VEIL_COMPLETION.nextSlot.label}</div>
-            <h2>{OUTER_VEIL_COMPLETION.nextSlot.chapter}</h2>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="realm-slot-heading">{OUTER_VEIL_COMPLETION.nextSlot.chapter}</h2>
             <p>The Warden’s restored road now points beneath the second veil. This realm slot is unlocked, but its chapters have not been authored yet.</p>
             <div className="save-warning" role="status">{OUTER_VEIL_COMPLETION.nextSlot.status}</div>
             <div className="overlay-actions">

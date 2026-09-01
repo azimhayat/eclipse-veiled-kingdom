@@ -1490,6 +1490,18 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
       ctx.lineWidth = recovery || finale ? 7 : 5;
       ctx.fillRect(-30, -30, 60, 60);
       ctx.strokeRect(-30, -30, 60, 60);
+      if (boss.armored) {
+        ctx.rotate(-Math.PI / 4 - Math.sin(time * 2.4) * .06);
+        ctx.setLineDash(boss.armorBreakReady ? [5, 13] : [18, 7]);
+        ctx.strokeStyle = boss.armorBreakReady ? '#bff8fa' : '#ffd67b';
+        ctx.lineWidth = boss.armorBreakReady ? 6 : 9;
+        ctx.shadowColor = boss.armorBreakReady ? '#78e7f1' : '#e6aa49';
+        ctx.shadowBlur = 26;
+        ctx.beginPath();
+        ctx.arc(0, 0, 50, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.restore();
 
       ctx.save();

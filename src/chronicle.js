@@ -5,9 +5,9 @@ export const STAGE_ONE_RANK_POLICY = Object.freeze({
   masterySeconds: 1355,
   parSeconds: 2160,
   ranks: Object.freeze([
-    Object.freeze({ key: 'S', title: 'Dawn', maxTime: 1355, maxRetries: 0, maxAttempts: 1, maxDamage: 1, maxFightTime: 90 }),
-    Object.freeze({ key: 'A', title: 'Veil', maxTime: 2160, maxRetries: 3, maxAttempts: 2, maxDamage: 4, maxFightTime: 120 }),
-    Object.freeze({ key: 'B', title: 'Guardian', maxTime: 3240, maxRetries: 8, maxAttempts: 4, maxDamage: 10, maxFightTime: 180 }),
+    Object.freeze({ key: 'S', title: 'Dawn', maxTime: 1355, maxFalls: 0, maxAttempts: 1, maxDamage: 1, maxFightTime: 90 }),
+    Object.freeze({ key: 'A', title: 'Veil', maxTime: 2160, maxFalls: 3, maxAttempts: 2, maxDamage: 4, maxFightTime: 120 }),
+    Object.freeze({ key: 'B', title: 'Guardian', maxTime: 3240, maxFalls: 8, maxAttempts: 4, maxDamage: 10, maxFightTime: 180 }),
   ]),
 });
 
@@ -75,7 +75,7 @@ function rankCriteria(rank) {
   const minutes = Math.floor(rank.maxTime / 60);
   const seconds = Math.floor(rank.maxTime % 60);
   const stageTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  return `≤ ${stageTime} stage · ≤ ${rank.maxRetries} retries · ≤ ${rank.maxAttempts} Warden attempts · ≤ ${rank.maxDamage} Warden damage · ≤ ${rank.maxFightTime} sec total Warden combat`;
+  return `≤ ${stageTime} stage · ≤ ${rank.maxFalls} falls · ≤ ${rank.maxAttempts} Warden attempts · ≤ ${rank.maxDamage} Warden damage · ≤ ${rank.maxFightTime} sec total Warden combat`;
 }
 
 export function evaluateStageOneRank(metrics) {
@@ -97,7 +97,7 @@ export function evaluateStageOneRank(metrics) {
 
   for (const rank of STAGE_ONE_RANK_POLICY.ranks) {
     if (metrics.totalTimeSeconds <= rank.maxTime
-      && metrics.retries <= rank.maxRetries
+      && metrics.retries <= rank.maxFalls
       && metrics.wardenAttempts <= rank.maxAttempts
       && metrics.damageTaken <= rank.maxDamage
       && metrics.wardenCombatTimeSeconds <= rank.maxFightTime) {

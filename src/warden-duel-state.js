@@ -10,6 +10,10 @@ function resetBoss(duel) {
   duel.boss.hitstun = 0;
   duel.boss.invulnerable = false;
   duel.boss.attackConsumed = true;
+  duel.boss.openingEarned = false;
+  duel.boss.recoveryHits = 0;
+  duel.boss.armored = false;
+  duel.boss.armorBreakReady = false;
 }
 
 function resetPlayer(duel) {
@@ -17,6 +21,7 @@ function resetPlayer(duel) {
   duel.player.comboClock = 0;
   duel.player.guarding = false;
   duel.player.parryClock = 0;
+  duel.player.guardLessonComplete = false;
 }
 
 function resetAttempt(duel) {
@@ -68,11 +73,24 @@ export function updateWardenDuelPhase(duel) {
     duel.finale.ready = true;
     return duel.phase;
   }
+  const previousPhase = duel.boss.phase;
   const phase = duel.boss.hp <= duel.thresholds.eclipseHp
     ? 'eclipse'
     : duel.boss.hp <= duel.thresholds.commandHp ? 'command' : 'guardian';
   duel.boss.phase = phase;
   duel.phase = phase;
+  if (phase !== previousPhase) {
+    duel.boss.action = 'intro';
+    duel.boss.actionClock = duel.timing.phaseShiftSeconds;
+    duel.boss.sequenceIndex = 0;
+    duel.boss.hitstun = 0;
+    duel.boss.invulnerable = true;
+    duel.boss.attackConsumed = true;
+    duel.boss.openingEarned = false;
+    duel.boss.recoveryHits = 0;
+    duel.boss.armored = phase === 'command';
+    duel.boss.armorBreakReady = false;
+  }
   return phase;
 }
 

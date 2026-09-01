@@ -877,3 +877,61 @@ Scope: fourth bounded overnight milestone; local Stage I statistics, migration, 
 ## Exact next milestone
 
 Run the final local balance and accessibility pass without adding scope: naturally play the real Level 10 fight through the Dawnstroke and Chronicle on keyboard and touch, tune only reproduced fairness/readability/audio issues, verify reduced-motion and contrast behavior, rerun every automated/build/responsive check, and prepare the concise morning handoff. Keep all work local until the user explicitly approves publication.
+
+---
+
+# Stage I finale — final balance and accessibility pass
+
+Updated: 2026-09-01 04:25 Asia/Dubai
+Scope: fifth bounded overnight milestone; local duel balance, input resilience, accessibility semantics, and final reviewed handoff only. Levels 1-9, Level 10 puzzles/geometry/art/restoration, the verified backup, and the public game remain untouched.
+
+## Completed milestone
+
+- Rebalanced the Warden from an exploitable 18-point rush into a 48-point three-lesson duel. A clean high guard now earns the first opening; the Command phase raises visible amber armour that can be exposed only by clearing its full sand wave and broken only with Down plus Strike; the Eclipse phase keeps faster tells and rewards the established chain, heavy, and aerial answers.
+- Closed the heavy-attack stun lock. Each earned recovery now accepts one heavy/aerial answer or one complete 1-1-2 chain, then forces a 3.2-second readable regroup. Phase changes have their own 1.8-second breathing space, clear state, and distinct guidance.
+- Preserved buffered attack intent across cooldown and landing changes, so a buffered normal, heavy, or aerial input resolves as the action the player actually entered. Added direct one-resolution checks for high, sweep, and sand-wave attack windows.
+- Kept the Warden non-lethal ending and all prior restoration work. The final Dawnstroke still breaks the Crown command, opens both seals once, and leaves the guardian kneeling.
+- Repaired focus and semantics for pause, help, death, loading error, realm-slot, and Chronicle overlays. Critical Warden guidance is announced politely; hero and Warden health expose progress semantics; the canvas has a concise dynamic status description; keyboard focus is visible; and Enter/Space can operate every touch control.
+- Released held movement/actions on window blur or hidden-document transitions, preventing stuck controls after task switching. Editable fields now receive all text keys before global game shortcuts, including the previously blocked letter `P` in the Chronicle name.
+- Made mute semantics stable (`Mute all audio` plus pressed state), renamed the Chronicle's truthful death count from `Falls / retries` to `Falls`, raised phone HUD copy to at least 12px, and added a reduced-motion branch that removes decorative motion without hiding chapter content.
+- Clarified fatal-duel recovery in the player-facing overlay: `Restart Warden duel` returns to the sealed arena with 4/4 health while all solved Level 10 vows remain restored.
+
+## Exact validation evidence
+
+- Complete automated suite: **262 tests across 28 files passed**. New regressions cover earned openings, Command armour exposure/break, anti-stun-lock regrouping, 48 → 32 → 16 → 0 phase changes, preserved buffered attack kind, one boss-hit resolution per active window, input release on blur/visibility loss, editable-key safety, and final Warden rendering states.
+- Production build: **58 modules transformed**; all ten Stage I chapters remain independently lazy-loaded.
+- `git diff --check`: passed with only expected Windows LF-to-CRLF notices.
+- Real established-input browser driver completed the current 48-point duel in **104.50 reported fight seconds**, one attempt, 4/4 health, zero damage, through Guardian, Command armour, Eclipse, and the earned final Dawnstroke. It ended with boss health 0, `duelComplete: true`, `finale.struck: true`, objective `CROSS THE FIRST CROWN PATH`, and the gate open. This is deterministic reactive-input evidence, not a substitute for the player's natural difficulty judgment.
+- A separate fatal-attempt browser test opened an accessible `You have fallen` alert dialog with heading focus and truthful checkpoint copy. `Restart Warden duel` produced attempt 2, restored 4/4 health and 48/48 Warden health, and preserved the memory, heartstone, hand, and bridle prerequisites.
+- Responsive proof covered 1440x900 desktop, 844x390 landscape phone, and 390x844 portrait phone. There was no page overflow or actual HUD-content/control overlap; landscape and portrait HUD copy measured 12px; all seven touch controls remained in bounds. With the visible Jump touch button focused, a real Enter key press produced a jump and released the held input. Portrait's center objective was moved below the left health block and rechecked at 390x844.
+- Reduced-motion emulation reported a matching preference, no chapter-card animation, visible content opacity, and no overflow. Real browser name entry accepted `P` without pausing, and pause/death/Chronicle headings received focus. Fresh loads reported no game load error.
+- Audio provenance remains unchanged: the score and effects are original deterministic Web Audio synthesis authored locally in this repository. No samples, downloads, external generators, paid APIs, or third-party copyrighted assets were added. This remains a professional first pass, not final studio mastering.
+
+## Agent findings accepted or rejected
+
+- Accepted the combat audit's heavy stun-lock, missing Command armour lesson, too-short kill, missing buffered-intent proof, and one-resolution test findings. Each was corrected and covered.
+- Accepted the accessibility audit's overlay focus/semantics, stuck-input, editable `P`, touch keyboard access, reduced-motion, small phone copy, and mute-label findings. The canvas now has useful status and live cues, while the remaining nonvisual limitation is stated honestly below.
+- Accepted the presentation audit's truthful `Falls` label and live Warden guidance findings. Existing safe name handling, historic unknown metrics, Stage II copy, completion gating, and Chronicle focus were retained.
+- Rejected no reproduced agent finding. A full rotation gate or portrait-only game redesign was not added because it would exceed the approved balance/accessibility scope and replace a functional, overflow-free layout.
+
+## Playable local state
+
+- Stage I campaign: `http://127.0.0.1:4173/eclipse-veiled-kingdom/?campaign=outer-veil`
+- Fresh Level 10 preview: `http://127.0.0.1:4173/eclipse-veiled-kingdom/?previewLevel=warden-of-dust&fresh=1`
+- Work remains local. No push, deployment, publication, purchase, credential access, or public infrastructure change occurred.
+
+## Backup and rollback
+
+- Pre-finale recovery point remains commit `bcadb1b2a12f50b8709b852ddd6ec49150684f1f`, branch `backup/stage-1-before-finale-20260901`, tag `backup-stage-1-playtested-20260901`, and bundle `C:\Users\azimh\Documents\Codex\backups\eclipse-veiled-kingdom\2026-09-01-stage1\eclipse-veiled-kingdom-stage1.bundle`.
+- The four prior coherent local milestones remain at `b807317`, `7ccf52c`, `07d33e0`, and `e7af56c`. This final pass will be committed as a fifth independent rollback point after the handoff is validated.
+
+## Remaining quality gaps
+
+- The 104.50-second result is a deterministic real-input browser run. One natural player keyboard session and one physical touch-device session are still required to accept difficulty, perceived fairness, button comfort, uninterrupted Level 10-to-Chronicle flow, and the 90–120-second human target.
+- Audio behavior, persistence, and mix routing are verified, but device-speaker tone, long-session fatigue, and final musical taste still need human listening. It must not be represented as final studio mastering.
+- Spatial canvas play remains fundamentally visual. Status, health, focus, live cues, controls, and reduced motion are materially improved, but the platforming game is not fully playable through a screen reader alone.
+- Portrait play is functional and overflow-free, but the authored 16:9 world is necessarily smaller than in landscape. A dedicated portrait camera/control redesign is future polish, not part of this protected pass.
+
+## Next safest milestone
+
+Have the player run one uninterrupted local Level 10 fight on keyboard, then repeat on a physical touch device with sound enabled. Record only reproduced pacing, control, readability, or mix issues; tune those narrowly; rerun the complete suite/build/responsive checks; and ask for explicit publication approval. Do not push or deploy before that approval.

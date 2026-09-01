@@ -20,7 +20,7 @@ describe('Warden duel state', () => {
     expect(startWardenDuelAttempt(duel)).toBe(true);
     expect(duel).toMatchObject({
       phase: 'guardian', active: true,
-      boss: { hp: 18, phase: 'guardian', action: 'intro', invulnerable: true },
+      boss: { hp: 48, phase: 'guardian', action: 'intro', invulnerable: true },
       attempt: { count: 1, elapsed: 0, damageTaken: 0 },
     });
     expect(advanceWardenDuel(duel, 12.5)).toBe(true);
@@ -32,8 +32,8 @@ describe('Warden duel state', () => {
     expect(startWardenDuelAttempt(duel)).toBe(true);
     expect(duel).toMatchObject({
       phase: 'guardian', active: true,
-      boss: { hp: 18, phase: 'guardian', action: 'intro', invulnerable: true },
-      player: { comboStep: 0, guarding: false },
+      boss: { hp: 48, phase: 'guardian', action: 'intro', invulnerable: true, armored: false },
+      player: { comboStep: 0, guarding: false, guardLessonComplete: false },
       attempt: { count: 2, elapsed: 0, damageTaken: 0 },
       totals: { elapsed: 12.5, damageTaken: 2 },
     });
@@ -43,10 +43,18 @@ describe('Warden duel state', () => {
     const duel = duelState();
     startWardenDuelAttempt(duel);
     duel.boss.invulnerable = false;
-    expect(damageWardenDuelBoss(duel, 6)).toBe(true);
-    expect(duel).toMatchObject({ phase: 'command', boss: { hp: 12, phase: 'command' } });
-    expect(damageWardenDuelBoss(duel, 6)).toBe(true);
-    expect(duel).toMatchObject({ phase: 'eclipse', boss: { hp: 6, phase: 'eclipse' } });
+    expect(damageWardenDuelBoss(duel, 16)).toBe(true);
+    expect(duel).toMatchObject({
+      phase: 'command',
+      boss: { hp: 32, phase: 'command', action: 'intro', armored: true, invulnerable: true },
+    });
+    duel.boss.invulnerable = false;
+    expect(damageWardenDuelBoss(duel, 16)).toBe(true);
+    expect(duel).toMatchObject({
+      phase: 'eclipse',
+      boss: { hp: 16, phase: 'eclipse', action: 'intro', armored: false, invulnerable: true },
+    });
+    duel.boss.invulnerable = false;
     expect(damageWardenDuelBoss(duel, 99)).toBe(true);
     expect(duel).toMatchObject({
       phase: 'finale', active: true,
@@ -90,8 +98,11 @@ describe('Warden duel state', () => {
     expect(resetWardenDuel(duel)).toBe(true);
     expect(duel).toMatchObject({
       phase: 'sealed', active: false, complete: false,
-      boss: { hp: 18, phase: 'guardian', action: 'idle', invulnerable: false },
-      player: { comboStep: 0, guarding: false },
+      boss: {
+        hp: 48, phase: 'guardian', action: 'idle', invulnerable: false,
+        armored: false, armorBreakReady: false, recoveryHits: 0,
+      },
+      player: { comboStep: 0, guarding: false, guardLessonComplete: false },
       attempt: { count: 0, elapsed: 0, damageTaken: 0 },
       totals: { elapsed: 0, damageTaken: 0 },
       finale: { ready: false, struck: false },

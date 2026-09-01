@@ -29,6 +29,46 @@ describe('Eclipse of the Veiled Kingdom', () => {
     expect(KEY_ACTIONS.KeyW).toBe('climb');
   });
 
+  it('does not consume game shortcuts while the player is typing a Chronicle name', () => {
+    const engine = {
+      mode: 'win',
+      audio: { unlock: vi.fn() },
+      callbacks: { pause: vi.fn() },
+      input: { left: false, right: false, climb: false, down: false, jump: false, attack: false, dig: false, pressed: new Set(), released: new Set() },
+    };
+    const preventDefault = vi.fn();
+    GameEngine.prototype.keyDown.call(engine, {
+      code: 'KeyP',
+      repeat: false,
+      target: { tagName: 'INPUT', isContentEditable: false },
+      preventDefault,
+    });
+    GameEngine.prototype.keyUp.call(engine, {
+      code: 'Space',
+      target: { tagName: 'INPUT', isContentEditable: false },
+      preventDefault,
+    });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(engine.audio.unlock).not.toHaveBeenCalled();
+    expect(engine.callbacks.pause).not.toHaveBeenCalled();
+  });
+
+  it('clears every held action when focus is lost', () => {
+    const engine = {
+      input: {
+        left: true, right: false, climb: true, down: true, jump: true, attack: true, dig: true,
+        pressed: new Set(['left', 'attack']), released: new Set(['jump']),
+      },
+    };
+    GameEngine.prototype.clearInputs.call(engine);
+    expect(engine.input).toMatchObject({
+      left: false, right: false, climb: false, down: false,
+      jump: false, attack: false, dig: false,
+    });
+    expect(engine.input.pressed.size).toBe(0);
+    expect(engine.input.released.size).toBe(0);
+  });
+
   it('authors ten full 90 by 28 maps with three relics each', () => {
     const levels = createLevels();
     expect(levels).toHaveLength(10);

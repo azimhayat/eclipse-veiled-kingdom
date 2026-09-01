@@ -1432,15 +1432,20 @@ function validateWarden(level, issues) {
     || ![-1, 1].includes(checkpoint.facing)
     || !seal || seal.leftTx !== arena.minTx - 1 || seal.topTy !== 12 || seal.bottomTy !== arena.feetTy - 1
     || !level.map.slice(seal.topTy, seal.bottomTy + 1).every((row) => row[seal.leftTx] === Tile.AIR)
-    || !duelBoss || duelBoss.maxHp !== 18 || duelBoss.hp !== duelBoss.maxHp
+    || !duelBoss || duelBoss.maxHp !== 48 || duelBoss.hp !== duelBoss.maxHp
     || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle' || duelBoss.attackKind !== 'high'
     || duelBoss.actionClock !== 0 || duelBoss.sequenceIndex !== 0 || duelBoss.hitstun !== 0
     || duelBoss.invulnerable !== false || duelBoss.attackConsumed !== true
+    || duelBoss.openingEarned !== false || duelBoss.recoveryHits !== 0
+    || duelBoss.armored !== false || duelBoss.armorBreakReady !== false
     || !duelBoss.target || duelBoss.target.x !== 58.5 * TILE || duelBoss.target.y !== 20 * TILE - 72
     || duelBoss.target.radius !== 3 * TILE
     || !duelPlayer || duelPlayer.comboStep !== 0 || duelPlayer.comboClock !== 0
     || duelPlayer.guarding !== false || duelPlayer.parryClock !== 0
+    || duelPlayer.guardLessonComplete !== false
     || !timing || !Number.isFinite(timing.introSeconds) || timing.introSeconds < 1
+    || !Number.isFinite(timing.phaseShiftSeconds) || timing.phaseShiftSeconds < 1.5
+    || !Number.isFinite(timing.regroupSeconds) || timing.regroupSeconds < 3
     || !Number.isFinite(timing.comboWindow) || timing.comboWindow < .7
     || !Number.isFinite(timing.parryWindow) || timing.parryWindow < .1
     || !Number.isFinite(timing.guardianTelegraph) || timing.guardianTelegraph < .9
