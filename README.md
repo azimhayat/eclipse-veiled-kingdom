@@ -17,15 +17,18 @@ npm run build
 
 ## Play online
 
-The public GitHub Pages build is deployed automatically from `main`:
+Both editions are published together so the original game remains playable:
 
-https://azimhayat.github.io/eclipse-veiled-kingdom/
+- V1 — original release: https://azimhayat.github.io/eclipse-veiled-kingdom/
+- V2 — expanded Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v2/
+
+The preserved V1 source remains on `main`. The expanded game is maintained on `v2`; its Pages workflow builds the preserved V1 commit at the root URL and V2 at `/v2/`.
 
 ## Controls
 
 - Move: A / D or Left / Right
-- Jump: Space or Up; hold for height
-- Wall climb: W plus the direction of the wall
+- Jump: Space; hold for height
+- Wall climb: W or Up plus the direction of the wall
 - Drop through: S or Down
 - Strike: J or X
 - Dig: K or Shift
