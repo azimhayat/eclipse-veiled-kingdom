@@ -36,6 +36,12 @@ import {
   recordWardenDuelPlayerDamage,
   startWardenDuelAttempt,
 } from './warden-duel-state.js';
+import {
+  chooseWardenFighterAttack,
+  getWardenFighterAttack,
+  getWardenFighterPhase,
+  wardenAttackCanHit,
+} from './warden-fighter.js';
 
 export const PHYSICS = Object.freeze({
   RUN_SPEED: 290,
@@ -1506,12 +1512,10 @@ export class GameEngine {
         ascend: 'CLIMB THE REMEMBERED HAND',
         unbind: 'BREAK THE INVERTED COMMAND',
         duel: objective.duel?.boss?.phase === 'eclipse'
-          ? 'DUEL · SURVIVE THE LAST ECLIPSE'
+          ? 'FINAL ROUND · ECLIPSE FURY'
           : objective.duel?.boss?.phase === 'command'
-            ? objective.duel.boss.armored
-              ? 'DUEL · LEAP THE SAND WAVE, BREAK THE ARMOUR'
-              : 'DUEL · BREAK THE CROWN COMMAND'
-            : 'DUEL · READ THE GUARDIAN',
+            ? 'ROUND II · BREAK THE CROWN GUARD'
+            : 'ROUND I · FIGHT THE GUARDIAN',
         finale: 'DAWNSTROKE · FREE THE WARDEN',
         'first-path': 'CROSS THE FIRST CROWN PATH',
       };
@@ -2250,27 +2254,66 @@ export class GameEngine {
   }
 
   wardenDuelRecoverySeconds(duel) {
-    if (duel.boss.phase === 'eclipse') return duel.timing.eclipseRecovery;
-    if (duel.boss.phase === 'command') return duel.timing.commandRecovery;
-    return duel.timing.guardianRecovery;
+    return getWardenFighterAttack(duel?.boss?.attackKind).recovery;
   }
 
   wardenDuelTelegraphSeconds(duel) {
-    if (duel.boss.phase === 'eclipse') return duel.timing.eclipseTelegraph;
-    if (duel.boss.phase === 'command') return duel.timing.commandTelegraph;
-    return duel.timing.guardianTelegraph;
+    return getWardenFighterAttack(duel?.boss?.attackKind).windup;
   }
 
   regroupWardenDuel(duel, hint = '') {
     const boss = duel?.boss;
     if (!boss) return false;
-    boss.action = 'regroup';
-    boss.actionClock = duel.timing.regroupSeconds;
+    const playerX = this.player.x + this.player.w / 2;
+    boss.action = 'backstep';
+    boss.actionClock = .42;
     boss.attackConsumed = true;
     boss.openingEarned = false;
     boss.recoveryHits = 0;
+    boss.comboTaken = 0;
+    boss.guarding = false;
+    boss.nextGuard = true;
     boss.invulnerable = true;
-    if (hint) this.setHint(hint, Math.min(2.2, duel.timing.regroupSeconds));
+    boss.velocityX = (boss.target.x >= playerX ? 1 : -1)
+      * getWardenFighterPhase(boss.phase).moveSpeed * 1.45;
+    if (hint) this.setHint(hint, 1.6);
+    return true;
+  }
+
+  moveWardenFighter(duel, velocityX, dt) {
+    const boss = duel?.boss;
+    if (!boss?.target || !Number.isFinite(dt) || dt <= 0) return false;
+    const margin = 1.15 * TILE;
+    const minX = duel.arena.minTx * TILE + margin;
+    const maxX = duel.arena.maxTx * TILE - margin;
+    boss.velocityX = velocityX;
+    boss.target.x = clamp(boss.target.x + velocityX * dt, minX, maxX);
+    return true;
+  }
+
+  beginWardenFighterAttack(duel) {
+    const boss = duel?.boss;
+    if (!boss) return false;
+    const playerX = this.player.x + this.player.w / 2;
+    const distance = Math.abs(playerX - boss.target.x);
+    boss.facing = playerX < boss.target.x ? -1 : 1;
+    boss.attackKind = chooseWardenFighterAttack(boss, distance);
+    boss.sequenceIndex += 1;
+    boss.action = 'windup';
+    boss.actionClock = getWardenFighterAttack(boss.attackKind).windup;
+    boss.attackConsumed = true;
+    boss.guarding = false;
+    boss.invulnerable = false;
+    const warning = {
+      'sun-blade': 'SUN-BLADE · guard, interrupt, or step outside its reach.',
+      'dust-sweep': 'DUST SWEEP · crouch-guard or jump over the blade.',
+      'crown-breaker': 'CROWN BREAKER · jump away or interrupt; a held guard will crack.',
+      'sand-wave': 'SAND WAVE · guard it, leap it, or close distance and interrupt.',
+      'eclipse-rush': 'ECLIPSE RUSH · guard the charge, then answer before it recovers.',
+    };
+    this.audio.play(boss.attackKind === 'sand-wave' ? 'wave' : 'enemy');
+    this.setHint(warning[boss.attackKind], boss.actionClock + .25);
+    this.pushHud(true);
     return true;
   }
 
@@ -2336,7 +2379,7 @@ export class GameEngine {
     this.camera.y = clamp(this.player.y - VIEW_H * .58, 0, WORLD_H - VIEW_H);
     this.projectiles = [];
     this.audio.play('gate');
-    this.setHint('THE CROWN COMMANDS · Aren refuses to kill. Read the amber attack, then answer the cyan opening.', 6.2);
+    this.setHint('THE SEVERED COURT · move to control distance. STRIKE chains three blows; DOWN guards; DOWN + STRIKE breaks guard; JUMP + STRIKE attacks from above.', 6.2);
     this.pushHud(true);
     return true;
   }
@@ -2348,123 +2391,170 @@ export class GameEngine {
     const boss = duel.boss;
     const player = duel.player;
     if (this.input.pressed.has('down')) player.parryClock = duel.timing.parryWindow;
-    player.guarding = Boolean(this.input.down && this.player.grounded);
+    player.guarding = Boolean(this.input.down && this.player.grounded
+      && this.player.attackTimer <= 0 && (player.guardBrokenClock || 0) <= 0);
     advanceWardenDuel(duel, dt);
+    if (!player.guarding && player.guardBrokenClock <= 0) {
+      player.guardMeter = Math.min(player.guardMax || 4, (player.guardMeter || 0) + dt * .72);
+    }
+    const phase = getWardenFighterPhase(boss.phase);
+    const attack = getWardenFighterAttack(boss.attackKind);
+    const playerX = this.player.x + this.player.w / 2;
+    const distance = Math.abs(playerX - boss.target.x);
+    const towardPlayer = playerX < boss.target.x ? -1 : 1;
+    boss.facing = towardPlayer;
+    if (distance > 8) this.player.facing = -towardPlayer;
+    boss.guardMeter = Math.min(boss.guardMax || 6, (boss.guardMeter || 0)
+      + (boss.action === 'neutral' ? dt * .34 : 0));
 
     if (boss.action === 'intro') {
+      boss.guarding = false;
+      boss.velocityX = 0;
       if (boss.actionClock <= 0) {
-        boss.action = 'idle';
-        boss.invulnerable = true;
+        boss.action = 'neutral';
+        boss.decisionClock = phase.decisionSeconds;
+        boss.invulnerable = false;
+        const roundText = boss.phase === 'guardian'
+          ? 'ROUND I · control distance, guard, and build a three-hit Strike chain.'
+          : boss.phase === 'command'
+            ? 'ROUND II · the Crown teaches the Warden to guard. Use DOWN + STRIKE to break it.'
+            : 'FINAL ROUND · the Eclipse is faster. Guard, jump, and punish its recovery.';
+        this.audio.play('gate');
+        this.setHint(roundText, 3.2);
+        this.pushHud(true);
       }
       return true;
     }
-    if (boss.action === 'regroup') {
-      if (boss.actionClock <= 0) boss.action = 'idle';
+    if (boss.action === 'backstep') {
+      this.moveWardenFighter(duel, boss.velocityX, dt);
+      if (boss.actionClock <= 0) {
+        boss.action = boss.nextGuard && boss.guardMeter > 0 ? 'guard' : 'neutral';
+        boss.actionClock = boss.action === 'guard' ? phase.guardSeconds : 0;
+        boss.guarding = boss.action === 'guard';
+        boss.nextGuard = false;
+        boss.decisionClock = phase.decisionSeconds * .7;
+        boss.invulnerable = false;
+        boss.velocityX = 0;
+      }
       return true;
     }
-    if (boss.action === 'recovery') {
+    if (boss.action === 'hitstun') {
+      this.moveWardenFighter(duel, boss.velocityX, dt);
+      boss.velocityX *= Math.pow(.025, dt);
+      if (boss.actionClock <= 0 || boss.hitstun <= 0) {
+        if (boss.comboTaken >= 3) this.regroupWardenDuel(duel, 'BREAKAWAY · reset your spacing and meet the next exchange.');
+        else {
+          boss.action = 'neutral';
+          boss.decisionClock = phase.decisionSeconds * .55;
+          boss.velocityX = 0;
+        }
+      }
+      return true;
+    }
+    if (boss.action === 'guard') {
+      boss.velocityX = 0;
+      boss.guarding = true;
       boss.invulnerable = false;
-      if (boss.actionClock <= 0 && boss.hitstun <= 0) {
-        this.regroupWardenDuel(duel, boss.armored
-          ? 'COMMAND ARMOUR HOLDS · wait for the sand wave, leap it, then use DOWN + STRIKE.'
-          : 'THE WARDEN RECOVERS · read the next amber tell.');
+      if (boss.actionClock <= 0) {
+        boss.action = 'neutral';
+        boss.guarding = false;
+        boss.decisionClock = phase.decisionSeconds * .5;
       }
       return true;
     }
-    if (boss.action === 'idle') {
-      const patterns = {
-        guardian: ['high', 'sweep', 'high'],
-        command: ['sand-wave', 'high', 'sweep'],
-        eclipse: ['sand-wave', 'high', 'sweep', 'high'],
-      };
-      const pattern = patterns[boss.phase] || patterns.guardian;
-      boss.attackKind = pattern[boss.sequenceIndex % pattern.length];
-      boss.sequenceIndex += 1;
-      boss.action = 'telegraph';
-      boss.actionClock = this.wardenDuelTelegraphSeconds(duel);
-      boss.attackConsumed = true;
-      boss.openingEarned = false;
-      boss.recoveryHits = 0;
-      boss.invulnerable = true;
-      this.audio.play(boss.attackKind === 'sand-wave' ? 'wave' : 'enemy');
-      const warning = boss.attackKind === 'high'
-        ? 'AMBER HIGH CUT · hold DOWN to guard; tap it late to parry.'
-        : boss.attackKind === 'sweep'
-          ? 'LOW SWEEP · JUMP over the marked ground edge.'
-          : 'SAND WAVE · JUMP before the vermilion current crosses the arena.';
-      this.setHint(warning, boss.actionClock);
-      this.pushHud(true);
+    if (boss.action === 'neutral' || boss.action === 'idle') {
+      boss.invulnerable = false;
+      boss.guarding = false;
+      boss.decisionClock = Math.max(0, (boss.decisionClock || 0) - dt);
+      const heroSwinging = this.player.attackTimer > .13 && distance <= 2.7 * TILE;
+      const willGuard = heroSwinging && boss.guardMeter > 0
+        && (boss.sequenceIndex + (boss.phase === 'guardian' ? 1 : 0)) % 3 === 0;
+      if (willGuard) {
+        boss.action = 'guard';
+        boss.actionClock = phase.guardSeconds;
+        boss.guarding = true;
+        boss.velocityX = 0;
+        this.setHint('WARDEN GUARD · finish your chain, jump across it, or use DOWN + STRIKE.', 1.4);
+        return true;
+      }
+      if (distance > phase.idealRange + .35 * TILE) {
+        this.moveWardenFighter(duel, towardPlayer * phase.moveSpeed, dt);
+      } else if (distance < 1.05 * TILE) {
+        this.moveWardenFighter(duel, -towardPlayer * phase.moveSpeed * .62, dt);
+      } else this.moveWardenFighter(duel, 0, dt);
+      if (boss.decisionClock <= 0 && distance <= 5.4 * TILE) this.beginWardenFighterAttack(duel);
       return true;
     }
-    if (boss.action === 'telegraph') {
+    if (boss.action === 'windup') {
+      boss.velocityX = 0;
       if (boss.actionClock <= 0) {
         boss.action = 'active';
-        boss.actionClock = duel.timing.activeSeconds;
+        boss.actionClock = attack.active;
         boss.attackConsumed = false;
       }
       return true;
     }
-    if (boss.action !== 'active') return true;
-
-    if (!boss.attackConsumed) {
-      const playerCenter = this.player.x + this.player.w / 2;
-      const distance = Math.abs(playerCenter - boss.target.x);
-      const inArena = playerCenter >= duel.arena.minTx * TILE && playerCenter <= duel.arena.maxTx * TILE;
-      const airborne = !this.player.grounded
-        && this.player.y + this.player.h < duel.arena.feetTy * TILE - 8;
-      const dangerous = boss.attackKind === 'sand-wave'
-        ? inArena
-        : distance <= (boss.attackKind === 'high' ? 4.25 : 6.5) * TILE;
-      if (!dangerous || (boss.attackKind !== 'high' && airborne)) {
-        boss.attackConsumed = true;
-        if (dangerous) {
-          const lessonReady = boss.phase !== 'guardian' || player.guardLessonComplete;
-          boss.openingEarned = lessonReady;
-          if (boss.attackKind === 'sand-wave' && boss.phase === 'command' && boss.armored) {
-            boss.armorBreakReady = true;
-            boss.openingEarned = true;
-            this.setHint('SAND WAVE CLEARED · land, then use DOWN + STRIKE in the cyan armour window.', 2.2);
-          } else if (lessonReady) this.setHint('CLEAN EVADE · the Warden opens cyan after the sweep.', 1.5);
-          else this.setHint('THE FIRST LESSON IS GUARD · meet the amber high cut with DOWN.', 2.1);
+    if (boss.action === 'active') {
+      this.moveWardenFighter(duel, boss.facing * attack.lunge, dt);
+      if (!boss.attackConsumed) {
+        const currentDistance = Math.abs((this.player.x + this.player.w / 2) - boss.target.x);
+        const airborne = !this.player.grounded
+          && this.player.y + this.player.h < duel.arena.feetTy * TILE - 8;
+        if (wardenAttackCanHit({ attackKind: boss.attackKind, distance: currentDistance, airborne })) {
+          boss.attackConsumed = true;
+          const perfectGuard = player.guarding && player.parryClock > 0;
+          if (player.guarding && (!attack.guardBreak || perfectGuard)) {
+            player.guardLessonComplete = true;
+            boss.action = 'recovery';
+            boss.actionClock = attack.recovery + (perfectGuard ? .22 : 0);
+            boss.velocityX = 0;
+            if (perfectGuard) {
+              this.audio.play('parry');
+              this.setHint('PERFECT GUARD · no guard lost. Take your turn and counter.', 1.35);
+            } else {
+              const guardCost = boss.attackKind === 'sand-wave' ? 2 : 1;
+              player.guardMeter = Math.max(0, (player.guardMeter || 0) - guardCost);
+              if (player.guardMeter <= 0) {
+                player.guarding = false;
+                player.guardBrokenClock = .72;
+                this.audio.play('heavy');
+                this.damagePlayer(1, boss.facing * 320);
+                this.setHint('AREN’S GUARD BREAKS · move, jump, or time a late parry instead of holding DOWN.', 1.8);
+              } else {
+                this.audio.play('block');
+                this.setHint(`BLOCK · Aren guard ${Math.ceil(player.guardMeter)}/${player.guardMax}. Counter or create space.`, 1.35);
+              }
+            }
+            this.pushHud(true);
+          } else if (this.mode === 'play' && this.player.hp > 0) {
+            if (attack.guardBreak && this.input.down) {
+              player.guardMeter = 0;
+              player.guardBrokenClock = .72;
+            }
+            const before = this.player.hp;
+            this.damagePlayer(attack.damage, boss.facing * 390);
+            if (this.player.hp < before) this.setHint(attack.guardBreak && player.guarding
+              ? 'GUARD BROKEN · jump away from the next Crown Breaker or interrupt it.'
+              : `${attack.label} CONNECTS · recover your spacing.`, 1.55);
+          }
         }
-      } else if (boss.attackKind === 'high' && player.guarding) {
-        boss.attackConsumed = true;
-        boss.openingEarned = true;
-        player.guardLessonComplete = true;
-        if (player.parryClock > 0) {
-          boss.action = 'recovery';
-          boss.actionClock = this.wardenDuelRecoverySeconds(duel) + .24;
-          boss.invulnerable = false;
-          boss.hitstun = .18;
-          this.audio.play('parry');
-          this.setHint('PERFECT GUARD · cyan counter window extended.', 1.8);
-        } else {
-          this.audio.play('block');
-          this.setHint('GUARD HELD · wait for cyan, then counter.', 1.4);
-        }
-      } else if (this.mode === 'play' && this.player.hp > 0) {
-        boss.attackConsumed = true;
-        boss.openingEarned = false;
-        const before = this.player.hp;
-        this.damagePlayer(1, -390);
-        if (this.player.hp < before) this.setHint('THE COMMAND CONNECTS · recover, then read the next amber tell.', 2.2);
       }
-    }
-    if (boss.action === 'active' && boss.actionClock <= 0) {
-      if (boss.openingEarned) {
+      if (boss.action === 'active' && boss.actionClock <= 0) {
         boss.action = 'recovery';
-        boss.actionClock = this.wardenDuelRecoverySeconds(duel);
-        boss.invulnerable = false;
-        boss.recoveryHits = 0;
-        this.setHint(boss.armored
-          ? boss.armorBreakReady
-            ? 'CYAN ARMOUR SEAM · DOWN + STRIKE breaks it now.'
-            : 'THE COMMAND ARMOUR HOLDS · evade the full sand wave before the heavy break.'
-          : 'CYAN OPENING · answer with a three-hit Strike chain, heavy break, or aerial attack.', 1.9);
-      } else {
-        this.regroupWardenDuel(duel, 'NO OPENING · defend cleanly before you counter.');
+        boss.actionClock = attack.recovery;
+        boss.velocityX = 0;
       }
-      this.pushHud(true);
+      return true;
+    }
+    if (boss.action === 'recovery') {
+      boss.guarding = false;
+      boss.invulnerable = false;
+      boss.velocityX = 0;
+      if (boss.actionClock <= 0) {
+        boss.action = 'neutral';
+        boss.decisionClock = phase.decisionSeconds * .72;
+      }
+      return true;
     }
     return true;
   }
@@ -2478,7 +2568,12 @@ export class GameEngine {
     const target = boss.target;
     const playerX = this.player.x + this.player.w / 2;
     const playerY = this.player.y + this.player.h / 2;
-    if (Math.hypot(playerX - target.x, playerY - target.y) > target.radius) return false;
+    const aerial = this.player.attackKind === 'aerial' || !this.player.grounded;
+    const heavy = !aerial && (this.player.attackKind === 'heavy' || this.input.down);
+    const reach = (heavy ? 2.65 : aerial ? 2.55 : 2.35) * TILE;
+    const facingTarget = Math.abs(target.x - playerX) < .4 * TILE
+      || Math.sign(target.x - playerX) === this.player.facing;
+    if (Math.hypot(playerX - target.x, playerY - target.y) > reach || !facingTarget) return false;
     this.player.attackHits.add('warden-duel');
 
     if (duel.phase === 'finale' && duel.finale.ready) {
@@ -2489,29 +2584,35 @@ export class GameEngine {
       return this.completeWarden();
     }
 
-    const aerial = this.player.attackKind === 'aerial' || !this.player.grounded;
-    const heavy = !aerial && (this.player.attackKind === 'heavy' || this.input.down);
-    if (boss.action !== 'recovery' || boss.invulnerable) {
+    if (boss.invulnerable || ['intro', 'backstep', 'staggered'].includes(boss.action)) {
       this.audio.play('block');
-      this.setHint('THE WARDEN BRACES · defend the attack and answer during cyan recovery.', 1.8);
+      this.setHint('BREAKAWAY · close the distance when the Warden lands.', 1.1);
       return false;
     }
-    if (boss.armored) {
-      if (!heavy || !boss.armorBreakReady) {
-        this.audio.play('block');
-        this.setHint(boss.armorBreakReady
-          ? 'COMMAND ARMOUR · use DOWN + STRIKE before cyan closes.'
-          : 'COMMAND ARMOUR · leap the full sand wave to expose its seam.', 2.1);
-        return false;
+
+    if (boss.guarding || boss.action === 'guard') {
+      if (!heavy) {
+        boss.guardMeter = Math.max(0, (boss.guardMeter || 0) - (aerial ? 2 : 1));
+        boss.action = boss.guardMeter <= 0 ? 'hitstun' : 'guard';
+        boss.actionClock = boss.guardMeter <= 0 ? .48 : getWardenFighterPhase(boss.phase).guardSeconds;
+        boss.hitstun = boss.guardMeter <= 0 ? .48 : 0;
+        boss.guarding = boss.guardMeter > 0;
+        boss.velocityX = this.player.facing * (boss.guardMeter > 0 ? 55 : 125);
+        this.audio.play(boss.guardMeter > 0 ? 'block' : 'parry');
+        this.setHint(boss.guardMeter > 0
+          ? `GUARD ${Math.ceil(boss.guardMeter)}/${boss.guardMax} · keep pressure or use DOWN + STRIKE.`
+          : 'GUARD SHATTERED · finish your three-hit chain.', 1.35);
+        this.pushHud(true);
+        return true;
       }
-      boss.armored = false;
-      boss.armorBreakReady = false;
-      boss.hitstun = .2;
-      duel.player.comboStep = 0;
-      duel.player.comboClock = 0;
-      this.burst(target.x, target.y, '#f1cf72', 26, 210);
+      boss.guarding = false;
+      boss.guardMeter = 0;
+      boss.action = 'hitstun';
+      boss.actionClock = .58;
+      boss.hitstun = .58;
+      boss.velocityX = this.player.facing * 175;
       this.audio.play('heavy');
-      this.regroupWardenDuel(duel, 'ARMOUR BROKEN · the next clean defence earns a true counter window.');
+      this.setHint('HEAVY GUARD BREAK · the Warden is open.', 1.35);
       this.pushHud(true);
       return true;
     }
@@ -2519,12 +2620,12 @@ export class GameEngine {
     let damage = 1;
     let attackLabel = 'STRIKE';
     if (aerial) {
-      damage = boss.phase === 'eclipse' ? 3 : 2;
+      damage = 2;
       attackLabel = 'AERIAL DAWNSTROKE';
       duel.player.comboStep = 0;
       duel.player.comboClock = 0;
     } else if (heavy) {
-      damage = 2;
+      damage = 3;
       attackLabel = 'HEAVY BREAK';
       duel.player.comboStep = 0;
       duel.player.comboClock = 0;
@@ -2539,9 +2640,7 @@ export class GameEngine {
     const phaseBefore = boss.phase;
     boss.invulnerable = false;
     if (!damageWardenDuelBoss(duel, damage)) return false;
-    boss.hitstun = .16;
-    boss.actionClock = Math.max(boss.actionClock, .3);
-    if (boss.phase === phaseBefore) boss.recoveryHits += aerial || heavy ? 3 : 1;
+    boss.hitFlash = .14;
     this.burst(target.x, target.y, duel.phase === 'finale' ? '#dffcff' : '#f3d47d', 18 + damage * 5, 190);
     this.audio.play('hit');
     if (duel.finale.ready) {
@@ -2549,15 +2648,21 @@ export class GameEngine {
       objective.warden.state = 'staggered';
       this.setHint('THE LAST BINDING BREAKS · step close and STRIKE the cyan heart with Dawnstroke.', 4.8);
     } else if (boss.phase !== phaseBefore) {
-      const shift = boss.phase === 'command'
-        ? 'SECOND BINDING · command armour rises. Leap the sand wave, then break the cyan seam.'
-        : 'FINAL BINDING · Eclipse attacks faster. Defend cleanly and answer from the air.';
-      this.setHint(shift, duel.timing.phaseShiftSeconds);
-    } else if (boss.recoveryHits >= 3 || aerial || heavy) {
-      this.regroupWardenDuel(duel, `${attackLabel} · ${boss.hp}/${boss.maxHp} command strength remains.`);
-      duel.player.comboStep = 0;
-      duel.player.comboClock = 0;
-    } else this.setHint(`${attackLabel} · ${boss.hp}/${boss.maxHp} command strength remains.`, 1.5);
+      const shift = 'FINAL ROUND · the Eclipse is faster. Guard, jump, and keep your spacing.';
+      const fighterShift = boss.phase === 'command'
+        ? 'ROUND II · CROWN COMMAND. The Warden now guards and breaks passive defence.'
+        : shift;
+      this.setHint(fighterShift, duel.timing.phaseShiftSeconds);
+    } else {
+      boss.comboTaken = (boss.comboTaken || 0) + (aerial || heavy ? 2 : 1);
+      boss.action = 'hitstun';
+      boss.actionClock = aerial || heavy ? .3 : .19;
+      boss.hitstun = boss.actionClock;
+      boss.guarding = false;
+      boss.velocityX = this.player.facing * (heavy ? 185 : aerial ? 145 : 95);
+      duel.player.lastAttackLabel = attackLabel;
+      this.setHint(`${attackLabel} · ${boss.hp}/${boss.maxHp} command strength.`, .95);
+    }
     this.pushHud(true);
     return true;
   }
@@ -3660,9 +3765,22 @@ export class GameEngine {
 
   updateCamera(dt) {
     const p = this.player;
+    const wardenDuel = this.level.objective?.type === 'warden-restoration'
+      && this.level.objective.phase === 'duel'
+      && this.level.objective.duel?.active
+      ? this.level.objective.duel
+      : null;
     const horizontalLead = this.level.gameplay?.cameraHorizontalLead ?? 105;
-    const targetX = clamp(p.x + p.w / 2 - VIEW_W / 2 + p.facing * horizontalLead, 0, WORLD_W - VIEW_W);
+    const duelMidpoint = wardenDuel
+      ? ((p.x + p.w / 2) + wardenDuel.boss.target.x) / 2
+      : null;
+    const targetX = clamp(
+      wardenDuel ? duelMidpoint - VIEW_W / 2 : p.x + p.w / 2 - VIEW_W / 2 + p.facing * horizontalLead,
+      0,
+      WORLD_W - VIEW_W,
+    );
     let targetY = p.y + p.h / 2 - VIEW_H * .58;
+    if (wardenDuel) targetY = wardenDuel.arena.feetTy * TILE - VIEW_H * .7;
     if (p.x > 80 * TILE) targetY -= 74;
     targetY = clamp(targetY, 0, WORLD_H - VIEW_H);
     const smoothing = 1 - Math.pow(.001, dt);
@@ -3758,6 +3876,13 @@ export class GameEngine {
       bossMaxHp: wardenDuel?.active ? wardenDuel.boss.maxHp : this.level.boss?.maxHp || null,
       bossLabel: wardenDuel?.active ? 'WARDEN OF DUST' : 'VEILED GUARDIAN',
       wardenFightActive: Boolean(wardenDuel?.active && !wardenDuel.complete),
+      bossPhase: wardenDuel?.active ? getWardenFighterPhase(wardenDuel.boss.phase).label : null,
+      bossAction: wardenDuel?.active ? wardenDuel.boss.action : null,
+      bossGuard: wardenDuel?.active ? Math.ceil(wardenDuel.boss.guardMeter || 0) : null,
+      bossGuardMax: wardenDuel?.active ? wardenDuel.boss.guardMax || 6 : null,
+      playerCombo: wardenDuel?.active ? wardenDuel.player.comboStep || 0 : 0,
+      playerGuard: wardenDuel?.active ? Math.ceil(wardenDuel.player.guardMeter || 0) : null,
+      playerGuardMax: wardenDuel?.active ? wardenDuel.player.guardMax || 4 : null,
     });
   }
 

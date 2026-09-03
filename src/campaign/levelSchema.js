@@ -1425,6 +1425,7 @@ function validateWarden(level, issues) {
   const thresholds = duel?.thresholds;
   const attempt = duel?.attempt;
   const totals = duel?.totals;
+  const fighter = duel?.fighter;
   if (!duel || duel.phase !== 'sealed' || duel.active !== false || duel.complete !== false
     || !arena || arena.minTx !== 46 || arena.maxTx !== 67 || arena.feetTy !== 20
     || !checkpoint || checkpoint.tx !== 48 || checkpoint.tx <= arena.minTx
@@ -1432,17 +1433,22 @@ function validateWarden(level, issues) {
     || ![-1, 1].includes(checkpoint.facing)
     || !seal || seal.leftTx !== arena.minTx - 1 || seal.topTy !== 12 || seal.bottomTy !== arena.feetTy - 1
     || !level.map.slice(seal.topTy, seal.bottomTy + 1).every((row) => row[seal.leftTx] === Tile.AIR)
-    || !duelBoss || duelBoss.maxHp !== 48 || duelBoss.hp !== duelBoss.maxHp
-    || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle' || duelBoss.attackKind !== 'high'
+    || !duelBoss || duelBoss.maxHp !== 60 || duelBoss.hp !== duelBoss.maxHp
+    || duelBoss.phase !== 'guardian' || duelBoss.action !== 'idle' || duelBoss.attackKind !== 'sun-blade'
     || duelBoss.actionClock !== 0 || duelBoss.sequenceIndex !== 0 || duelBoss.hitstun !== 0
     || duelBoss.invulnerable !== false || duelBoss.attackConsumed !== true
     || duelBoss.openingEarned !== false || duelBoss.recoveryHits !== 0
     || duelBoss.armored !== false || duelBoss.armorBreakReady !== false
+    || duelBoss.facing !== -1 || duelBoss.velocityX !== 0 || duelBoss.guarding !== false
+    || duelBoss.guardMeter !== 6 || duelBoss.guardMax !== 6 || duelBoss.comboTaken !== 0
+    || duelBoss.decisionClock !== 0 || duelBoss.hitFlash !== 0 || duelBoss.nextGuard !== false
     || !duelBoss.target || duelBoss.target.x !== 58.5 * TILE || duelBoss.target.y !== 20 * TILE - 72
-    || duelBoss.target.radius !== 3 * TILE
+    || duelBoss.target.spawnX !== 58.5 * TILE || duelBoss.target.radius !== 3 * TILE
     || !duelPlayer || duelPlayer.comboStep !== 0 || duelPlayer.comboClock !== 0
     || duelPlayer.guarding !== false || duelPlayer.parryClock !== 0
-    || duelPlayer.guardLessonComplete !== false
+    || duelPlayer.guardLessonComplete !== false || duelPlayer.guardMeter !== 4
+    || duelPlayer.guardMax !== 4 || duelPlayer.guardBrokenClock !== 0
+    || duelPlayer.lastAttackLabel !== ''
     || !timing || !Number.isFinite(timing.introSeconds) || timing.introSeconds < 1
     || !Number.isFinite(timing.phaseShiftSeconds) || timing.phaseShiftSeconds < 1.5
     || !Number.isFinite(timing.regroupSeconds) || timing.regroupSeconds < 3
@@ -1459,12 +1465,17 @@ function validateWarden(level, issues) {
     || timing.guardianRecovery < timing.commandRecovery
     || timing.commandRecovery < timing.eclipseRecovery || timing.eclipseRecovery < 1
     || !thresholds || !Number.isInteger(thresholds.commandHp) || !Number.isInteger(thresholds.eclipseHp)
+    || thresholds.commandHp !== 40 || thresholds.eclipseHp !== 20
     || thresholds.commandHp >= duelBoss.maxHp
     || thresholds.commandHp <= thresholds.eclipseHp || thresholds.eclipseHp <= 0
     || !attempt || attempt.count !== 0 || attempt.elapsed !== 0 || attempt.damageTaken !== 0
     || !totals || totals.elapsed !== 0 || totals.damageTaken !== 0
+    || !fighter || fighter.arenaName !== 'THE SEVERED COURT'
+    || fighter.style !== 'real-time-arcade-duel'
+    || typeof fighter.controls !== 'string' || !fighter.controls.includes('STRIKE chains three blows')
+    || typeof fighter.mercyRule !== 'string' || !fighter.mercyRule.includes('restores the Warden')
     || !duel.finale || duel.finale.ready !== false || duel.finale.struck !== false) {
-    addIssue(issues, 'objective.duel', 'invalid_warden_duel', 'must define one pristine three-phase fight, fair arena checkpoint, deterministic timing, and resettable attempt statistics');
+    addIssue(issues, 'objective.duel', 'invalid_warden_duel', 'must define one pristine three-round real-time fight, fair arena checkpoint, deterministic controls, and resettable attempt statistics');
   }
   if (!objective.crownPath || objective.crownPath.id !== 'outer-veil-crown-path'
     || objective.crownPath.restored !== false) {

@@ -4,7 +4,7 @@ function resetBoss(duel) {
   duel.boss.hp = duel.boss.maxHp;
   duel.boss.phase = 'guardian';
   duel.boss.action = 'idle';
-  duel.boss.attackKind = 'high';
+  duel.boss.attackKind = 'sun-blade';
   duel.boss.actionClock = 0;
   duel.boss.sequenceIndex = 0;
   duel.boss.hitstun = 0;
@@ -14,6 +14,17 @@ function resetBoss(duel) {
   duel.boss.recoveryHits = 0;
   duel.boss.armored = false;
   duel.boss.armorBreakReady = false;
+  duel.boss.facing = -1;
+  duel.boss.velocityX = 0;
+  duel.boss.guarding = false;
+  duel.boss.guardMeter = duel.boss.guardMax || 6;
+  duel.boss.comboTaken = 0;
+  duel.boss.decisionClock = 0;
+  duel.boss.hitFlash = 0;
+  duel.boss.nextGuard = false;
+  if (duel.boss.target && Number.isFinite(duel.boss.target.spawnX)) {
+    duel.boss.target.x = duel.boss.target.spawnX;
+  }
 }
 
 function resetPlayer(duel) {
@@ -22,6 +33,9 @@ function resetPlayer(duel) {
   duel.player.guarding = false;
   duel.player.parryClock = 0;
   duel.player.guardLessonComplete = false;
+  duel.player.guardMeter = duel.player.guardMax || 4;
+  duel.player.guardBrokenClock = 0;
+  duel.player.lastAttackLabel = '';
 }
 
 function resetAttempt(duel) {
@@ -88,8 +102,14 @@ export function updateWardenDuelPhase(duel) {
     duel.boss.attackConsumed = true;
     duel.boss.openingEarned = false;
     duel.boss.recoveryHits = 0;
-    duel.boss.armored = phase === 'command';
+    duel.boss.armored = false;
     duel.boss.armorBreakReady = false;
+    duel.boss.guarding = false;
+    duel.boss.guardMeter = duel.boss.guardMax || 6;
+    duel.boss.comboTaken = 0;
+    duel.boss.decisionClock = 0;
+    duel.boss.velocityX = 0;
+    duel.boss.nextGuard = false;
   }
   return phase;
 }
@@ -101,8 +121,10 @@ export function advanceWardenDuel(duel, dt) {
   duel.totals.elapsed += dt;
   duel.player.comboClock = Math.max(0, duel.player.comboClock - dt);
   duel.player.parryClock = Math.max(0, duel.player.parryClock - dt);
+  duel.player.guardBrokenClock = Math.max(0, (duel.player.guardBrokenClock || 0) - dt);
   duel.boss.actionClock = Math.max(0, duel.boss.actionClock - dt);
   duel.boss.hitstun = Math.max(0, duel.boss.hitstun - dt);
+  duel.boss.hitFlash = Math.max(0, (duel.boss.hitFlash || 0) - dt);
   if (duel.player.comboClock === 0) duel.player.comboStep = 0;
   updateWardenDuelPhase(duel);
   return true;

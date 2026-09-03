@@ -935,3 +935,35 @@ Scope: fifth bounded overnight milestone; local duel balance, input resilience, 
 ## Next safest milestone
 
 Have the player run one uninterrupted local Level 10 fight on keyboard, then repeat on a physical touch device with sound enabled. Record only reproduced pacing, control, readability, or mix issues; tune those narrowly; rerun the complete suite/build/responsive checks; and ask for explicit publication approval. Do not push or deploy before that approval.
+
+---
+
+# Level 10 finale — real-time arcade duel redesign
+
+Updated: 2026-09-03 Asia/Dubai
+Scope: replace only the post-restoration Warden duel. Levels 1-9 and every Level 10 puzzle, story beat, geometry, graphic, and restoration event before the duel remain unchanged. The public V3 remains untouched.
+
+## Completed milestone
+
+- Rebuilt the Warden encounter as an original side-view, real-time fighting finale with free spacing, automatic facing, attack tells, active/recovery windows, hit reactions, backsteps, guard pressure, and three continuous rounds: Guardian, Crown Command, and Eclipse.
+- Added a readable three-hit Strike chain, Down guard, Down plus Strike guard break, and Jump plus Strike aerial attack using the existing keyboard and touch input system. Forgiving input buffering and anti-stunlock regrouping keep the exchange deliberate instead of allowing permanent hit lock.
+- Added independent 4-point Aren guard and 6-point Warden guard meters. Blocking drains guard, sand waves apply heavier pressure, a late block preserves guard as a parry, and Crown Breaker punishes passive guarding. A heavy attack breaks Warden guard and creates a fair punish opening.
+- Raised the Warden to 60 health with visible phase transitions at 40 and 20. The Warden advances, retreats, crosses sides safely, and automatically faces Aren; attack selection changes by range and phase.
+- Preserved the fight-only checkpoint and non-lethal Dawnstroke ending. A fatal duel restarts at the sealed arena with full health while every solved Level 10 vow remains restored.
+- Replaced the stationary duel target with an original animated sentinel presentation and new fighter HUD while preserving the existing cinematic background art. During the duel only, the camera frames both fighters around their midpoint.
+
+## Validation evidence
+
+- Complete automated suite: **272 tests across 29 files passed**. New coverage includes fighter timing, range, damage, guarding, parries, guard breaks, phase transitions, anti-stunlock behavior, camera framing, reset behavior, and rendering.
+- Production build: **59 modules transformed**.
+- `git diff --check`: passed with only expected Windows line-ending notices.
+- A real-input browser stress run completed all 60 health through all three rounds and the Dawnstroke in **39.77 seconds**, one attempt, with zero damage. This is an aggressive near-perfect lower-bound run, not a claim about natural-player difficulty.
+- A separate no-input run allowed the Warden to approach and defeat Aren naturally. The accessible death dialog appeared, and `Restart Warden duel` restored Aren to 4/4 and the Warden to 60/60 on attempt 2 without resetting the solved Level 10 prerequisites.
+- Responsive browser checks covered 1440x900 desktop, 844x390 landscape phone, and 390x844 portrait phone. Both fighters, the full fighter HUD, guidance, and all seven touch controls remained visible without page overflow. Portrait HUD spacing was corrected after inspection.
+- The existing original locally synthesized audio system remains connected to attack tells, swings, impacts, guards, parries, waves, damage, defeat, and victory. No downloaded or third-party assets were added.
+
+## Backup, publication, and remaining acceptance
+
+- A local pre-change rollback branch, `backup/v3-before-arcade-duel-20260903`, points to V3 commit `0232d14ca6065f98cd49bb8f49c05506e31f00fb`.
+- The public V3 at GitHub Pages was not pushed, deployed, or altered.
+- One natural keyboard playthrough and one physical-phone playthrough remain the acceptance gate for difficulty, touch comfort, and audio feel. Tune only reproduced issues, rerun validation, and publish only after explicit approval.

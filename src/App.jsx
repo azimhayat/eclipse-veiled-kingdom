@@ -198,7 +198,7 @@ export default function App() {
   const [presentationCard, setPresentationCard] = useState(null);
   const presentationTimerRef = useRef(null);
   const presentationGenerationRef = useRef(0);
-  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN', wardenFightActive: false });
+  const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN', wardenFightActive: false, bossPhase: null, bossAction: null, bossGuard: null, bossGuardMax: null, playerCombo: 0, playerGuard: null, playerGuardMax: null });
 
   useEffect(() => {
     if (screen === 'win') chronicleHeadingRef.current?.focus({ preventScroll: true });
@@ -701,8 +701,15 @@ export default function App() {
           )}
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">
-              <span>{hud.bossLabel}</span>
+              <span className="boss-hud-title">{hud.bossLabel}<small>{hud.bossPhase}</small></span>
               <div role="progressbar" aria-label="Warden command strength" aria-valuemin="0" aria-valuemax={hud.bossMaxHp} aria-valuenow={hud.bossHp}><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
+              {hud.wardenFightActive && (
+                <div className="fighter-readout" aria-live="polite">
+                  <span>{`AREN GUARD ${hud.playerGuard}/${hud.playerGuardMax}`}</span>
+                  <span>{hud.bossAction === 'guard' ? `WARDEN GUARD ${hud.bossGuard}/${hud.bossGuardMax}` : hud.bossAction?.replace('-', ' ')}</span>
+                  <span>{hud.playerCombo > 0 ? `CHAIN ${hud.playerCombo}/3` : 'FREE MOVEMENT'}</span>
+                </div>
+              )}
             </div>
           )}
           {screen === 'play' && (

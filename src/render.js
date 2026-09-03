@@ -12,6 +12,203 @@ function seeded(n) {
   return x - Math.floor(x);
 }
 
+function drawWardenFighter(ctx, duel, time) {
+  const boss = duel.boss;
+  const target = boss.target;
+  const facing = boss.facing || -1;
+  const phaseColor = boss.phase === 'eclipse' ? '#da6d75' : boss.phase === 'command' ? '#efbd5d' : '#7fe3ed';
+  const active = boss.action === 'active';
+  const windup = boss.action === 'windup';
+  const hit = boss.action === 'hitstun' || boss.hitFlash > 0;
+  const guarding = boss.action === 'guard' || boss.guarding;
+  const finale = duel.phase === 'finale';
+  const feetY = duel.arena.feetTy * TILE;
+  const lean = active ? 12 : windup ? -7 : hit ? -10 : 0;
+  const bob = ['neutral', 'idle'].includes(boss.action) ? Math.sin(time * 5.2) * 2.5 : 0;
+
+  ctx.save();
+  ctx.translate(target.x, feetY + bob);
+  ctx.scale(facing, 1);
+
+  ctx.save();
+  ctx.scale(1 / facing, 1);
+  const shadow = ctx.createRadialGradient(0, -2, 4, 0, -2, 72);
+  shadow.addColorStop(0, 'rgba(0,0,0,.58)');
+  shadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shadow;
+  ctx.beginPath();
+  ctx.ellipse(0, -3, 78, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  if (boss.attackKind === 'eclipse-rush' && (windup || active)) {
+    ctx.save();
+    ctx.globalAlpha = active ? .34 : .16;
+    ctx.fillStyle = '#d85c69';
+    for (let trail = 1; trail <= 3; trail += 1) {
+      ctx.beginPath();
+      ctx.ellipse(-trail * 34, -66, 31, 58, -.18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.translate(lean, 0);
+  ctx.globalAlpha = finale ? .76 : 1;
+  ctx.shadowColor = finale ? '#c7f8fb' : phaseColor;
+  ctx.shadowBlur = hit ? 38 : boss.phase === 'eclipse' ? 25 : 17;
+
+  // Split cloak and grounded legs give the Warden a readable fighting stance.
+  ctx.fillStyle = hit ? '#dffcff' : '#151722';
+  ctx.strokeStyle = phaseColor;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(-31, -88);
+  ctx.quadraticCurveTo(-53, -48, -48, -4);
+  ctx.lineTo(-12, -4);
+  ctx.lineTo(-4, -57);
+  ctx.lineTo(10, -4);
+  ctx.lineTo(48, -4);
+  ctx.quadraticCurveTo(49, -47, 28, -88);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = boss.phase === 'eclipse' ? '#34202a' : boss.phase === 'command' ? '#32291f' : '#1a2830';
+  ctx.beginPath();
+  ctx.moveTo(-29, -91);
+  ctx.lineTo(-20, -128);
+  ctx.quadraticCurveTo(0, -143, 23, -126);
+  ctx.lineTo(31, -88);
+  ctx.quadraticCurveTo(0, -73, -29, -91);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Hood, single remembered eye, and broken command circlet.
+  ctx.fillStyle = '#090b11';
+  ctx.beginPath();
+  ctx.moveTo(-23, -132);
+  ctx.quadraticCurveTo(0, -160, 26, -132);
+  ctx.lineTo(17, -105);
+  ctx.lineTo(-17, -105);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = finale ? '#efffff' : phaseColor;
+  ctx.shadowBlur = 24;
+  ctx.beginPath();
+  ctx.arc(8, -125, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-27, -151);
+  ctx.lineTo(-8, -158);
+  ctx.lineTo(4, -149);
+  ctx.lineTo(25, -157);
+  ctx.stroke();
+
+  // Guard arm or forward striking arm.
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = hit ? '#dffcff' : '#202633';
+  ctx.beginPath();
+  if (guarding) {
+    ctx.moveTo(-4, -105);
+    ctx.lineTo(27, -82);
+    ctx.lineTo(13, -54);
+  } else if (active) {
+    ctx.moveTo(5, -105);
+    ctx.lineTo(45, -84);
+    ctx.lineTo(70, -71);
+  } else {
+    ctx.moveTo(5, -105);
+    ctx.lineTo(34, -86);
+    ctx.lineTo(28, -58);
+  }
+  ctx.stroke();
+
+  const attackAngle = boss.attackKind === 'dust-sweep' || boss.attackKind === 'sand-wave'
+    ? active ? .08 : -.42
+    : boss.attackKind === 'crown-breaker'
+      ? active ? 1.03 : -.95
+      : active ? -.1 : -1.02;
+  ctx.save();
+  ctx.translate(active ? 68 : 29, active ? -71 : -59);
+  ctx.rotate(attackAngle);
+  ctx.strokeStyle = phaseColor;
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(72, 0);
+  ctx.stroke();
+  ctx.strokeStyle = '#fff1b7';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(8, -2);
+  ctx.lineTo(70, -2);
+  ctx.stroke();
+  ctx.restore();
+
+  if (guarding) {
+    const guardRatio = Math.max(0, Math.min(1, (boss.guardMeter || 0) / (boss.guardMax || 6)));
+    ctx.save();
+    ctx.strokeStyle = guardRatio > .34 ? '#f3c969' : '#ef7764';
+    ctx.lineWidth = 7;
+    ctx.setLineDash([18, 7]);
+    ctx.beginPath();
+    ctx.arc(16, -78, 58, -1.22, 1.18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  if (windup) {
+    ctx.save();
+    ctx.globalAlpha = .72 + Math.sin(time * 24) * .2;
+    ctx.strokeStyle = boss.attackKind === 'crown-breaker' ? '#ef6e5e' : '#f1c461';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(12, -76, 70, -1.4, 1.35);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  if (['dust-sweep', 'sand-wave'].includes(boss.attackKind) && (windup || active)) {
+    const attackRange = boss.attackKind === 'sand-wave' ? 5.1 * TILE : 2.75 * TILE;
+    const startX = boss.attackKind === 'sand-wave' ? target.x - attackRange : target.x - attackRange * .55;
+    const width = boss.attackKind === 'sand-wave' ? attackRange * 2 : attackRange * 1.1;
+    ctx.save();
+    ctx.strokeStyle = active ? '#ef715b' : '#dfb653';
+    ctx.fillStyle = active ? 'rgba(231,92,68,.2)' : 'rgba(224,174,70,.08)';
+    ctx.shadowColor = active ? '#ee684f' : '#e4af4f';
+    ctx.shadowBlur = active ? 22 : 12;
+    ctx.lineWidth = active ? 9 : 4;
+    ctx.beginPath();
+    ctx.moveTo(startX, feetY - 8);
+    for (let x = startX; x <= startX + width; x += 28) {
+      ctx.lineTo(x, feetY - 11 - Math.sin(x * .035 + time * 9) * (active ? 14 : 7));
+    }
+    ctx.lineTo(startX + width, feetY + 8);
+    ctx.lineTo(startX, feetY + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  for (let phaseIndex = 0; phaseIndex < 3; phaseIndex += 1) {
+    const threshold = phaseIndex === 0 ? duel.thresholds.commandHp : phaseIndex === 1 ? duel.thresholds.eclipseHp : 0;
+    ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.45)';
+    ctx.beginPath();
+    ctx.arc(target.x - 34 + phaseIndex * 34, target.y - 103, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawProcessionStatue(ctx, item, { observed, restored, time }) {
   const x = item.tx * TILE;
   const y = item.baseTy * TILE;
@@ -1472,80 +1669,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
 
     const duel = objective.duel;
     if (duel?.active) {
-      const boss = duel.boss;
-      const target = boss.target;
-      const active = boss.action === 'active';
-      const recovery = boss.action === 'recovery';
-      const finale = duel.phase === 'finale';
-      const combatColor = finale ? '#e5fcff' : recovery ? '#78e7f1' : active ? '#ed705b' : '#e4b451';
-      ctx.save();
-      ctx.translate(target.x, target.y);
-      ctx.rotate(Math.PI / 4 + Math.sin(time * 2.4) * .06);
-      ctx.strokeStyle = combatColor;
-      ctx.fillStyle = finale
-        ? 'rgba(214,250,255,.34)'
-        : recovery ? 'rgba(104,226,238,.27)' : active ? 'rgba(222,81,62,.24)' : 'rgba(212,163,67,.2)';
-      ctx.shadowColor = combatColor;
-      ctx.shadowBlur = recovery || finale ? 34 : 22;
-      ctx.lineWidth = recovery || finale ? 7 : 5;
-      ctx.fillRect(-30, -30, 60, 60);
-      ctx.strokeRect(-30, -30, 60, 60);
-      if (boss.armored) {
-        ctx.rotate(-Math.PI / 4 - Math.sin(time * 2.4) * .06);
-        ctx.setLineDash(boss.armorBreakReady ? [5, 13] : [18, 7]);
-        ctx.strokeStyle = boss.armorBreakReady ? '#bff8fa' : '#ffd67b';
-        ctx.lineWidth = boss.armorBreakReady ? 6 : 9;
-        ctx.shadowColor = boss.armorBreakReady ? '#78e7f1' : '#e6aa49';
-        ctx.shadowBlur = 26;
-        ctx.beginPath();
-        ctx.arc(0, 0, 50, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      ctx.restore();
-
-      ctx.save();
-      for (let phase = 0; phase < 3; phase += 1) {
-        const threshold = phase === 0 ? duel.thresholds.commandHp : phase === 1 ? duel.thresholds.eclipseHp : 0;
-        ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.38)';
-        ctx.shadowColor = boss.hp <= threshold ? '#73e5ef' : 'transparent';
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.arc(target.x - 40 + phase * 40, target.y - 72, 7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-
-      if (['sweep', 'sand-wave'].includes(boss.attackKind)
-        && ['telegraph', 'active'].includes(boss.action)) {
-        const targetTx = boss.target.x / TILE;
-        const waveMinTx = boss.attackKind === 'sweep'
-          ? Math.max(duel.arena.minTx, targetTx - 6.5)
-          : duel.arena.minTx;
-        const waveMaxTx = boss.attackKind === 'sweep'
-          ? Math.min(duel.arena.maxTx, targetTx + 6.5)
-          : duel.arena.maxTx;
-        const arenaX = waveMinTx * TILE;
-        const arenaW = (waveMaxTx - waveMinTx) * TILE;
-        const edgeY = duel.arena.feetTy * TILE - 9;
-        ctx.save();
-        ctx.strokeStyle = active ? '#ef715b' : '#e3b24f';
-        ctx.fillStyle = active ? 'rgba(231,92,68,.2)' : 'rgba(224,174,70,.1)';
-        ctx.shadowColor = active ? '#ee684f' : '#e4af4f';
-        ctx.shadowBlur = active ? 26 : 16;
-        ctx.lineWidth = active ? 10 : 6;
-        ctx.beginPath();
-        ctx.moveTo(arenaX, edgeY);
-        for (let tx = Math.ceil(waveMinTx); tx <= Math.floor(waveMaxTx); tx += 1) {
-          ctx.lineTo(tx * TILE, edgeY - Math.sin(tx * .9 + time * 7) * (active ? 17 : 9));
-        }
-        ctx.lineTo(arenaX + arenaW, edgeY + 18);
-        ctx.lineTo(arenaX, edgeY + 18);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
+      drawWardenFighter(ctx, duel, time);
     }
 
     if (restored) {

@@ -8,7 +8,7 @@ import { assertValidAuthoredLevel, validateAuthoredLevel } from '../../campaign/
 import { GameEngine } from '../../engine.js';
 import { createLevels } from '../../levels.js';
 import { cloneLevel } from '../cloneLevel.js';
-import { TILE, Tile, VIEW_H, WORLD_H } from '../constants.js';
+import { TILE, Tile, VIEW_H, VIEW_W, WORLD_H } from '../constants.js';
 import { completeWardenDuel, damageWardenDuelBoss } from '../../warden-duel-state.js';
 import { createWardenOfDust } from './wardenOfDust.js';
 
@@ -86,6 +86,8 @@ function engineHarness(level) {
     beginWardenDuel: GameEngine.prototype.beginWardenDuel,
     updateWardenDuel: GameEngine.prototype.updateWardenDuel,
     regroupWardenDuel: GameEngine.prototype.regroupWardenDuel,
+    moveWardenFighter: GameEngine.prototype.moveWardenFighter,
+    beginWardenFighterAttack: GameEngine.prototype.beginWardenFighterAttack,
     wardenDuelRecoverySeconds: GameEngine.prototype.wardenDuelRecoverySeconds,
     wardenDuelTelegraphSeconds: GameEngine.prototype.wardenDuelTelegraphSeconds,
     setWardenDuelSeal: GameEngine.prototype.setWardenDuelSeal,
@@ -99,6 +101,7 @@ function engineHarness(level) {
     checkSanctumReturnFields: vi.fn(() => false),
     armCrumble: vi.fn(),
     armBellTowerCollapseLedge: vi.fn(),
+    updateCamera: GameEngine.prototype.updateCamera,
   };
 }
 
@@ -149,12 +152,12 @@ describe('Outer Veil Level 10 production preview', () => {
         checkpoint: { tx: 48, feetTy: 20, facing: 1 },
       },
       boss: {
-        maxHp: 48, hp: 48, phase: 'guardian', action: 'idle',
+        maxHp: 60, hp: 60, phase: 'guardian', action: 'idle',
         openingEarned: false, recoveryHits: 0, armored: false, armorBreakReady: false,
       },
       player: {
         comboStep: 0, comboClock: 0, guarding: false, parryClock: 0,
-        guardLessonComplete: false,
+        guardLessonComplete: false, guardMeter: 4, guardMax: 4, guardBrokenClock: 0,
       },
       attempt: { count: 0, elapsed: 0, damageTaken: 0 },
       totals: { elapsed: 0, damageTaken: 0 },
@@ -264,7 +267,7 @@ describe('Outer Veil Level 10 production preview', () => {
       crownPath: { restored: true },
       duel: {
         phase: 'guardian', active: true, complete: false,
-        boss: { hp: 48, action: 'intro', invulnerable: true },
+        boss: { hp: 60, action: 'intro', invulnerable: true },
         attempt: { count: 1, elapsed: 0, damageTaken: 0 },
       },
     });
@@ -313,7 +316,7 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(objective.breath.strikeCount).toBe(1);
   });
 
-  it('requires the guard lesson and rewards one three-hit chain only in the earned cyan recovery', () => {
+  it('lets Aren fight freely at close range and forces a breakaway after a complete three-hit chain', () => {
     const { engine, duel } = beginDuelHarness();
     const boss = duel.boss;
     const target = boss.target;
@@ -322,71 +325,69 @@ describe('Outer Veil Level 10 production preview', () => {
       y: target.y - 22,
       grounded: true,
       invuln: 0,
+      attackKind: 'normal',
     });
-
-    boss.action = 'active';
-    boss.actionClock = .2;
-    boss.attackKind = 'high';
-    boss.attackConsumed = false;
-    engine.input.down = true;
-    engine.input.pressed.add('down');
-    expect(engine.updateWardenDuel(.05)).toBe(true);
-    expect(engine.player.hp).toBe(4);
-    expect(boss).toMatchObject({ action: 'recovery', attackConsumed: true, invulnerable: false });
-    expect(duel.player.guardLessonComplete).toBe(true);
-    expect(boss.actionClock).toBeGreaterThan(duel.timing.guardianRecovery);
-
-    boss.action = 'telegraph';
-    boss.actionClock = .5;
-    boss.invulnerable = true;
-    engine.player.attackHits.clear();
-    expect(engine.resolveWardenDuelStrike()).toBe(false);
-    expect(boss).toMatchObject({ action: 'telegraph', invulnerable: true });
-    expect(boss.hp).toBe(48);
-
-    boss.action = 'recovery';
-    boss.actionClock = duel.timing.guardianRecovery;
+    boss.action = 'neutral';
     boss.invulnerable = false;
-    engine.input.down = false;
-    for (const expectedHp of [47, 46, 44]) {
+    for (const expectedHp of [59, 58, 56]) {
       engine.player.attackHits.clear();
       expect(engine.resolveWardenDuelStrike()).toBe(true);
       expect(boss.hp).toBe(expectedHp);
     }
-    expect(boss).toMatchObject({ action: 'regroup', invulnerable: true, recoveryHits: 0 });
+    expect(boss).toMatchObject({ action: 'hitstun', invulnerable: false, comboTaken: 3 });
     expect(duel.player).toMatchObject({ comboStep: 0, comboClock: 0 });
+    engine.updateWardenDuel(.2);
+    expect(boss).toMatchObject({ action: 'backstep', invulnerable: true, comboTaken: 0 });
   });
 
-  it('makes the Command armour require a clean sand-wave evade and one heavy break without damage or stun-lock', () => {
+  it('gives the Warden a real guard that normal pressure chips and DOWN + STRIKE breaks', () => {
     const { engine, duel } = beginDuelHarness();
     const boss = duel.boss;
     const target = boss.target;
-    boss.invulnerable = false;
-    expect(damageWardenDuelBoss(duel, 16)).toBe(true);
-    expect(boss).toMatchObject({ hp: 32, phase: 'command', action: 'intro', armored: true });
     Object.assign(engine.player, {
       x: target.x - 14,
-      y: duel.arena.feetTy * TILE - engine.player.h - 24,
-      grounded: false,
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      grounded: true,
       invuln: 0,
-      attackKind: 'heavy',
+      attackKind: 'normal',
     });
-    boss.action = 'active';
-    boss.actionClock = .01;
-    boss.attackKind = 'sand-wave';
-    boss.attackConsumed = false;
-    expect(engine.updateWardenDuel(.02)).toBe(true);
-    expect(boss).toMatchObject({ action: 'recovery', armored: true, armorBreakReady: true, invulnerable: false });
-
-    engine.player.grounded = true;
-    engine.input.down = true;
+    Object.assign(boss, { action: 'guard', guarding: true, guardMeter: 6, invulnerable: false });
     engine.player.attackHits.clear();
     expect(engine.resolveWardenDuelStrike()).toBe(true);
-    expect(boss).toMatchObject({ hp: 32, action: 'regroup', armored: false, armorBreakReady: false, invulnerable: true });
+    expect(boss).toMatchObject({ hp: 60, action: 'guard', guardMeter: 5, guarding: true });
 
     engine.player.attackHits.clear();
-    expect(engine.resolveWardenDuelStrike()).toBe(false);
-    expect(boss.hp).toBe(32);
+    engine.player.attackKind = 'heavy';
+    engine.input.down = true;
+    expect(engine.resolveWardenDuelStrike()).toBe(true);
+    expect(boss).toMatchObject({ hp: 60, action: 'hitstun', guardMeter: 0, guarding: false });
+    expect(engine.audio.play).toHaveBeenCalledWith('heavy');
+  });
+
+  it('auto-faces both fighters after they cross sides near an arena edge', () => {
+    const { engine, duel } = beginDuelHarness();
+    Object.assign(duel.boss, { action: 'neutral', decisionClock: 1, invulnerable: false });
+    duel.boss.target.x = 60 * TILE;
+    engine.player.x = 61 * TILE;
+    engine.updateWardenDuel(1 / 60);
+    expect(duel.boss.facing).toBe(1);
+    expect(engine.player.facing).toBe(-1);
+
+    engine.player.x = 58 * TILE;
+    engine.updateWardenDuel(1 / 60);
+    expect(duel.boss.facing).toBe(-1);
+    expect(engine.player.facing).toBe(1);
+  });
+
+  it('frames the midpoint of both fighters instead of cropping the Warden with the platforming camera', () => {
+    const { engine, duel } = beginDuelHarness();
+    engine.player.x = duel.arena.minTx * TILE + 20;
+    duel.boss.target.x = duel.arena.maxTx * TILE - 20;
+    engine.camera = { x: 0, y: 0 };
+    engine.updateCamera(2);
+    const expectedMidpoint = ((engine.player.x + engine.player.w / 2) + duel.boss.target.x) / 2;
+    expect(engine.camera.x).toBeCloseTo(expectedMidpoint - VIEW_W / 2, 2);
+    expect(engine.camera.y).toBeCloseTo(duel.arena.feetTy * TILE - VIEW_H * .7, 2);
   });
 
   it('buffers an early heavy press and preserves its intent after Down is released', () => {
@@ -407,7 +408,7 @@ describe('Outer Veil Level 10 production preview', () => {
     engine.updatePlayer(1 / 60);
     expect(engine.player).toMatchObject({ attackBufferKind: 'heavy' });
     expect(engine.player.attackBuffer).toBeGreaterThan(0);
-    expect(boss.hp).toBe(48);
+    expect(boss.hp).toBe(60);
 
     engine.input.pressed.clear();
     engine.setInput('attack', false);
@@ -419,10 +420,10 @@ describe('Outer Veil Level 10 production preview', () => {
       engine.input.released.clear();
     }
     expect(engine.player.attackKind).toBe('heavy');
-    expect(boss).toMatchObject({ hp: 46, action: 'regroup', invulnerable: true });
+    expect(boss).toMatchObject({ hp: 57, action: 'hitstun', invulnerable: false });
   });
 
-  it.each(['high', 'sweep', 'sand-wave'])('lets one %s active window damage the hero only once', (attackKind) => {
+  it.each(['sun-blade', 'dust-sweep', 'sand-wave', 'eclipse-rush'])('lets one %s active window damage the hero only once', (attackKind) => {
     const { engine, duel } = beginDuelHarness();
     const boss = duel.boss;
     Object.assign(engine.player, {
@@ -435,6 +436,7 @@ describe('Outer Veil Level 10 production preview', () => {
     boss.actionClock = .2;
     boss.attackKind = attackKind;
     boss.attackConsumed = false;
+    boss.invulnerable = false;
     engine.input.down = false;
     engine.updateWardenDuel(.01);
     expect(engine.player.hp).toBe(3);
@@ -442,10 +444,31 @@ describe('Outer Veil Level 10 production preview', () => {
     engine.player.invuln = 0;
     engine.updateWardenDuel(.25);
     expect(engine.player.hp).toBe(3);
-    expect(boss).toMatchObject({ action: 'regroup', invulnerable: true, openingEarned: false });
+    expect(boss).toMatchObject({ action: 'recovery', invulnerable: false });
   });
 
-  it('keeps DOWN as guard on the one-way arena and fits three separate touch-like strikes inside every recovery', () => {
+  it('breaks passive defence when a depleted guard absorbs sand pressure', () => {
+    const { engine, duel } = beginDuelHarness();
+    const boss = duel.boss;
+    Object.assign(engine.player, {
+      x: boss.target.x - 14,
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      grounded: true,
+      invuln: 0,
+    });
+    Object.assign(duel.player, { guardMeter: 1, guardBrokenClock: 0 });
+    Object.assign(boss, {
+      action: 'active', actionClock: .2, attackKind: 'sand-wave',
+      attackConsumed: false, invulnerable: false,
+    });
+    engine.input.down = true;
+    expect(engine.updateWardenDuel(.01)).toBe(true);
+    expect(engine.player.hp).toBe(3);
+    expect(duel.player).toMatchObject({ guarding: false, guardMeter: 0, guardBrokenClock: .72 });
+    expect(boss.action).toBe('recovery');
+  });
+
+  it('keeps DOWN as guard on the one-way arena and allows jumps to clear low attacks', () => {
     const { engine, duel } = beginDuelHarness();
     const boss = duel.boss;
     const target = boss.target;
@@ -455,13 +478,6 @@ describe('Outer Veil Level 10 production preview', () => {
       grounded: true,
       invuln: 0,
     });
-    boss.action = 'recovery';
-    boss.hp = 16;
-    boss.actionClock = duel.timing.eclipseRecovery;
-    boss.phase = 'eclipse';
-    boss.invulnerable = false;
-    duel.phase = 'eclipse';
-
     engine.setInput('down', true);
     engine.updateWardenDuel(1 / 60);
     engine.updatePlayer(1 / 60);
@@ -470,28 +486,21 @@ describe('Outer Veil Level 10 production preview', () => {
       grounded: true,
       dropTimer: 0,
     });
+    boss.action = 'active';
+    boss.actionClock = .2;
+    boss.attackKind = 'sun-blade';
+    boss.attackConsumed = false;
+    engine.player.invuln = 0;
+    engine.updateWardenDuel(.01);
+    expect(engine.player.hp).toBe(4);
+    expect(boss.action).toBe('recovery');
+
     engine.setInput('down', false);
-    engine.input.pressed.clear();
-    engine.input.released.clear();
-
-    for (let strike = 0; strike < 3; strike += 1) {
-      engine.setInput('attack', true);
-      engine.updatePlayer(1 / 60);
-      engine.input.pressed.clear();
-      engine.setInput('attack', false);
-      engine.input.released.clear();
-      if (strike >= 2) continue;
-      for (let frame = 0; frame < 20; frame += 1) {
-        engine.updateWardenDuel(1 / 60);
-        engine.updatePlayer(1 / 60);
-        engine.input.pressed.clear();
-        engine.input.released.clear();
-      }
-    }
-
-    expect(boss.hp).toBe(12);
-    expect(boss.action).toBe('regroup');
-    expect(duel.player).toMatchObject({ comboStep: 0, comboClock: 0 });
+    Object.assign(engine.player, { grounded: false, y: duel.arena.feetTy * TILE - engine.player.h - 30 });
+    Object.assign(boss, { action: 'active', actionClock: .1, attackKind: 'dust-sweep', attackConsumed: false });
+    engine.updateWardenDuel(.11);
+    expect(engine.player.hp).toBe(4);
+    expect(boss.action).toBe('recovery');
   });
 
   it('keeps the arena sealed until Dawnstroke, then restarts only the duel after a fatal attempt', () => {
@@ -502,7 +511,7 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(duel).toMatchObject({
       attempt: { count: 1, damageTaken: 4 },
       totals: { damageTaken: 4 },
-      boss: { hp: 48 },
+      boss: { hp: 60 },
     });
 
     GameEngine.prototype.respawn.call(engine);
@@ -515,7 +524,7 @@ describe('Outer Veil Level 10 production preview', () => {
       crownPath: { restored: true },
       duel: {
         active: true, phase: 'guardian',
-        boss: { hp: 48, action: 'intro' },
+        boss: { hp: 60, action: 'intro' },
         attempt: { count: 2, elapsed: 0, damageTaken: 0 },
         totals: { damageTaken: 4 },
       },
@@ -548,7 +557,7 @@ describe('Outer Veil Level 10 production preview', () => {
       phase: 'duel', complete: false,
       duel: {
         phase: 'guardian', active: true, complete: false,
-        boss: { hp: 48, action: 'intro' },
+        boss: { hp: 60, action: 'intro' },
         attempt: { count: 3 },
         finale: { ready: false, struck: false },
       },
@@ -662,7 +671,7 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(runtimeB.objective.bridle.struck).toBe(false);
     expect(runtimeB.objective.duel).toMatchObject({
       phase: 'sealed', active: false, complete: false,
-      boss: { hp: 48, phase: 'guardian', action: 'idle' },
+      boss: { hp: 60, phase: 'guardian', action: 'idle' },
       player: { comboStep: 0, guarding: false },
       attempt: { count: 0, elapsed: 0, damageTaken: 0 },
       totals: { elapsed: 0, damageTaken: 0 },
@@ -722,7 +731,7 @@ describe('Outer Veil Level 10 production preview', () => {
       bridle: { exposed: false, struck: false, clock: 0 },
       duel: {
         phase: 'sealed', active: false, complete: false,
-        boss: { hp: 48, phase: 'guardian', action: 'idle' },
+        boss: { hp: 60, phase: 'guardian', action: 'idle' },
         player: { comboStep: 0, guarding: false },
         attempt: { count: 0, elapsed: 0, damageTaken: 0 },
         totals: { elapsed: 0, damageTaken: 0 },

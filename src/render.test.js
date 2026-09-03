@@ -133,33 +133,34 @@ describe('Parachute Choir skyboard rendering', () => {
 });
 
 describe('Warden duel rendering', () => {
-  it('shows the authored target, phase pips, and telegraphed arena wave during the duel', () => {
+  it('draws a grounded moving fighter, phase pips, and an authored sand special', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';
     level.objective.crownPath.restored = true;
     level.objective.duel.active = true;
     level.objective.duel.phase = 'command';
     level.objective.duel.boss.phase = 'command';
-    level.objective.duel.boss.action = 'telegraph';
+    level.objective.duel.boss.action = 'windup';
     level.objective.duel.boss.attackKind = 'sand-wave';
     const ctx = recordingContext();
 
     drawLevelMechanics(ctx, level, 8, false);
 
     expect(ctx.calls).toContainEqual([
-      'translate', level.objective.duel.boss.target.x, level.objective.duel.boss.target.y,
+      'translate', level.objective.duel.boss.target.x, level.objective.duel.arena.feetTy * TILE,
     ]);
-    expect(ctx.calls.filter((call) => call[0] === 'arc' && call[3] === 7)).toHaveLength(3);
+    expect(ctx.calls).toContainEqual(['scale', -1, 1]);
+    expect(ctx.calls).toContainEqual(['lineTo', 72, 0]);
+    expect(ctx.calls.filter((call) => call[0] === 'arc' && call[3] === 6)).toHaveLength(3);
     const pipColors = ctx.calls
       .map((call, index) => ({ call, index }))
-      .filter(({ call }) => call[0] === 'arc' && call[3] === 7)
+      .filter(({ call }) => call[0] === 'arc' && call[3] === 6)
       .map(({ index }) => ctx.calls.slice(0, index).findLast((call) => call[0] === 'set:fillStyle')?.[1]);
-    expect(pipColors).toEqual(Array(3).fill('rgba(229,186,86,.38)'));
-    expect(ctx.calls.some((call) => call[0] === 'lineTo'
-      && call[1] === level.objective.duel.arena.maxTx * TILE)).toBe(true);
+    expect(pipColors).toEqual(Array(3).fill('rgba(229,186,86,.45)'));
+    expect(ctx.calls).toContainEqual(['set:strokeStyle', '#dfb653']);
   });
 
-  it('switches the Warden target from vermilion danger to cyan punishability', () => {
+  it('changes the Warden pose between an active strike and recovery', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';
     level.objective.duel.active = true;
@@ -171,33 +172,34 @@ describe('Warden duel rendering', () => {
     const recovery = recordingContext();
     drawLevelMechanics(recovery, level, 8.2, false);
 
-    expect(danger.calls).toContainEqual(['set:strokeStyle', '#ed705b']);
-    expect(recovery.calls).toContainEqual(['set:strokeStyle', '#78e7f1']);
+    expect(danger.calls).toContainEqual(['lineTo', 70, -71]);
+    expect(recovery.calls).toContainEqual(['lineTo', 28, -58]);
   });
 
-  it('draws the Command armour as a solid ring and its exposed seam as a broken ring', () => {
+  it('draws a visible guard arc whose colour warns when the guard meter is nearly broken', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';
     level.objective.duel.active = true;
-    level.objective.duel.boss.phase = 'command';
-    level.objective.duel.boss.armored = true;
+    level.objective.duel.boss.action = 'guard';
+    level.objective.duel.boss.guarding = true;
     const held = recordingContext();
     drawLevelMechanics(held, level, 8, false);
     expect(held.calls).toContainEqual(['setLineDash', [18, 7]]);
-    expect(held.calls).toContainEqual(['arc', 0, 0, 50, 0, Math.PI * 2]);
+    expect(held.calls).toContainEqual(['arc', 16, -78, 58, -1.22, 1.18]);
+    expect(held.calls).toContainEqual(['set:strokeStyle', '#f3c969']);
 
-    level.objective.duel.boss.armorBreakReady = true;
+    level.objective.duel.boss.guardMeter = 1;
     const exposed = recordingContext();
     drawLevelMechanics(exposed, level, 8.2, false);
-    expect(exposed.calls).toContainEqual(['setLineDash', [5, 13]]);
+    expect(exposed.calls).toContainEqual(['set:strokeStyle', '#ef7764']);
   });
 
-  it('keeps the sweep warning local while the sand wave marks the complete sealed arena', () => {
+  it('keeps the sweep local while the sand-wave special reaches farther across the fighting floor', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';
     level.objective.duel.active = true;
-    level.objective.duel.boss.action = 'telegraph';
-    level.objective.duel.boss.attackKind = 'sweep';
+    level.objective.duel.boss.action = 'windup';
+    level.objective.duel.boss.attackKind = 'dust-sweep';
     const sweep = recordingContext();
     drawLevelMechanics(sweep, level, 8, false);
 
@@ -205,8 +207,8 @@ describe('Warden duel rendering', () => {
     const sandWave = recordingContext();
     drawLevelMechanics(sandWave, level, 8, false);
 
-    const edgeY = level.objective.duel.arena.feetTy * TILE - 9;
-    expect(sweep.calls).toContainEqual(['moveTo', 52 * TILE, edgeY]);
-    expect(sandWave.calls).toContainEqual(['moveTo', level.objective.duel.arena.minTx * TILE, edgeY]);
+    const edgeY = level.objective.duel.arena.feetTy * TILE - 8;
+    expect(sweep.calls).toContainEqual(['moveTo', level.objective.duel.boss.target.x - 2.75 * TILE * .55, edgeY]);
+    expect(sandWave.calls).toContainEqual(['moveTo', level.objective.duel.boss.target.x - 5.1 * TILE, edgeY]);
   });
 });

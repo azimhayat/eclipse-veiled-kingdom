@@ -400,12 +400,25 @@ h1 span { color: var(--gold); display: block; }
   text-shadow: 0 2px 9px #000;
 }
 
-.boss-hud > div {
+.boss-hud-title { display: flex; justify-content: center; align-items: baseline; gap: 12px; }
+.boss-hud-title small { color: #91e7ef; font: 700 9px Inter, sans-serif; letter-spacing: .12em; }
+
+.boss-hud > div[role="progressbar"] {
   height: 6px;
   margin-top: 7px;
   padding: 1px;
   border: 1px solid rgba(232,197,106,.48);
   background: rgba(3,5,12,.72);
+}
+
+.boss-hud .fighter-readout {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: rgba(235,245,246,.84);
+  font: 700 9px Inter, sans-serif;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 
 .boss-hud i {
@@ -583,6 +596,13 @@ h1 span { color: var(--gold); display: block; }
     text-align: center;
     line-height: 1.35;
   }
+}
+
+@media (max-width: 680px) and (orientation: portrait) {
+  .boss-hud { top: 112px; width: calc(100vw - 24px); }
+  .boss-hud-title { gap: 7px; font-size: 10px; }
+  .boss-hud-title small { font-size: 8px; }
+  .boss-hud .fighter-readout { gap: 8px; font-size: 8px; letter-spacing: .06em; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
