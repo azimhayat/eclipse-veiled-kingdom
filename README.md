@@ -17,12 +17,13 @@ npm run build
 
 ## Play online
 
-Both editions are published together so the original game remains playable:
+All three editions are published together so the earlier games remain playable:
 
 - V1 — original release: https://azimhayat.github.io/eclipse-veiled-kingdom/
 - V2 — expanded Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v2/
+- V3 — current playtested Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v3/
 
-The preserved V1 source remains on `main`. The expanded game is maintained on `v2`; its Pages workflow builds the preserved V1 commit at the root URL and V2 at `/v2/`.
+The Pages workflow builds the preserved V1 commit at the root URL, the frozen `v2` branch at `/v2/`, and the current `v3` branch at `/v3/`. Ongoing development is maintained on `v3` so V1 and V2 remain independently playable.
 
 ## Controls
 

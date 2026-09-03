@@ -209,6 +209,54 @@ describe('Outer Veil Level 9 production preview', () => {
     expect(engine.callbacks.gate).toHaveBeenCalledOnce();
   });
 
+  it('seats a visibly overlapping counterweight instead of rejecting it by a few pixels', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createGateOfTheVeil(), identity));
+    const engine = engineHarness(level);
+    const { zone } = level.objective.counterweight;
+    level.objective.memoryMark.revealed = true;
+    level.objective.phase = 'counterweight';
+    level.block.x = zone.x - level.block.w + 17;
+    level.block.y = zone.y + zone.h - level.block.h;
+    engine.player.x = level.block.x + level.block.w + 4;
+    engine.player.y = level.block.y;
+
+    expect(GameEngine.prototype.blockOnOathZone.call(engine, zone)).toBe(false);
+    expect(GameEngine.prototype.toggleOathbind.call(engine)).toBe(true);
+    expect(level.block.x).toBe(zone.x + (zone.w - level.block.w) / 2);
+    expect(level.block.bound).toBe(true);
+    expect(level.objective).toMatchObject({
+      phase: 'ascent',
+      counterweight: { bound: true, locked: false },
+    });
+    expect(engine.setHint).toHaveBeenLastCalledWith(
+      expect.stringContaining('COUNTERWEIGHT HELD'),
+      4.2,
+    );
+  });
+
+  it('does not pull a clearly misplaced counterweight into the cyan seat', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createGateOfTheVeil(), identity));
+    const engine = engineHarness(level);
+    const counterweight = level.objective.counterweight;
+    const { zone } = counterweight;
+    level.objective.memoryMark.revealed = true;
+    level.objective.phase = 'counterweight';
+    level.block.x = zone.x - level.block.w - counterweight.seatSnapPadding - 1;
+    level.block.y = zone.y + zone.h - level.block.h;
+    const originalX = level.block.x;
+    engine.player.x = level.block.x - engine.player.w - 4;
+    engine.player.y = level.block.y;
+
+    expect(GameEngine.prototype.toggleOathbind.call(engine)).toBe(true);
+    expect(level.block.x).toBe(originalX);
+    expect(level.block.bound).toBe(true);
+    expect(level.objective).toMatchObject({
+      phase: 'counterweight',
+      counterweight: { bound: false, locked: false },
+    });
+    expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('WRONG AXLE'), 3.8);
+  });
+
   it('emits the exact isolated preview identity and ending at the restored door', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createGateOfTheVeil(), identity));
     const engine = engineHarness(level);

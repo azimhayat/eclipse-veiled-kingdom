@@ -3018,6 +3018,21 @@ export class GameEngine {
       return true;
     }
 
+    if (veilGate && !block.bound) {
+      const counterweight = objective.counterweight;
+      const zone = counterweight?.zone;
+      const snapPadding = counterweight?.seatSnapPadding || 0;
+      const restingBottom = block.y + block.h;
+      const verticallySeated = zone
+        && Math.abs(restingBottom - (zone.y + zone.h)) < 14;
+      const withinSeatCapture = verticallySeated
+        && block.x + block.w >= zone.x - snapPadding
+        && block.x <= zone.x + zone.w + snapPadding;
+      if (withinSeatCapture) {
+        block.x = zone.x + (zone.w - block.w) / 2;
+      }
+    }
+
     const lift = block.oathLift || 0;
     if (block.bound) {
       block.bound = false;

@@ -130,6 +130,7 @@ export function createGateOfTheVeil() {
         id: 'inward-counterweight',
         blockId: 'veil-counterweight',
         zone: counterweightZone,
+        seatSnapPadding: TILE * .25,
         bound: false,
         locked: false,
       },
