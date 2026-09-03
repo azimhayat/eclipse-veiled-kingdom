@@ -440,14 +440,14 @@ export default function App() {
     document.addEventListener('visibilitychange', persistHiddenRun);
     window.addEventListener('pagehide', persistRunCheckpoint);
     setAudioSettings(engine.getAudioSettings());
-    if (import.meta.env.DEV) {
-      const params = new URLSearchParams(window.location.search);
-      const demoLevel = Number(params.get('demoLevel'));
-      const prepareDemo = async () => {
-        if (activeSessionKind === 'production-preview') {
-          engine.start(false);
-          setScreen('play');
-        } else if (params.get('demoBoss') === '1') {
+    const params = new URLSearchParams(window.location.search);
+    const demoLevel = Number(params.get('demoLevel'));
+    const prepareRequestedSession = async () => {
+      if (activeSessionKind === 'production-preview') {
+        engine.start(false);
+        setScreen('play');
+      } else if (import.meta.env.DEV) {
+        if (params.get('demoBoss') === '1') {
           await engine.startAt(9, { demo: true });
           if (!engine.running || engine.levelIndex !== 9) return;
           engine.level.relics.forEach((relic) => { relic.collected = true; });
@@ -461,9 +461,9 @@ export default function App() {
           await engine.startAt(demoLevel - 1, { demo: true });
           if (engine.running) setScreen('play');
         }
-      };
-      void prepareDemo().catch((error) => console.error('Could not prepare demo route', error));
-    }
+      }
+    };
+    void prepareRequestedSession().catch((error) => console.error('Could not prepare requested session', error));
     return () => {
       clearPresentation({ hide: false });
       window.clearTimeout(demoRespawnTimer);

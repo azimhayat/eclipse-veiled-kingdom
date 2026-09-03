@@ -13,8 +13,19 @@ describe('development session routing', () => {
   it('keeps normal and prototype demo routes on the preserved campaign', () => {
     expect(resolveDevelopmentSession('', options)).toEqual({ kind: 'prototype-campaign' });
     expect(resolveDevelopmentSession('?demoLevel=2', options)).toEqual({ kind: 'prototype-campaign' });
-    expect(resolveDevelopmentSession('?previewLevel=sand-that-remembers', { ...options, dev: false }))
-      .toEqual({ kind: 'prototype-campaign' });
+  });
+
+  it('opens the integrated Outer Veil campaign in published V3 builds', () => {
+    const published = { ...options, dev: false };
+    expect(resolveDevelopmentSession('', published)).toEqual({
+      kind: 'production-campaign', campaignKey: 'outer-veil',
+    });
+    expect(resolveDevelopmentSession('?campaign=outer-veil', published)).toEqual({
+      kind: 'production-campaign', campaignKey: 'outer-veil',
+    });
+    expect(resolveDevelopmentSession('?previewLevel=pilgrims-climb', published)).toEqual({
+      kind: 'production-preview', previewLevel: 'pilgrims-climb',
+    });
   });
 
   it('selects the named production preview without numeric-level ambiguity', () => {
@@ -48,12 +59,12 @@ describe('development session routing', () => {
     });
   });
 
-  it('selects the integrated Outer Veil only through its explicit dev route', () => {
+  it('selects the integrated Outer Veil through its explicit named route', () => {
     expect(resolveDevelopmentSession('?campaign=outer-veil', options)).toEqual({
       kind: 'production-campaign', campaignKey: 'outer-veil',
     });
     expect(resolveDevelopmentSession('?campaign=outer-veil', { ...options, dev: false }))
-      .toEqual({ kind: 'prototype-campaign' });
+      .toEqual({ kind: 'production-campaign', campaignKey: 'outer-veil' });
     expect(resolveDevelopmentSession('?campaign=unknown', options).kind).toBe('error');
     expect(resolveDevelopmentSession('?campaign=', options).kind).toBe('error');
     expect(resolveDevelopmentSession('?campaign=outer-veil&campaign=outer-veil', options).kind).toBe('error');

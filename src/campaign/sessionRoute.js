@@ -1,5 +1,4 @@
 export function resolveDevelopmentSession(search, { dev = false, previewKeys = [] } = {}) {
-  if (!dev) return { kind: 'prototype-campaign' };
   const params = new URLSearchParams(search || '');
   const hasPrototypeDemo = params.has('demoLevel') || params.get('demoBoss') === '1';
   if (params.has('campaign')) {
@@ -16,7 +15,11 @@ export function resolveDevelopmentSession(search, { dev = false, previewKeys = [
     }
     return { kind: 'production-campaign', campaignKey: campaign };
   }
-  if (!params.has('previewLevel')) return { kind: 'prototype-campaign' };
+  if (!params.has('previewLevel')) {
+    return dev
+      ? { kind: 'prototype-campaign' }
+      : { kind: 'production-campaign', campaignKey: 'outer-veil' };
+  }
   const previewLevels = params.getAll('previewLevel');
   const previewLevel = previewLevels[0]?.trim();
   if (previewLevels.length !== 1 || !previewLevel) {
