@@ -2,6 +2,8 @@
 
 A multi-edition HTML5 Canvas action-adventure wrapped in React. V4 combines twenty playable levels across two chapters—the Outer Veil and Inner Kingdom—while preserving the earlier ten-level releases. The game uses a fixed 60 Hz simulation, three collision substeps, pre-baked world chunks, synthesized Web Audio, responsive touch controls, checkpoints, combat, destructible sand, moving blocks, pressure gates, crumble and crystal platforms, currents, moving lifts, crushers, veil bridges, mirror beams, guardians, versioned progress, and personal Top 10 records.
 
+The authoritative 100-level narrative, Princess Liora arc, cinematic structure, episodic release model, and ending rules are locked in [`docs/STORY_ONE_LOCK.md`](docs/STORY_ONE_LOCK.md).
+
 ## Run locally
 
 ```bash

@@ -1,10 +1,12 @@
 # Eclipse of the Veiled Kingdom — Creative Bible
 
+> **Story authority:** [`STORY_ONE_LOCK.md`](./STORY_ONE_LOCK.md) is the locked narrative spine. This creative bible governs the broader experience and production language; the story lock prevails if older wording conflicts with it.
+
 ## North star
 
 Build a cinematic action-adventure platformer about recovering a kingdom's stolen memory. The player should feel agile, vulnerable, curious, and increasingly capable. Every room must deliver at least one of four values: mastery, discovery, spectacle, or story.
 
-The initial release contains 100 authored levels arranged as ten realms of ten chapters. Additional realms can be added later without changing the central rules or invalidating saved progress.
+Story One contains 100 authored levels arranged as ten chapters of ten levels, with each chapter set in its own realm. V5 launches with Chapters I–II and later reviewed chapters extend the same story without invalidating saved progress.
 
 ## Player promise
 
@@ -29,6 +31,7 @@ The player gathers **Dawn Fragments**, restores the ten Crown Paths, and discove
 ## Main cast
 
 - **Aren Vale — the Veilbound:** precise, resourceful, and haunted by missing choices. His cloak records recovered constellations as the campaign progresses.
+- **Princess Liora of Orun — the Erased Heir:** a reformer who chose to divide her living-light memory among the Crown Paths so Serath could not control it. She is Aren's missing partner and an active co-protagonist, never a captive or reward.
 - **Mira of the Last Lamp — guide and dissenter:** a living archivist who communicates through sanctum flames. She wants Orun restored but conceals the cost of the original Crown Engine.
 - **Regent Serath — the Hollow Crown:** the visible antagonist. He believes forgetting pain is mercy and uses the eclipse to keep the kingdom stable and obedient.
 - **The Choir Below — collective memory:** voices stored in the Engine. Sometimes helpful, sometimes monstrous, never entirely trustworthy.
@@ -42,9 +45,9 @@ The player gathers **Dawn Fragments**, restores the ten Crown Paths, and discove
 - **Act IV — Choose what survives (Levels 71–90):** the dead, the occupation, and the rebellion offer incompatible futures.
 - **Act V — Break the perfect memory (Levels 91–100):** Aren reaches the throne and chooses restoration, release, or a difficult synthesis.
 
-## The ten realms
+## The ten chapters and realms
 
-| Realm | Levels | Identity | Signature rule | Guardian |
+| Chapter / realm | Levels | Identity | Signature rule | Guardian |
 |---|---:|---|---|---|
 | The Outer Veil | 1–10 | buried gates, wind-cut monuments, first light | living sand can be carved and reshaped | Warden of Dust |
 | The Inner Kingdom | 11–20 | abandoned civic terraces and royal roads | paired mechanisms and route planning | The Nameless Magistrate |
@@ -129,4 +132,3 @@ Every shippable level must have:
 ## Definition of world-class for this project
 
 World-class is not the number of levels or the amount of visual detail. It means the controls remain trustworthy, the art belongs to one world, the story earns attention, the challenge teaches before it tests, and the player consistently understands why they want to take the next step.
-

@@ -2,6 +2,8 @@
 
 Each row defines a unique mechanical job, story beat, and memorable image. Names are production working titles and may change after playtesting.
 
+[`STORY_ONE_LOCK.md`](./STORY_ONE_LOCK.md) is the authority for characters, revelations, cinematics, endings, and release structure. The realm sections below correspond one-to-one with player-facing Chapters I–X.
+
 ## Realm I — The Outer Veil
 
 | # | Level | Authored purpose |
@@ -151,4 +153,3 @@ Each row defines a unique mechanical job, story beat, and memorable image. Names
 | 98 | Kingdom in One Breath | Complete a continuous mastery sequence without loading transitions. |
 | 99 | Hollow Sun | Defeat the Engine's autonomous defense across shifting rule sets. |
 | 100 | What Morning Means | Confront Serath, resolve the Choir, and make the final restorative choice. |
-
