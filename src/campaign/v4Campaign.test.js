@@ -52,6 +52,16 @@ describe('V4 twenty-level campaign', () => {
     expect(levels[8].boss).toMatchObject({ hp: 10, maxHp: 10 });
   });
 
+  it('gives every Stage II level the same finite, touch-safe combat contract', async () => {
+    const levels = await Promise.all(V4_LEVEL_KEYS.slice(10).map(loadV4Level));
+    for (const level of levels) {
+      expect(level.gameplay.combat).toMatchObject({ style: 'unified', maxActive: 3 });
+      expect(level.gameplay.combat.maxSpawns).toBeGreaterThanOrEqual(6);
+      expect(level.gameplay.combat.controls).toContain('DOWN + STRIKE');
+      expect(level.gameplay.combat.controls).toContain('JUMP + STRIKE');
+    }
+  });
+
   it('keeps direct resume lazy and bounded at the Stage I/II boundary', async () => {
     const repository = createV4CampaignRepository();
     expect(repository.campaignId).toBe(V4_CAMPAIGN_ID);

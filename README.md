@@ -1,6 +1,6 @@
 # Eclipse of the Veiled Kingdom
 
-A multi-edition HTML5 Canvas action-adventure wrapped in React. V4 combines twenty playable chapters across the Outer Veil and Inner Kingdom while preserving the earlier ten-level releases. The game uses a fixed 60 Hz simulation, three collision substeps, pre-baked world chunks, synthesized Web Audio, responsive touch controls, checkpoints, combat, destructible sand, moving blocks, pressure gates, crumble and crystal platforms, currents, moving lifts, crushers, veil bridges, mirror beams, guardians, versioned progress, and personal Top 10 records.
+A multi-edition HTML5 Canvas action-adventure wrapped in React. V4 combines twenty playable levels across two chapters—the Outer Veil and Inner Kingdom—while preserving the earlier ten-level releases. The game uses a fixed 60 Hz simulation, three collision substeps, pre-baked world chunks, synthesized Web Audio, responsive touch controls, checkpoints, combat, destructible sand, moving blocks, pressure gates, crumble and crystal platforms, currents, moving lifts, crushers, veil bridges, mirror beams, guardians, versioned progress, and personal Top 10 records.
 
 ## Run locally
 
@@ -19,13 +19,14 @@ The current local V4 campaign opens at `http://127.0.0.1:4173/eclipse-veiled-kin
 
 ## Play online
 
-Three editions are currently published together so the earlier games remain playable:
+Four editions are published together so the earlier games remain playable:
 
 - V1 — original release: https://azimhayat.github.io/eclipse-veiled-kingdom/
 - V2 — expanded Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v2/
 - V3 — current playtested Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v3/
+- V4 — twenty-level review build: https://azimhayat.github.io/eclipse-veiled-kingdom/v4/
 
-The published V1, V2, and V3 editions remain unchanged. V4 development is local on the `v4` branch and has no public URL until it receives a separate publication approval.
+V1, V2, and V3 remain available at their existing URLs. V4 is the review build for the final playtest; the planned V5 will be the first formal release after the agreed final changes.
 
 ## V4 leaderboard
 

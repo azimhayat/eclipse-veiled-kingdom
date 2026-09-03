@@ -2026,11 +2026,11 @@ export function drawSoldier(ctx, soldier, time) {
       ctx.arc(18, -25, soldier.kind === 'spear' ? 74 : 52, -.65, .55);
       ctx.stroke();
       ctx.restore();
-    } else if (phase === 'landing' || phase === 'recovery' || phase === 'stun') {
+    } else if (phase === 'landing' || phase === 'recovery' || phase === 'stun' || phase === 'guard') {
       ctx.save();
-      ctx.strokeStyle = phase === 'stun' ? '#ffe091' : '#86e1eb';
+      ctx.strokeStyle = phase === 'stun' ? '#ffe091' : phase === 'guard' ? '#d4eeff' : '#86e1eb';
       ctx.globalAlpha = .75;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = phase === 'guard' ? 5 : 3;
       ctx.setLineDash([8, 7]);
       ctx.beginPath();
       ctx.arc(0, -25, 28, -.2, Math.PI + .2);
@@ -2186,6 +2186,15 @@ export function drawHero(ctx, player, time, heroSheet) {
       drawSize,
       drawSize,
     );
+    if (player.guarding) {
+      ctx.strokeStyle = '#9cefff';
+      ctx.shadowColor = '#66d9ee';
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(9, -43, 35, -1.35, 1.35);
+      ctx.stroke();
+    }
     ctx.imageSmoothingEnabled = false;
     ctx.restore();
     return;
@@ -2255,6 +2264,15 @@ export function drawHero(ctx, player, time, heroSheet) {
   if (player.digTimer > 0) {
     ctx.strokeStyle = '#75d8ff'; ctx.shadowColor = '#50c9ff'; ctx.shadowBlur = 13; ctx.lineWidth = 5;
     ctx.beginPath(); ctx.moveTo(8, -45); ctx.lineTo(39, -61); ctx.stroke();
+  }
+  if (player.guarding) {
+    ctx.strokeStyle = '#9cefff';
+    ctx.shadowColor = '#66d9ee';
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(9, -43, 35, -1.35, 1.35);
+    ctx.stroke();
   }
   ctx.restore();
 }

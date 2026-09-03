@@ -141,6 +141,8 @@ export class GameEngine {
     this.checkpoint = { kind: 'spawn', id: null, ...this.level.spawn, facing: 1 };
     this.gateOpen = false;
     this.spawnClock = 0;
+    this.combatSpawned = 0;
+    this.combatDefeated = 0;
     this.hudClock = 0;
     this.lastHint = '';
     this.hintHoldUntil = 0;
@@ -187,6 +189,7 @@ export class GameEngine {
       hp: PHYSICS.MAX_HP, invuln: 0,
       coyote: 0, jumpBuffer: 0, dropTimer: 0,
       attackTimer: 0, attackBuffer: 0, attackBufferKind: null, attackKind: null,
+      attackDamage: 1, comboStep: 0, comboClock: 0, guarding: false,
       digTimer: 0, attackHits: new Set(), inWater: false,
     };
   }
@@ -344,6 +347,11 @@ export class GameEngine {
       deaths: this.deaths,
       levelDeaths: this.levelDeaths,
       soldiers: this.soldiers.length,
+      combat: {
+        spawned: this.combatSpawned,
+        defeated: this.combatDefeated,
+        limit: GameEngine.prototype.standardEncounterLimit.call(this),
+      },
       time: this.totalTime,
       levelTime: this.levelTime,
       timedTeeth,
@@ -641,6 +649,8 @@ export class GameEngine {
     this.crumble.clear();
     this.gateOpen = !this.level.map.some((row) => row[this.level.gateColumn] === Tile.GATE);
     this.spawnClock = 0;
+    this.combatSpawned = 0;
+    this.combatDefeated = 0;
     this.transitionRetryBlocked = false;
     this.hintHoldUntil = 0;
     this.setHint(this.level.gameplay?.openingHint || this.level.mechanic || 'The inner paths demand every skill.');
@@ -971,6 +981,8 @@ export class GameEngine {
     p.attackTimer = Math.max(0, p.attackTimer - dt);
     p.attackBuffer = Math.max(0, (p.attackBuffer || 0) - dt);
     if (p.attackBuffer === 0) p.attackBufferKind = null;
+    p.comboClock = Math.max(0, (p.comboClock || 0) - dt);
+    if (p.comboClock === 0) p.comboStep = 0;
     p.digTimer = Math.max(0, p.digTimer - dt);
     p.jumpBuffer = this.input.pressed.has('jump') ? PHYSICS.JUMP_BUFFER : Math.max(0, p.jumpBuffer - dt);
     p.coyote = p.grounded ? PHYSICS.COYOTE : Math.max(0, p.coyote - dt);
@@ -980,8 +992,7 @@ export class GameEngine {
     if (guardingWarden) p.dropTimer = 0;
     else if (this.input.pressed.has('down')) p.dropTimer = .2;
 
-    const readableCombat = ['parachute-choir-restoration', 'veil-gate-restoration', 'warden-restoration']
-      .includes(this.level.objective?.type);
+    const readableCombat = GameEngine.prototype.usesUnifiedCombat.call(this);
     if (readableCombat && this.input.pressed.has('attack')) {
       p.attackBuffer = .16;
       p.attackBufferKind = !p.grounded ? 'aerial' : this.input.down ? 'heavy' : 'normal';
@@ -992,6 +1003,16 @@ export class GameEngine {
       p.attackKind = p.attackBufferKind
         || (!p.grounded ? 'aerial' : this.input.down ? 'heavy' : 'normal');
       p.attackBufferKind = null;
+      if (p.attackKind === 'normal') {
+        const nextStep = p.comboClock > 0 ? p.comboStep + 1 : 1;
+        p.attackDamage = nextStep >= 3 ? 2 : 1;
+        p.comboStep = nextStep >= 3 ? 0 : nextStep;
+        p.comboClock = nextStep >= 3 ? 0 : .85;
+      } else {
+        p.attackDamage = 2;
+        p.comboStep = 0;
+        p.comboClock = 0;
+      }
       p.attackHits.clear();
       this.audio.play('attack');
       this.strikePilgrimBell();
@@ -999,6 +1020,7 @@ export class GameEngine {
       this.strikeVeilSunstone?.();
       this.strikeWardenBridle?.();
     }
+    p.guarding = Boolean(readableCombat && this.input.down && p.grounded && p.attackTimer <= 0);
     if (this.input.pressed.has('dig') && p.digTimer <= 0) this.dig();
 
     p.inWater = this.level.water.some((zone) => overlaps(p, zone));
@@ -1745,6 +1767,65 @@ export class GameEngine {
     }
   }
 
+  usesUnifiedCombat() {
+    return this.level.gameplay?.combat?.style === 'unified'
+      || ['parachute-choir-restoration', 'veil-gate-restoration', 'warden-restoration']
+        .includes(this.level.objective?.type);
+  }
+
+  usesStandardUnifiedCombat() {
+    return this.level.gameplay?.combat?.style === 'unified';
+  }
+
+  standardEncounterLimit() {
+    if (!GameEngine.prototype.usesStandardUnifiedCombat.call(this)) return null;
+    const configured = this.level.gameplay?.combat?.maxSpawns;
+    return Number.isInteger(configured) && configured > 0 ? configured : 0;
+  }
+
+  standardActiveLimit() {
+    if (!GameEngine.prototype.usesStandardUnifiedCombat.call(this)) return null;
+    const configured = this.level.gameplay?.combat?.maxActive;
+    const encounterLimit = GameEngine.prototype.standardEncounterLimit.call(this);
+    return Number.isInteger(configured) && configured > 0
+      ? Math.min(configured, encounterLimit)
+      : Math.min(3, encounterLimit);
+  }
+
+  playerGuardsAgainst(sourceX) {
+    const p = this.player;
+    if (!GameEngine.prototype.usesUnifiedCombat.call(this)
+      || !this.input.down || !p.grounded || p.attackTimer > 0) return false;
+    const direction = Math.sign(sourceX - (p.x + p.w / 2));
+    return direction === 0 || direction === p.facing;
+  }
+
+  resolveSoldierAttack(soldier) {
+    if (GameEngine.prototype.playerGuardsAgainst.call(this, soldier.x + soldier.w / 2)) {
+      soldier.attackPhase = 'recovery';
+      soldier.attackClock = Math.max(.52, soldier.recoverySeconds || .52);
+      soldier.attackConsumed = true;
+      soldier.vx = 0;
+      this.audio.play('block');
+      this.burst(this.player.x + this.player.w / 2, this.player.y + 22, '#8ce8ff', 9, 100);
+      this.setHint('BLOCK · hold your ground, then counter during the blue recovery.', 1.8);
+      return 'blocked';
+    }
+    this.damagePlayer(1, -430);
+    return 'hit';
+  }
+
+  recordStandardDefeat(soldier) {
+    if (!soldier?.standardCombatMember || soldier.defeatRecorded) return false;
+    soldier.defeatRecorded = true;
+    this.combatDefeated += 1;
+    if (this.combatDefeated >= GameEngine.prototype.standardEncounterLimit.call(this)) {
+      this.setHint('FORMATION BROKEN · no more reinforcements are coming.', 3.2);
+    }
+    this.pushHud(true);
+    return true;
+  }
+
   resolveAttackHits() {
     const p = this.player;
     if (p.attackTimer <= .05) return;
@@ -1758,6 +1839,20 @@ export class GameEngine {
     };
     for (const soldier of this.soldiers) {
       if (p.attackHits.has(soldier.id) || !overlaps(hitbox, soldier)) continue;
+      const unifiedMember = Boolean(soldier.standardCombatMember);
+      const heavy = unifiedMember && p.attackKind === 'heavy';
+      const vulnerableShield = ['recovery', 'stun'].includes(soldier.attackPhase);
+      if (unifiedMember && soldier.kind === 'shield' && !heavy && !vulnerableShield) {
+        p.attackHits.add(soldier.id);
+        soldier.attackPhase = 'guard';
+        soldier.attackClock = .24;
+        soldier.attackConsumed = true;
+        soldier.vx = 0;
+        this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#8ce8ff', 8, 90);
+        this.audio.play('block');
+        this.setHint('SHIELD HOLDS · press DOWN + STRIKE to break it.', 2.4);
+        continue;
+      }
       if (soldier.gateMember && soldier.kind === 'shield'
         && !['recovery', 'stun'].includes(soldier.attackPhase)) {
         p.attackHits.add(soldier.id);
@@ -1771,16 +1866,18 @@ export class GameEngine {
         continue;
       }
       p.attackHits.add(soldier.id);
-      soldier.hp -= 1;
+      const damage = unifiedMember ? Math.max(1, p.attackDamage || 1) : 1;
+      soldier.hp -= damage;
       soldier.vx = p.facing * (soldier.raidMember ? 110 : 260);
       if (soldier.raidMember || soldier.readableMelee) {
         soldier.attackPhase = 'stun';
-        soldier.attackClock = .24;
+        soldier.attackClock = heavy ? .5 : .24;
         soldier.attackConsumed = true;
       }
       this.burst(soldier.x + soldier.w / 2, soldier.y + 20, '#f1bf57', 11, 180);
-      this.audio.play('hit');
+      this.audio.play(heavy ? 'heavy' : 'hit');
       if (soldier.hp <= 0) {
+        if (soldier.standardCombatMember) GameEngine.prototype.recordStandardDefeat.call(this, soldier);
         this.recordParachuteDefeat?.(soldier);
         this.recordVeilGateDefeat?.(soldier);
       }
@@ -2891,6 +2988,11 @@ export class GameEngine {
     }
 
     soldier.attackClock = Math.max(0, (soldier.attackClock || 0) - dt);
+    if (soldier.attackPhase === 'guard') {
+      soldier.vx = approach(soldier.vx, 0, 900 * dt);
+      if (soldier.attackClock <= 0) soldier.attackPhase = 'pursue';
+      return;
+    }
     if (soldier.attackPhase === 'stun') {
       soldier.vx = approach(soldier.vx, 0, 820 * dt);
       if (soldier.attackClock <= 0) {
@@ -2917,7 +3019,7 @@ export class GameEngine {
     if (soldier.attackPhase === 'active') {
       if (!soldier.attackConsumed && overlaps(this.player, this.raidAttackBox(soldier))) {
         soldier.attackConsumed = true;
-        this.damagePlayer(1, -430);
+        GameEngine.prototype.resolveSoldierAttack.call(this, soldier);
       }
       if (soldier.attackClock <= 0) {
         soldier.attackPhase = 'recovery';
@@ -2939,6 +3041,171 @@ export class GameEngine {
     }
     const speed = soldier.kind === 'spear' ? 88 : soldier.kind === 'shield' ? 46 : 64;
     soldier.vx = approach(soldier.vx, soldier.facing * speed, 420 * dt);
+  }
+
+  spawnStandardSoldier() {
+    const roster = this.level.gameplay?.enemyRoster || [];
+    const limit = GameEngine.prototype.standardEncounterLimit.call(this);
+    if (!roster.length || !this.level.ships.length || this.combatSpawned >= limit) return false;
+    const index = this.combatSpawned;
+    const kind = roster[index % roster.length];
+    const ship = this.level.ships[index % this.level.ships.length];
+    const hp = kind === 'shield' ? 4 : kind === 'spear' ? 3 : 2;
+    this.soldiers.push({
+      id: `${this.level.levelKey || this.level.id}-formation-${index + 1}`,
+      standardCombatMember: true,
+      readableMelee: true,
+      x: ship.x - 12,
+      y: ship.y + 30,
+      w: 24,
+      h: 44,
+      vx: 0,
+      vy: 48,
+      hp,
+      maxHp: hp,
+      mode: 'para',
+      facing: -1,
+      kind,
+      attackPhase: 'descent',
+      attackClock: 0,
+      attackConsumed: true,
+      telegraphSeconds: kind === 'shield' ? .78 : kind === 'spear' ? .66 : kind === 'archer' ? .82 : .58,
+      recoverySeconds: kind === 'shield' ? .72 : kind === 'spear' ? .62 : .68,
+      activeSeconds: kind === 'spear' ? .18 : .2,
+      minX: Math.max(2 * TILE, ((this.level.arenaStart || 4) - 3) * TILE),
+      maxX: WORLD_W - 2 * TILE,
+    });
+    this.combatSpawned += 1;
+    if (this.combatSpawned === 1) {
+      this.setHint(this.level.gameplay.combat.controls, 6);
+    }
+    this.pushHud(true);
+    return true;
+  }
+
+  updateStandardArcher(soldier, dt) {
+    if (soldier.mode === 'para') {
+      soldier.vy = Math.min(260, soldier.vy + 260 * dt);
+      soldier.vx = 0;
+      return;
+    }
+
+    soldier.attackClock = Math.max(0, (soldier.attackClock || 0) - dt);
+    if (soldier.attackPhase === 'guard' || soldier.attackPhase === 'stun') {
+      soldier.vx = approach(soldier.vx, 0, 820 * dt);
+      if (soldier.attackClock <= 0) {
+        soldier.attackPhase = 'recovery';
+        soldier.attackClock = soldier.recoverySeconds;
+      }
+      return;
+    }
+    if (soldier.attackPhase === 'landing' || soldier.attackPhase === 'recovery') {
+      soldier.vx = approach(soldier.vx, 0, 760 * dt);
+      if (soldier.attackClock <= 0) soldier.attackPhase = 'pursue';
+      return;
+    }
+    if (soldier.attackPhase === 'windup') {
+      soldier.vx = approach(soldier.vx, 0, 900 * dt);
+      if (soldier.attackClock <= 0) {
+        soldier.attackPhase = 'active';
+        soldier.attackClock = .16;
+        soldier.attackConsumed = false;
+      }
+      return;
+    }
+    if (soldier.attackPhase === 'active') {
+      if (!soldier.attackConsumed) {
+        soldier.attackConsumed = true;
+        this.projectiles.push({
+          x: soldier.x + soldier.w / 2,
+          y: soldier.y + 15,
+          vx: soldier.facing * 285,
+          w: 18,
+          h: 5,
+          readableCombat: true,
+        });
+        this.audio.play('enemy');
+      }
+      if (soldier.attackClock <= 0) {
+        soldier.attackPhase = 'recovery';
+        soldier.attackClock = soldier.recoverySeconds;
+      }
+      return;
+    }
+
+    const playerCenter = this.player.x + this.player.w / 2;
+    const soldierCenter = soldier.x + soldier.w / 2;
+    const distance = Math.abs(playerCenter - soldierCenter);
+    soldier.facing = playerCenter >= soldierCenter ? 1 : -1;
+    if (distance <= 430) {
+      soldier.attackPhase = 'windup';
+      soldier.attackClock = soldier.telegraphSeconds;
+      soldier.attackConsumed = true;
+      soldier.vx = 0;
+      return;
+    }
+    soldier.vx = approach(soldier.vx, soldier.facing * 64, 420 * dt);
+  }
+
+  updateStandardUnifiedCombat(dt) {
+    const activeLimit = GameEngine.prototype.standardActiveLimit.call(this);
+    const inArena = this.player.x > (this.level.arenaStart ?? 68) * TILE;
+    if (inArena && this.level.ships.length
+      && this.combatSpawned < GameEngine.prototype.standardEncounterLimit.call(this)
+      && this.soldiers.length < activeLimit) {
+      this.spawnClock += dt;
+      if (this.spawnClock >= (this.level.spawnEvery ?? 2.4)) {
+        this.spawnClock = 0;
+        GameEngine.prototype.spawnStandardSoldier.call(this);
+      }
+    }
+
+    for (const soldier of this.soldiers) {
+      if (soldier.kind === 'archer') GameEngine.prototype.updateStandardArcher.call(this, soldier, dt);
+      else GameEngine.prototype.updateRaidSoldier.call(this, soldier, dt);
+      if (soldier.mode !== 'para') {
+        soldier.vy = Math.min(900, soldier.vy + PHYSICS.GRAVITY_DOWN * dt);
+      }
+      soldier.x = clamp(soldier.x + soldier.vx * dt, soldier.minX, soldier.maxX - soldier.w);
+      const nextY = soldier.y + soldier.vy * dt;
+      const footY = nextY + soldier.h;
+      const tx = Math.floor((soldier.x + soldier.w / 2) / TILE);
+      const ty = Math.floor(footY / TILE);
+      const tile = this.tileAt(tx, ty);
+      if ((this.isSolidTile(tile) || tile === Tile.ONEWAY)
+        && soldier.y + soldier.h <= ty * TILE + 12 && soldier.vy >= 0) {
+        soldier.y = ty * TILE - soldier.h;
+        soldier.vy = 0;
+        if (soldier.mode === 'para') {
+          soldier.mode = 'walk';
+          soldier.attackPhase = 'landing';
+          soldier.attackClock = .62;
+          soldier.attackConsumed = true;
+          this.burst(soldier.x + soldier.w / 2, soldier.y + soldier.h, '#8fe4ef', 12, 95);
+        }
+      } else soldier.y = nextY;
+    }
+    this.soldiers = this.soldiers.filter((soldier) => soldier.hp > 0
+      && soldier.y < WORLD_H + 100 && soldier.x > 0 && soldier.x < WORLD_W);
+
+    for (const projectile of this.projectiles) {
+      projectile.x += projectile.vx * dt;
+      const box = { x: projectile.x - 9, y: projectile.y - 3, w: projectile.w, h: projectile.h };
+      if (!projectile.dead && overlaps(this.player, box)) {
+        projectile.dead = true;
+        const sourceX = projectile.vx > 0 ? this.player.x - TILE : this.player.x + this.player.w + TILE;
+        if (GameEngine.prototype.playerGuardsAgainst.call(this, sourceX)) {
+          this.audio.play('block');
+          this.burst(this.player.x + this.player.w / 2, this.player.y + 20, '#8ce8ff', 8, 95);
+          this.setHint('BLOCK · the arrow breaks against Aren’s guard.', 1.4);
+        } else this.damagePlayer(1, -340);
+      }
+      if (this.isSolidTile(this.tileAt(Math.floor(projectile.x / TILE), Math.floor(projectile.y / TILE)))) {
+        projectile.dead = true;
+      }
+    }
+    this.projectiles = this.projectiles.filter((projectile) => !projectile.dead
+      && projectile.x > 0 && projectile.x < WORLD_W);
   }
 
   updateParachuteChoir(dt) {
@@ -2976,6 +3243,10 @@ export class GameEngine {
     }
     if (this.level.objective?.type === 'parachute-choir-restoration') {
       this.updateParachuteChoir(dt);
+      return;
+    }
+    if (GameEngine.prototype.usesStandardUnifiedCombat.call(this)) {
+      GameEngine.prototype.updateStandardUnifiedCombat.call(this, dt);
       return;
     }
     const inArena = this.player.x > (this.level.arenaStart ?? 68) * TILE;
@@ -3400,15 +3671,18 @@ export class GameEngine {
     const feetTy = (this.player.y + this.player.h) / TILE;
     const withinGroundedZone = (zone) => this.player.grounded
       && centerTx >= zone.minTx && centerTx <= zone.maxTx
-      && Math.abs(feetTy - zone.feetTy) <= .08;
+      && Math.abs(feetTy - zone.feetTy) <= .3;
 
     if (objective.phase === 'outward' && objective.arch.gripJumpRecorded
       && withinGroundedZone(objective.arch.landing)) {
       this.openSanctumArch();
     }
 
-    if (objective.phase === 'outward' && objective.arch.open
-      && withinGroundedZone(objective.witness.zone)) {
+    if (objective.phase === 'outward' && withinGroundedZone(objective.witness.zone)) {
+      // Reaching the authored destination is itself proof that the traversal
+      // was completed. Accept alternate platforming routes instead of leaving
+      // the player stranded behind an earlier arch-landing trigger.
+      if (!objective.arch.open) this.openSanctumArch();
       objective.witness.reached = true;
       objective.witness.reachedAt = this.totalTime;
       objective.phase = 'return';

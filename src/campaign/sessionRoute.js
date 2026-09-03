@@ -1,13 +1,18 @@
 export function resolveDevelopmentSession(search, { dev = false, previewKeys = [] } = {}) {
   const params = new URLSearchParams(search || '');
   const hasPrototypeDemo = params.has('demoLevel') || params.get('demoBoss') === '1';
+  const hasV4LevelDemo =
+    dev &&
+    params.get('campaign') === 'v4' &&
+    params.has('demoLevel') &&
+    params.get('demoBoss') !== '1';
   if (params.has('campaign')) {
     const campaigns = params.getAll('campaign');
     const campaign = campaigns[0]?.trim();
     if (campaigns.length !== 1 || !campaign) {
       return { kind: 'error', message: 'Choose exactly one named campaign.' };
     }
-    if (params.has('previewLevel') || hasPrototypeDemo) {
+    if (params.has('previewLevel') || (hasPrototypeDemo && !hasV4LevelDemo)) {
       return { kind: 'error', message: 'Choose the Outer Veil campaign without preview or prototype demo options.' };
     }
     if (campaign !== 'outer-veil' && campaign !== 'v4') {

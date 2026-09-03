@@ -199,6 +199,9 @@ export async function loadV4Level(levelKey) {
 
   const prototype = await loadPrototypeLevel(entry.sourceLevelKey);
   const source = entry.campaignOrder === 11 ? restoreOuterVeil(prototype) : prototype;
+  const finiteRosterSize = Number.isInteger(source.maxEnemies) && source.maxEnemies > 0
+    ? source.maxEnemies
+    : 7;
   return assertValidAuthoredLevel({
     ...source,
     name: entry.title,
@@ -206,7 +209,15 @@ export async function loadV4Level(levelKey) {
     storyLine: entry.storyLine,
     mechanic: entry.mechanic,
     targetTime: entry.targetTime,
-    gameplay: entry.gameplay,
+    gameplay: {
+      ...entry.gameplay,
+      combat: {
+        style: 'unified',
+        maxActive: Math.min(3, finiteRosterSize),
+        maxSpawns: finiteRosterSize,
+        controls: 'STRIKE chains three blows · DOWN guards · DOWN + STRIKE breaks shields · JUMP + STRIKE attacks from above',
+      },
+    },
   }, entry);
 }
 

@@ -253,18 +253,18 @@ describe('Outer Veil Level 7 production preview', () => {
     for (const cell of level.objective.arch.openCells) expect(level.map[cell.ty][cell.tx]).toBe(Tile.AIR);
   });
 
-  it('vetoes the witness before the arch and requires mist to carry its truth home', () => {
+  it('accepts a reached witness after an alternate arch route and requires mist to carry its truth home', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createFirstSanctum(), identity));
     const engine = engineHarness(level);
     bindLamp(engine);
     standInZone(engine, level.objective.witness.zone);
+    engine.player.y += TILE * .2;
     GameEngine.prototype.updateSanctumObjective.call(engine);
-    expect(level.objective.witness.reached).toBe(false);
-
-    openArch(engine);
-    standInZone(engine, level.objective.witness.zone);
-    GameEngine.prototype.updateSanctumObjective.call(engine);
-    expect(level.objective).toMatchObject({ phase: 'return', witness: { reached: true } });
+    expect(level.objective).toMatchObject({
+      phase: 'return',
+      arch: { open: true },
+      witness: { reached: true },
+    });
     standInZone(engine, level.objective.finalZone);
     GameEngine.prototype.updateSanctumObjective.call(engine);
     expect(level.objective.complete).toBe(false);

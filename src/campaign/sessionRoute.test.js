@@ -82,6 +82,13 @@ describe('development session routing', () => {
     });
   });
 
+  it('allows a local-only V4 level demo without weakening production routing', () => {
+    expect(resolveDevelopmentSession('?campaign=v4&demoLevel=19', options)).toEqual({
+      kind: 'v4-campaign', campaignKey: 'v4',
+    });
+    expect(resolveDevelopmentSession('?campaign=v4&demoLevel=19', { ...options, dev: false }).kind).toBe('error');
+  });
+
   it('fails closed for unknown and conflicting preview routes', () => {
     expect(resolveDevelopmentSession('?previewLevel=unknown', options).kind).toBe('error');
     expect(resolveDevelopmentSession('?previewLevel=sand-that-remembers&demoLevel=2', options).kind).toBe('error');

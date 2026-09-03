@@ -4,6 +4,7 @@ import { V4_LEVEL_KEYS } from './campaign/v4Campaign.js';
 import {
   beginNewV4Run,
   createV4Save,
+  getV4ChapterTarget,
   getV4ContinueTarget,
   getV4LocalTopTen,
   loadV4Save,
@@ -32,6 +33,28 @@ describe('V4 save and personal Top 10', () => {
     expect(storage.getItem(CAMPAIGN_SAVE_KEY)).toBeNull();
     const persisted = persistV4Save({ storage, save: loaded.save, now: clock });
     expect(persisted.persisted).toBe(true);
+  });
+
+  it('routes each title-screen chapter to its next unfinished level', () => {
+    const fresh = createV4Save({ now: clock });
+    expect(getV4ChapterTarget(fresh, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
+    expect(getV4ChapterTarget(fresh, 2)).toMatchObject({ unlocked: false, campaignOrder: 11 });
+
+    const midChapterOne = createV4Save({ now: clock });
+    midChapterOne.progress.completedLevelKeys = V4_LEVEL_KEYS.slice(0, 6);
+    expect(getV4ChapterTarget(midChapterOne, 1)).toMatchObject({ unlocked: true, campaignOrder: 7 });
+    expect(getV4ChapterTarget(midChapterOne, 2)).toMatchObject({ unlocked: false, campaignOrder: 11 });
+
+    const midChapterTwo = createV4Save({ now: clock });
+    midChapterTwo.progress.completedLevelKeys = V4_LEVEL_KEYS.slice(0, 15);
+    expect(getV4ChapterTarget(midChapterTwo, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
+    expect(getV4ChapterTarget(midChapterTwo, 2)).toMatchObject({ unlocked: true, campaignOrder: 16 });
+
+    const complete = createV4Save({ now: clock });
+    complete.progress.completedLevelKeys = [...V4_LEVEL_KEYS];
+    expect(getV4ChapterTarget(complete, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
+    expect(getV4ChapterTarget(complete, 2)).toMatchObject({ unlocked: true, campaignOrder: 11 });
+    expect(getV4ChapterTarget(complete, 3)).toBeNull();
   });
 
   it('migrates a safe Stage I prefix without overwriting the V3 save', () => {

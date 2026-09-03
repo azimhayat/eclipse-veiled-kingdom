@@ -30,6 +30,7 @@ import {
 import { createV4CampaignRepository, V4_LEVEL_KEYS } from './campaign/v4Campaign.js';
 import {
   beginNewV4Run,
+  getV4ChapterTarget,
   getV4ContinueTarget,
   getV4LocalTopTen,
   getV4RunCheckpoint,
@@ -315,6 +316,13 @@ export default function App() {
   useEffect(() => {
     if (!resourcesRef.current || !canvasRef.current || engineRef.current) return undefined;
     const { assets, repository, firstLevel, bank, sessionKind: activeSessionKind } = resourcesRef.current;
+    const params = new URLSearchParams(window.location.search);
+    const demoLevel = Number(params.get('demoLevel'));
+    const localV4LevelDemo = import.meta.env.DEV
+      && activeSessionKind === 'v4-campaign'
+      && params.has('demoLevel')
+      && Number.isInteger(demoLevel);
+    const manualLevelDemo = localV4LevelDemo && params.get('manual') === '1';
     let demoRespawnTimer;
     let runCheckpointTimer;
     const clearPresentation = ({ hide = true } = {}) => {
@@ -366,7 +374,10 @@ export default function App() {
       death: ({ deaths, levelDeaths, levelTime, levelKey, wardenStats, demo }) => {
         clearPresentation();
         setResults((current) => ({ ...current, deaths }));
-        if ((activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign') && levelKey) {
+        if (!demo
+          && !localV4LevelDemo
+          && (activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign')
+          && levelKey) {
           const updated = activeSessionKind === 'v4-campaign'
             ? recordV4RunCheckpoint(saveRef.current, { levelKey, levelTime, levelDeaths, wardenStats })
             : recordStageOneRunCheckpoint(saveRef.current, {
@@ -394,6 +405,7 @@ export default function App() {
         completionStats,
         realmComplete,
       }) => {
+        if (localV4LevelDemo || engine.demo) return;
         if (shouldPersistV4Progress({ sessionKind: completedSessionKind, campaignId })) {
           const completedAt = new Date().toISOString();
           const currentSave = saveRef.current || loadV4Save({ storage: getBrowserStorage() }).save;
@@ -475,6 +487,8 @@ export default function App() {
     engineRef.current = engine;
     const persistRunCheckpoint = () => {
       if (!['production-campaign', 'v4-campaign'].includes(activeSessionKind)
+        || localV4LevelDemo
+        || engine.demo
         || (engine.mode !== 'play' && engine.mode !== 'paused')) return;
       const snapshot = engine.snapshot();
       const previous = activeSessionKind === 'v4-campaign'
@@ -511,8 +525,6 @@ export default function App() {
     document.addEventListener('visibilitychange', persistHiddenRun);
     window.addEventListener('pagehide', persistRunCheckpoint);
     setAudioSettings(engine.getAudioSettings());
-    const params = new URLSearchParams(window.location.search);
-    const demoLevel = Number(params.get('demoLevel'));
     const prepareRequestedSession = async () => {
       if (activeSessionKind === 'production-preview') {
         engine.start(false);
@@ -528,8 +540,12 @@ export default function App() {
           engine.level.boss.active = true;
           engine.pushHud(true);
           setScreen('play');
-        } else if (Number.isInteger(demoLevel) && demoLevel >= 1 && demoLevel <= 10) {
-          await engine.startAt(demoLevel - 1, { demo: true });
+        } else if (
+          Number.isInteger(demoLevel) &&
+          demoLevel >= 1 &&
+          demoLevel <= (activeSessionKind === 'v4-campaign' ? repository.length : 10)
+        ) {
+          await engine.startAt(demoLevel - 1, { demo: !manualLevelDemo });
           if (engine.running) setScreen('play');
         }
       }
@@ -553,9 +569,9 @@ export default function App() {
     setScreen('play');
   };
 
-  const startOuterVeilAt = async (index) => {
+  const startOuterVeilAt = async (index, { restartCompletedV4 = true } = {}) => {
     setSaveWarning('');
-    if (v4Campaign && index === 0
+    if (restartCompletedV4 && v4Campaign && index === 0
       && saveRef.current?.progress.completedLevelKeys?.length === V4_LEVEL_KEYS.length) {
       const restarted = beginNewV4Run(saveRef.current);
       if (restarted) {
@@ -620,7 +636,9 @@ export default function App() {
     if (v4Campaign) {
       const recorded = recordV4PlayerNameAndScore(saveRef.current, { name: chronicleName });
       if (!recorded.save) {
-        setChronicleNameError(recorded.validation?.message || 'Enter a name or nickname.');
+        setChronicleNameError(recorded.validation?.valid
+          ? 'This journey has no pending Chronicle result to record.'
+          : recorded.validation?.message || 'Enter a name or nickname.');
         return;
       }
       const persisted = persistV4Save({ storage: getBrowserStorage(), save: recorded.save });
@@ -699,9 +717,19 @@ export default function App() {
   const productionCampaign = sessionKind === 'production-campaign';
   const v4Campaign = sessionKind === 'v4-campaign';
   const authoredCampaign = productionCampaign || v4Campaign;
+  const activeRouteParams = new URLSearchParams(window.location.search);
+  const requestedPlaytestLevel = Number(activeRouteParams.get('demoLevel'));
+  const localV4LevelPlaytest = import.meta.env.DEV
+    && v4Campaign
+    && activeRouteParams.has('demoLevel')
+    && Number.isInteger(requestedPlaytestLevel)
+    && requestedPlaytestLevel >= 1
+    && requestedPlaytestLevel <= V4_LEVEL_KEYS.length;
   const outerContinueTarget = authoredCampaign && saveRef.current
     ? v4Campaign ? getV4ContinueTarget(saveRef.current) : getOuterVeilContinueTarget(saveRef.current)
     : null;
+  const v4ChapterOneTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 1) : null;
+  const v4ChapterTwoTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 2) : null;
 
   return (
     <main
@@ -727,15 +755,37 @@ export default function App() {
         <section className="title-screen">
           <div className="title-layout">
             <div className="title-content">
-              <div className="eyebrow">{v4Campaign ? 'V4 · TWO REALMS · TWENTY CHAPTERS' : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
+              <div className="eyebrow">{v4Campaign ? 'V4 · TWO CHAPTERS · TWENTY LEVELS' : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
               <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
               <p className="title-subtitle">{authoredCampaign
                 ? v4Campaign
-                  ? 'Twenty playable chapters across the Outer Veil and Inner Kingdom. Restore the first Warden, follow the road of missing names, and break the second eclipse.'
+                  ? 'Twenty playable levels across two chapters. Restore the Outer Veil, follow the road of missing names into the Inner Kingdom, and break the second eclipse.'
                   : 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
                 : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
               <div className="title-actions">
-                {authoredCampaign ? (
+                {v4Campaign ? (
+                  <>
+                    <button
+                      ref={titlePrimaryRef}
+                      className={(v4Progress?.completedLevelKeys?.length || 0) < 10 ? 'primary' : 'secondary'}
+                      disabled={progress < 1}
+                      onClick={() => { void startOuterVeilAt(v4ChapterOneTarget.campaignOrder - 1, { restartCompletedV4: false }); }}
+                    >
+                      Chapter I
+                    </button>
+                    <button
+                      className={(v4Progress?.completedLevelKeys?.length || 0) >= 10 ? 'primary' : 'secondary'}
+                      disabled={progress < 1 || !v4ChapterTwoTarget.unlocked}
+                      title={v4ChapterTwoTarget.unlocked ? '' : 'Complete Chapter I to unlock'}
+                      aria-label={v4ChapterTwoTarget.unlocked ? 'Chapter II' : 'Chapter II · complete Chapter I to unlock'}
+                      onClick={() => { void startOuterVeilAt(v4ChapterTwoTarget.campaignOrder - 1, { restartCompletedV4: false }); }}
+                    >
+                      Chapter II
+                    </button>
+                    <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Top 10</button>
+                    <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
+                  </>
+                ) : authoredCampaign ? (
                   <>
                     <button
                       ref={titlePrimaryRef}
@@ -754,7 +804,6 @@ export default function App() {
                     {outerContinueTarget?.campaignOrder > 1 || ['realm-slot', 'complete'].includes(outerContinueTarget?.kind)
                       ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>{v4Campaign ? 'New 20-level journey' : 'Replay Stage I'}</button>
                       : null}
-                    {v4Campaign && <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Top 10</button>}
                   </>
                 ) : (
                   <>
@@ -762,7 +811,7 @@ export default function App() {
                     <button className="secondary" onClick={() => start(true)}>Watch a run</button>
                   </>
                 )}
-                <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
+                {!v4Campaign && <button className="secondary" onClick={() => setScreen('help')}>How to play</button>}
               </div>
               <AudioControls
                 settings={audioSettings}
@@ -772,7 +821,7 @@ export default function App() {
               />
               <div className="best-time">{authoredCampaign
                 ? v4Campaign
-                  ? `${v4Progress?.completedLevelKeys?.length || 0}/20 chapters restored${outerContinueTarget?.kind === 'complete' ? ' · Top 10 available' : ''}`
+                  ? `${v4Progress?.completedLevelKeys?.length || 0}/20 levels restored${outerContinueTarget?.kind === 'complete' ? ' · Top 10 available' : ''}`
                   : `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
                 : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
             </div>
@@ -962,7 +1011,21 @@ export default function App() {
         >
           <div className={`overlay-card${authoredCampaign ? ' chronicle-card' : ''}`}>
             {v4Campaign ? (
-              chronicleView === 'name' ? (
+              localV4LevelPlaytest ? (
+                <>
+                  <div className="eyebrow">
+                    {requestedPlaytestLevel === V4_LEVEL_KEYS.length
+                      ? `LEVEL ${requestedPlaytestLevel} PLAYTEST COMPLETE`
+                      : `LEVELS ${requestedPlaytestLevel}–${V4_LEVEL_KEYS.length} PLAYTEST COMPLETE`}
+                  </div>
+                  <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">Combat trial complete</h2>
+                  <p id="completion-story">This direct test was kept separate from your twenty-level journey. It did not replace your campaign save or submit a Top 10 result.</p>
+                  <div className="overlay-actions">
+                    <button className="primary" onClick={() => { void startOuterVeilAt(requestedPlaytestLevel - 1); }}>Replay the playtest</button>
+                    <button className="secondary" onClick={returnToTitle}>V4 title screen</button>
+                  </div>
+                </>
+              ) : chronicleView === 'name' ? (
                 <>
                   <div className="eyebrow">KINGDOM PATH CLEAR · 20 / 20</div>
                   <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">What name shall the kingdom remember?</h2>
@@ -1137,7 +1200,7 @@ export default function App() {
                       </li>
                     ))}
                   </ol>
-                ) : <div className="leaderboard-empty">Complete all 20 chapters to set the first record.</div>}
+                ) : <div className="leaderboard-empty">Complete all 20 levels to set the first record.</div>}
               </section>
               <section aria-labelledby="global-top-ten">
                 <h3 id="global-top-ten">Global Hall</h3>
@@ -1156,7 +1219,7 @@ export default function App() {
               </section>
             </div>
             <div className="overlay-actions">
-              <button className="primary" onClick={outerContinueTarget?.kind === 'complete' ? () => { void startOuterVeilAt(0); } : continueOuterVeil}>{outerContinueTarget?.kind === 'complete' ? 'Replay completed journey' : `Continue · Chapter ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')}`}</button>
+              <button className="primary" onClick={outerContinueTarget?.kind === 'complete' ? () => { void startOuterVeilAt(0); } : continueOuterVeil}>{outerContinueTarget?.kind === 'complete' ? 'Replay completed journey' : `Continue · Level ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')}`}</button>
               <button className="secondary" onClick={returnToTitle}>Title screen</button>
             </div>
           </div>

@@ -348,6 +348,21 @@ export function getV4ContinueTarget(save) {
   return { kind: 'level', levelKey, campaignOrder: V4_LEVEL_KEYS.indexOf(levelKey) + 1 };
 }
 
+export function getV4ChapterTarget(save, chapter) {
+  const normalised = normaliseV4Save(save);
+  const completedCount = normalised?.progress.completedLevelKeys.length || 0;
+  if (chapter === 1) {
+    const campaignOrder = completedCount < 10 ? completedCount + 1 : 1;
+    return { unlocked: true, campaignOrder, levelKey: V4_LEVEL_KEYS[campaignOrder - 1] };
+  }
+  if (chapter === 2) {
+    const unlocked = completedCount >= 10;
+    const campaignOrder = unlocked && completedCount < 20 ? completedCount + 1 : 11;
+    return { unlocked, campaignOrder, levelKey: V4_LEVEL_KEYS[campaignOrder - 1] };
+  }
+  return null;
+}
+
 export function beginNewV4Run(save, { now = () => new Date() } = {}) {
   const timestamp = nowIso(now);
   const normalised = normaliseV4Save(save, { now: () => timestamp });

@@ -1,8 +1,8 @@
-name: Deploy V1, V2, and V3 games to GitHub Pages
+name: Deploy V1, V2, V3, and V4 games to GitHub Pages
 
 on:
   push:
-    branches: [v3]
+    branches: [v4]
   workflow_dispatch:
 
 permissions:
@@ -18,9 +18,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out V3
+      - name: Check out V4
         uses: actions/checkout@v6
         with:
+          path: v4-source
+
+      - name: Check out preserved V3
+        uses: actions/checkout@v6
+        with:
+          ref: v3
           path: v3-source
 
       - name: Check out preserved V2
@@ -44,6 +50,7 @@ jobs:
             v1-source/package-lock.json
             v2-source/package-lock.json
             v3-source/package-lock.json
+            v4-source/package-lock.json
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -66,18 +73,27 @@ jobs:
           npm ci
           npm run build -- --base /eclipse-veiled-kingdom/v3/
 
+      - name: Build V4 at its own URL
+        working-directory: v4-source
+        run: |
+          npm ci
+          npm run build -- --base /eclipse-veiled-kingdom/v4/
+
       - name: Assemble all playable versions
         run: |
-          mkdir -p site/v2 site/v3
+          mkdir -p site/v2 site/v3 site/v4
           cp -a v1-source/dist/. site/
           cp -a v2-source/dist/. site/v2/
           cp -a v3-source/dist/. site/v3/
+          cp -a v4-source/dist/. site/v4/
           test -f site/index.html
           test -f site/v2/index.html
           test -f site/v3/index.html
+          test -f site/v4/index.html
           grep -q '/eclipse-veiled-kingdom/assets/' site/index.html
           grep -q '/eclipse-veiled-kingdom/v2/assets/' site/v2/index.html
           grep -q '/eclipse-veiled-kingdom/v3/assets/' site/v3/index.html
+          grep -q '/eclipse-veiled-kingdom/v4/assets/' site/v4/index.html
 
       - name: Upload all games
         uses: actions/upload-pages-artifact@v4
@@ -91,6 +107,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy V1, V2, and V3
+      - name: Deploy V1, V2, V3, and V4
         id: deployment
         uses: actions/deploy-pages@v4
