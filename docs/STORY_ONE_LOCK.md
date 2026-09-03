@@ -1,10 +1,10 @@
 # Story One Narrative Lock
 
-**Game:** Eclipse of the Veiled Kingdom  
-**Story:** Story One — Eclipse of the Veiled Kingdom  
-**Status:** LOCKED  
-**Locked:** 2026-09-04  
-**Scope:** 100 levels, ten chapters, one complete narrative
+- **Game:** Eclipse of the Veiled Kingdom
+- **Story:** Story One — Eclipse of the Veiled Kingdom
+- **Status:** LOCKED
+- **Locked:** 2026-09-04
+- **Scope:** 100 levels, ten chapters, one complete narrative
 
 This document is the narrative authority for Story One. It overrides conflicting story, character, chapter, ending, or release-language in older planning notes. Level geometry and mechanic plans remain governed by their authored level files and campaign plan. Any material change to this story lock requires explicit user approval and a dated revision to this document.
 
@@ -144,9 +144,12 @@ V5 is the first public Story One release and contains Chapters I–II, Levels 1�
 
 After Level 20, show:
 
-> CHAPTER II COMPLETE  
-> THE SECOND CROWN PATH IS OPEN  
-> CHAPTER III — THE SUNDERED AQUEDUCT  
+> CHAPTER II COMPLETE
+>
+> THE SECOND CROWN PATH IS OPEN
+>
+> CHAPTER III — THE SUNDERED AQUEDUCT
+>
 > COMING SOON
 
 The existing Levels 1–20 Top 10 becomes the permanent **Founders' Chronicle**. Later releases may add chapter-specific records. A complete 100-level Story One leaderboard must not open before Chapter X exists.
