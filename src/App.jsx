@@ -755,7 +755,7 @@ export default function App() {
         <section className="title-screen">
           <div className="title-layout">
             <div className="title-content">
-              <div className="eyebrow">{v4Campaign ? 'V4 · TWO CHAPTERS · TWENTY LEVELS' : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
+              {!v4Campaign && <div className="eyebrow">{productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>}
               <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
               <p className="title-subtitle">{authoredCampaign
                 ? v4Campaign
@@ -819,11 +819,9 @@ export default function App() {
                 onMusicVolume={setMusicVolume}
                 onEffectsVolume={setEffectsVolume}
               />
-              <div className="best-time">{authoredCampaign
-                ? v4Campaign
-                  ? `${v4Progress?.completedLevelKeys?.length || 0}/20 levels restored${outerContinueTarget?.kind === 'complete' ? ' · Top 10 available' : ''}`
-                  : `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
-                : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
+              {!v4Campaign && <div className="best-time">{authoredCampaign
+                ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
+                : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>}
             </div>
           </div>
         </section>
