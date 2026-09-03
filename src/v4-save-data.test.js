@@ -35,20 +35,20 @@ describe('V4 save and personal Top 10', () => {
     expect(persisted.persisted).toBe(true);
   });
 
-  it('routes each title-screen chapter to its next unfinished level', () => {
+  it('routes each title-screen chapter to its opening level', () => {
     const fresh = createV4Save({ now: clock });
     expect(getV4ChapterTarget(fresh, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
     expect(getV4ChapterTarget(fresh, 2)).toMatchObject({ unlocked: false, campaignOrder: 11 });
 
     const midChapterOne = createV4Save({ now: clock });
     midChapterOne.progress.completedLevelKeys = V4_LEVEL_KEYS.slice(0, 6);
-    expect(getV4ChapterTarget(midChapterOne, 1)).toMatchObject({ unlocked: true, campaignOrder: 7 });
+    expect(getV4ChapterTarget(midChapterOne, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
     expect(getV4ChapterTarget(midChapterOne, 2)).toMatchObject({ unlocked: false, campaignOrder: 11 });
 
     const midChapterTwo = createV4Save({ now: clock });
     midChapterTwo.progress.completedLevelKeys = V4_LEVEL_KEYS.slice(0, 15);
     expect(getV4ChapterTarget(midChapterTwo, 1)).toMatchObject({ unlocked: true, campaignOrder: 1 });
-    expect(getV4ChapterTarget(midChapterTwo, 2)).toMatchObject({ unlocked: true, campaignOrder: 16 });
+    expect(getV4ChapterTarget(midChapterTwo, 2)).toMatchObject({ unlocked: true, campaignOrder: 11 });
 
     const complete = createV4Save({ now: clock });
     complete.progress.completedLevelKeys = [...V4_LEVEL_KEYS];
