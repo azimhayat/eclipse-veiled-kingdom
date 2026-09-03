@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawLevelMechanics } from './render.js';
+import { drawLevelMechanics, drawVisibleChunks } from './render.js';
 import { TILE } from './levels/constants.js';
 import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
 import { createParachuteChoir } from './levels/outerVeil/parachuteChoir.js';
@@ -42,6 +42,15 @@ function civicScale({ restored = false, completedAt = null } = {}) {
     },
   };
 }
+
+describe('bounded level-chunk rendering', () => {
+  it('fails safely when a development reload evicts the current baked level', () => {
+    const ctx = recordingContext();
+    expect(drawVisibleChunks(ctx, undefined, { x: 0, y: 0 })).toBe(false);
+    expect(drawVisibleChunks(ctx, [], { x: 0, y: 0 })).toBe(false);
+    expect(ctx.calls.some((call) => call[0] === 'drawImage')).toBe(false);
+  });
+});
 
 describe('Civic Promise restoration rendering', () => {
   it('keeps the pillar upright while the unrestored scale beam carries the crooked angle', () => {

@@ -57,6 +57,15 @@ describe('level presentation sequence', () => {
     expect(cards.map(({ kind }) => kind)).toEqual(['chapter', 'objective']);
   });
 
+  it('labels the second V4 realm against the full twenty-level campaign', () => {
+    const cards = buildLevelPresentation({ ...level, level: 11, name: 'Outer Veil Restored' }, {
+      productionCampaign: true,
+      campaignTotal: 20,
+      realmLabel: 'Realm II',
+    });
+    expect(cards[0].kicker).toBe('Realm II · Chapter 11 of 20 · Outer Veil Restored');
+  });
+
   it.each([
     [2, 'memory-carve', 'Memory Carve', 'Mastery remembered · 1 of 5'],
     [4, 'oathbind', 'Oathbind', 'Mastery remembered · 2 of 5'],

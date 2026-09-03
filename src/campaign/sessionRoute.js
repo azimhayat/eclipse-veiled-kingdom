@@ -10,15 +10,17 @@ export function resolveDevelopmentSession(search, { dev = false, previewKeys = [
     if (params.has('previewLevel') || hasPrototypeDemo) {
       return { kind: 'error', message: 'Choose the Outer Veil campaign without preview or prototype demo options.' };
     }
-    if (campaign !== 'outer-veil') {
+    if (campaign !== 'outer-veil' && campaign !== 'v4') {
       return { kind: 'error', message: `Unknown campaign: ${campaign}` };
     }
-    return { kind: 'production-campaign', campaignKey: campaign };
+    return campaign === 'v4'
+      ? { kind: 'v4-campaign', campaignKey: campaign }
+      : { kind: 'production-campaign', campaignKey: campaign };
   }
   if (!params.has('previewLevel')) {
     return dev
       ? { kind: 'prototype-campaign' }
-      : { kind: 'production-campaign', campaignKey: 'outer-veil' };
+      : { kind: 'v4-campaign', campaignKey: 'v4' };
   }
   const previewLevels = params.getAll('previewLevel');
   const previewLevel = previewLevels[0]?.trim();
@@ -36,11 +38,17 @@ export function resolveDevelopmentSession(search, { dev = false, previewKeys = [
 }
 
 export function sessionUsesPersistentSave(sessionKind) {
-  return sessionKind === 'prototype-campaign' || sessionKind === 'production-campaign';
+  return sessionKind === 'prototype-campaign'
+    || sessionKind === 'production-campaign'
+    || sessionKind === 'v4-campaign';
 }
 
 export function shouldPersistProductionProgress({ sessionKind, campaignId }) {
   return sessionKind === 'production-campaign' && campaignId === 'outer-veil-production-v1';
+}
+
+export function shouldPersistV4Progress({ sessionKind, campaignId }) {
+  return sessionKind === 'v4-campaign' && campaignId === 'veiled-kingdom-v4-20';
 }
 
 export function shouldPersistCampaignCompletion({ sessionKind, campaignId, completedLevels }) {

@@ -536,6 +536,44 @@ h1 span { color: var(--gold); display: block; }
 .chronicle-next strong { color: #fff0bd; font: 500 18px 'Cinzel', serif; }
 .chronicle-next small { color: rgba(255,255,255,.5); font-size: 11px; }
 
+.leaderboard-card { width: min(920px, 100%); }
+.leaderboard-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0 22px;
+  text-align: left;
+}
+.leaderboard-columns h3 {
+  margin: 0 0 9px;
+  color: var(--gold);
+  font: 500 14px 'Cinzel', serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.leaderboard-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 10px;
+  min-height: 48px;
+  border: 1px solid rgba(232,197,106,.15);
+  padding: 7px 10px;
+  background: rgba(7,11,25,.78);
+}
+.leaderboard-position { grid-row: 1 / span 2; color: var(--gold-bright); font: 500 20px 'Cinzel', serif; }
+.leaderboard-list strong { overflow-wrap: anywhere; color: #fff0bd; font-weight: 500; }
+.leaderboard-list time { color: #fff; font-variant-numeric: tabular-nums; }
+.leaderboard-list small { grid-column: 2 / -1; color: rgba(255,255,255,.48); font-size: 10px; }
+.leaderboard-empty {
+  min-height: 90px;
+  border: 1px dashed rgba(232,197,106,.24);
+  padding: 20px;
+  color: rgba(255,255,255,.55);
+  line-height: 1.5;
+}
+
 .help-grid { text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 9px 18px; margin: 22px 0 28px; font-size: 13px; }
 .help-grid div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.08); padding-bottom: 7px; }
 .help-grid kbd { color: var(--gold); font: 600 11px 'Outfit'; }
@@ -565,6 +603,10 @@ h1 span { color: var(--gold); display: block; }
   }
   .title-layout { align-items: flex-end; padding-bottom: 42px; }
   h1 { font-size: clamp(38px, 11vw, 72px); }
+}
+
+@media (max-width: 700px) {
+  .leaderboard-columns { grid-template-columns: 1fr; }
 }
 
 @media (hover: none) and (orientation: portrait),

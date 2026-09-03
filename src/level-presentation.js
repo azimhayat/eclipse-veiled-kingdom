@@ -45,6 +45,8 @@ export function detectPresentationInput(windowObject = globalThis.window) {
 export function buildLevelPresentation(entry, {
   productionCampaign = false,
   inputMode = 'keyboard',
+  campaignTotal = productionCampaign ? 10 : null,
+  realmLabel = productionCampaign ? 'Realm I' : null,
 } = {}) {
   if (!entry || !Number.isInteger(entry.level) || typeof entry.name !== 'string') return [];
 
@@ -53,7 +55,7 @@ export function buildLevelPresentation(entry, {
     durationMs: PRESENTATION_DURATIONS.chapter,
     level: entry.level,
     name: entry.name,
-    kicker: `${productionCampaign ? 'Realm I · ' : ''}Chapter ${String(entry.level).padStart(2, '0')}${productionCampaign ? ' of 10' : ''} · ${entry.name}`,
+    kicker: `${realmLabel ? `${realmLabel} · ` : ''}Chapter ${String(entry.level).padStart(2, '0')}${Number.isInteger(campaignTotal) ? ` of ${campaignTotal}` : ''} · ${entry.name}`,
     title: entry.subtitle || entry.name,
     detail: entry.storyLine || '',
   }];

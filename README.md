@@ -1,6 +1,6 @@
 # Eclipse of the Veiled Kingdom
 
-A complete ten-level HTML5 Canvas action-adventure wrapped in React. The game uses a fixed 60 Hz simulation, three collision substeps, pre-baked world chunks, synthesized Web Audio, responsive touch controls, checkpoints, combat, destructible sand, moving blocks, pressure gates, crumble and crystal platforms, currents, moving lifts, crushers, veil bridges, mirror beams, a final guardian, and a local best-time record.
+A multi-edition HTML5 Canvas action-adventure wrapped in React. V4 combines twenty playable chapters across the Outer Veil and Inner Kingdom while preserving the earlier ten-level releases. The game uses a fixed 60 Hz simulation, three collision substeps, pre-baked world chunks, synthesized Web Audio, responsive touch controls, checkpoints, combat, destructible sand, moving blocks, pressure gates, crumble and crystal platforms, currents, moving lifts, crushers, veil bridges, mirror beams, guardians, versioned progress, and personal Top 10 records.
 
 ## Run locally
 
@@ -15,15 +15,21 @@ Open the local address shown by Vite. For a production bundle:
 npm run build
 ```
 
+The current local V4 campaign opens at `http://127.0.0.1:4173/eclipse-veiled-kingdom/?campaign=v4`. The preserved V3 campaign remains available locally with `?campaign=outer-veil`.
+
 ## Play online
 
-All three editions are published together so the earlier games remain playable:
+Three editions are currently published together so the earlier games remain playable:
 
 - V1 — original release: https://azimhayat.github.io/eclipse-veiled-kingdom/
 - V2 — expanded Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v2/
 - V3 — current playtested Stage I release: https://azimhayat.github.io/eclipse-veiled-kingdom/v3/
 
-The Pages workflow builds the preserved V1 commit at the root URL, the frozen `v2` branch at `/v2/`, and the current `v3` branch at `/v3/`. Ongoing development is maintained on `v3` so V1 and V2 remain independently playable.
+The published V1, V2, and V3 editions remain unchanged. V4 development is local on the `v4` branch and has no public URL until it receives a separate publication approval.
+
+## V4 leaderboard
+
+V4 always keeps a personal Top 10 on the device. A Supabase-backed Global Hall is implemented behind an explicit configuration boundary and remains disabled by default. See `docs/V4_LEADERBOARD_SETUP.md` for the reviewed security model and activation steps. Never expose a Supabase secret or service-role key in the browser build.
 
 ## Controls
 

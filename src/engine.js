@@ -3665,6 +3665,17 @@ export class GameEngine {
       } else if (this.levelIndex < this.repository.length - 1) {
         if (this.transitionRetryBlocked || this.transitioning) return;
         const nextIndex = this.levelIndex + 1;
+        const duel = this.level.objective?.type === 'warden-restoration'
+          ? this.level.objective.duel
+          : null;
+        const completionStats = duel?.complete
+          && duel.attempt.count >= 1
+          && duel.totals.elapsed > 0 ? {
+            provenance: 'live-run-v1',
+            attempts: duel.attempt.count,
+            damageTaken: duel.totals.damageTaken,
+            combatTimeSeconds: duel.totals.elapsed,
+          } : null;
         if (!this.levelCompletionEmitted) {
           this.levelCompletionEmitted = true;
           this.callbacks.levelComplete?.({
@@ -3678,6 +3689,7 @@ export class GameEngine {
             campaignTime: this.totalTime,
             deaths: this.deaths,
             ...(Number.isInteger(this.levelDeaths) ? { levelDeaths: this.levelDeaths } : {}),
+            ...(completionStats ? { completionStats } : {}),
             realmKey: this.repository.entryAt?.(this.levelIndex)?.realmKey || null,
             realmComplete: false,
           });

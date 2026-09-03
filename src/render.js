@@ -1840,9 +1840,12 @@ export function drawBoss(ctx, boss, time) {
 }
 
 export function drawVisibleChunks(ctx, chunks, camera) {
+  if (!Array.isArray(chunks)) return false;
   const first = Math.max(0, Math.floor(camera.x / CHUNK_W));
   const last = Math.min(CHUNK_COUNT - 1, Math.floor((camera.x + VIEW_W - 1) / CHUNK_W));
+  let drewChunk = false;
   for (let i = first; i <= last; i += 1) {
+    if (!chunks[i]) continue;
     const chunkWorldX = i * CHUNK_W;
     const visibleLeft = Math.max(camera.x, chunkWorldX);
     const visibleRight = Math.min(camera.x + VIEW_W, chunkWorldX + CHUNK_W, WORLD_W);
@@ -1851,7 +1854,9 @@ export function drawVisibleChunks(ctx, chunks, camera) {
     const sourceX = visibleLeft - chunkWorldX;
     const destX = visibleLeft - camera.x;
     ctx.drawImage(chunks[i], sourceX, camera.y, width, VIEW_H, destX, 0, width, VIEW_H);
+    drewChunk = true;
   }
+  return drewChunk;
 }
 
 export function drawRelic(ctx, relic, time) {

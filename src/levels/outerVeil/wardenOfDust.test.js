@@ -636,6 +636,41 @@ describe('Outer Veil Level 10 production preview', () => {
     }));
   });
 
+  it('carries duel statistics when the Warden becomes Chapter 10 of a longer campaign', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWardenOfDust(), identity));
+    const engine = engineHarness(level);
+    level.objective.phase = 'first-path';
+    level.objective.complete = true;
+    level.objective.restored = true;
+    level.objective.duel.active = false;
+    level.objective.duel.complete = true;
+    level.objective.duel.attempt.count = 3;
+    level.objective.duel.totals.elapsed = 101;
+    level.objective.duel.totals.damageTaken = 8;
+    engine.levelIndex = 9;
+    engine.repository = {
+      length: 20,
+      campaignId: 'veiled-kingdom-v4-20',
+      sessionKind: 'v4-campaign',
+      keyAt: () => 'inner-kingdom-01-outer-veil-restored',
+      entryAt: () => ({ realmKey: 'outer-veil' }),
+    };
+    engine.levelCompletionEmitted = false;
+    engine.transitionRetryBlocked = false;
+    engine.transitioning = false;
+    engine.transitionToLevel = vi.fn();
+    engine.player.x = level.door.x + 20;
+    engine.player.y = level.door.y + 20;
+    GameEngine.prototype.updateRelicsAndFlow.call(engine);
+    expect(engine.callbacks.levelComplete).toHaveBeenCalledWith(expect.objectContaining({
+      levelKey: identity.levelKey,
+      realmComplete: false,
+      completionStats: {
+        provenance: 'live-run-v1', attempts: 3, damageTaken: 8, combatTimeSeconds: 101,
+      },
+    }));
+  });
+
   it('deep-clones preview state and reforms the complete transformation after life-over', async () => {
     expect(PRODUCTION_PREVIEW_KEYS).toContain('warden-of-dust');
     const preview = createProductionPreviewRepository('warden-of-dust');

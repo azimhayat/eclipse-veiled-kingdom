@@ -27,11 +27,29 @@ import {
   createOuterVeilCampaignRepository,
   OUTER_VEIL_COMPLETION,
 } from './campaign/outerVeilCampaign.js';
+import { createV4CampaignRepository, V4_LEVEL_KEYS } from './campaign/v4Campaign.js';
+import {
+  beginNewV4Run,
+  getV4ContinueTarget,
+  getV4LocalTopTen,
+  getV4RunCheckpoint,
+  loadV4Save,
+  persistV4Save,
+  recordV4LevelCompletion,
+  recordV4PlayerNameAndScore,
+  recordV4RunCheckpoint,
+} from './v4-save-data.js';
+import {
+  fetchGlobalTopTen,
+  globalLeaderboardStatus,
+  submitGlobalV4Score,
+} from './global-leaderboard.js';
 import {
   resolveDevelopmentSession,
   sessionUsesPersistentSave,
   shouldPersistCampaignCompletion,
   shouldPersistProductionProgress,
+  shouldPersistV4Progress,
 } from './campaign/sessionRoute.js';
 
 const ASSET_URLS = {
@@ -190,6 +208,11 @@ export default function App() {
   const [sessionKind, setSessionKind] = useState('prototype-campaign');
   const [previewPresentation, setPreviewPresentation] = useState(null);
   const [outerProgress, setOuterProgress] = useState(null);
+  const [v4Progress, setV4Progress] = useState(null);
+  const [v4LatestScore, setV4LatestScore] = useState(null);
+  const [localTopTen, setLocalTopTen] = useState([]);
+  const [globalTopTen, setGlobalTopTen] = useState([]);
+  const [globalHall, setGlobalHall] = useState(() => globalLeaderboardStatus());
   const [results, setResults] = useState({ time: 0, deaths: 0, targetTime: null });
   const [chronicle, setChronicle] = useState(null);
   const [chronicleView, setChronicleView] = useState('name');
@@ -203,7 +226,7 @@ export default function App() {
   useEffect(() => {
     if (screen === 'win') chronicleHeadingRef.current?.focus({ preventScroll: true });
     if (screen === 'title' && ready) titlePrimaryRef.current?.focus({ preventScroll: true });
-    if (['help', 'pause', 'dead', 'load-error', 'realm-slot'].includes(screen)) {
+    if (['help', 'pause', 'dead', 'load-error', 'realm-slot', 'leaderboard'].includes(screen)) {
       overlayHeadingRef.current?.focus({ preventScroll: true });
     }
   }, [screen, chronicleView, ready]);
@@ -224,12 +247,19 @@ export default function App() {
       setSessionKind(route.kind);
       setPreviewPresentation(preview ? getProductionPreviewDescriptor(route.previewLevel)?.completion : null);
       if (sessionUsesPersistentSave(route.kind)) {
-        const { save } = loadCampaignSave({ storage: getBrowserStorage() });
-        saveRef.current = save;
-        if (route.kind === 'production-campaign') {
-          setOuterProgress(save.progress);
-          setBestTime(save.records.realmsByKey?.['outer-veil']?.bestTimeSeconds ?? null);
-        } else setBestTime(save.records.legacyPrototype?.bestTimeSeconds ?? null);
+        if (route.kind === 'v4-campaign') {
+          const { save } = loadV4Save({ storage: getBrowserStorage() });
+          saveRef.current = save;
+          setV4Progress(save.progress);
+          setLocalTopTen(getV4LocalTopTen(save));
+        } else {
+          const { save } = loadCampaignSave({ storage: getBrowserStorage() });
+          saveRef.current = save;
+          if (route.kind === 'production-campaign') {
+            setOuterProgress(save.progress);
+            setBestTime(save.records.realmsByKey?.['outer-veil']?.bestTimeSeconds ?? null);
+          } else setBestTime(save.records.legacyPrototype?.bestTimeSeconds ?? null);
+        }
       }
 
       const entries = Object.entries(ASSET_URLS);
@@ -253,6 +283,8 @@ export default function App() {
       setBootLabel('Preparing the first path');
       const repository = preview
         ? createProductionPreviewRepository(route.previewLevel)
+        : route.kind === 'v4-campaign'
+          ? createV4CampaignRepository()
         : route.kind === 'production-campaign'
           ? createOuterVeilCampaignRepository()
           : new AuthoredLevelRepository();
@@ -294,8 +326,12 @@ export default function App() {
     const announceLevel = (entry) => {
       clearPresentation();
       const cards = buildLevelPresentation(entry, {
-        productionCampaign: activeSessionKind === 'production-campaign',
+        productionCampaign: activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign',
         inputMode: detectPresentationInput(window),
+        campaignTotal: activeSessionKind === 'v4-campaign' ? 20 : 10,
+        realmLabel: activeSessionKind === 'v4-campaign'
+          ? entry.level <= 10 ? 'Realm I' : 'Realm II'
+          : activeSessionKind === 'production-campaign' ? 'Realm I' : null,
       });
       if (cards.length === 0) return;
       const generation = presentationGenerationRef.current;
@@ -330,12 +366,16 @@ export default function App() {
       death: ({ deaths, levelDeaths, levelTime, levelKey, wardenStats, demo }) => {
         clearPresentation();
         setResults((current) => ({ ...current, deaths }));
-        if (activeSessionKind === 'production-campaign' && levelKey) {
-          const updated = recordStageOneRunCheckpoint(saveRef.current, {
+        if ((activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign') && levelKey) {
+          const updated = activeSessionKind === 'v4-campaign'
+            ? recordV4RunCheckpoint(saveRef.current, { levelKey, levelTime, levelDeaths, wardenStats })
+            : recordStageOneRunCheckpoint(saveRef.current, {
             levelKey, levelTime, levelDeaths, wardenStats,
           });
           if (updated) {
-            const persisted = persistCampaignSave({ storage: getBrowserStorage(), save: updated });
+            const persisted = activeSessionKind === 'v4-campaign'
+              ? persistV4Save({ storage: getBrowserStorage(), save: updated })
+              : persistCampaignSave({ storage: getBrowserStorage(), save: updated });
             saveRef.current = persisted.save || updated;
             setSaveWarning(persisted.persisted ? '' : 'Run statistics are held for this session only · browser storage is unavailable.');
           }
@@ -354,6 +394,25 @@ export default function App() {
         completionStats,
         realmComplete,
       }) => {
+        if (shouldPersistV4Progress({ sessionKind: completedSessionKind, campaignId })) {
+          const completedAt = new Date().toISOString();
+          const currentSave = saveRef.current || loadV4Save({ storage: getBrowserStorage() }).save;
+          const updated = recordV4LevelCompletion(currentSave, {
+            levelKey, levelTime, levelDeaths, completionStats, completedAt,
+          });
+          if (!updated) return;
+          const result = persistV4Save({ storage: getBrowserStorage(), save: updated });
+          saveRef.current = result.save || updated;
+          setV4Progress(saveRef.current.progress);
+          setLocalTopTen(getV4LocalTopTen(saveRef.current));
+          if (realmComplete) {
+            setChronicleName(saveRef.current.playerName || '');
+            setChronicleNameError('');
+            setChronicleView('name');
+          }
+          setSaveWarning(result.persisted ? '' : 'Progress is held for this session only · browser storage is unavailable.');
+          return;
+        }
         if (!shouldPersistProductionProgress({ sessionKind: completedSessionKind, campaignId })) return;
         const completedAt = new Date().toISOString();
         const currentSave = saveRef.current || loadCampaignSave({ storage: getBrowserStorage() }).save;
@@ -399,19 +458,28 @@ export default function App() {
           setChronicleNameError('');
           setChronicleView(nextChronicle?.playerName ? 'chronicle' : 'name');
         }
+        if (completedSessionKind === 'v4-campaign') {
+          setChronicleName(saveRef.current?.playerName || '');
+          setChronicleNameError('');
+          setChronicleView('name');
+        }
         setScreen('win');
       },
       transition: (level, name) => {
-        if (activeSessionKind !== 'production-campaign') setHint(`LEVEL ${level} · ${name.toUpperCase()}`);
+        if (activeSessionKind !== 'production-campaign' && activeSessionKind !== 'v4-campaign') {
+          setHint(`LEVEL ${level} · ${name.toUpperCase()}`);
+        }
       },
       audioSettings: setAudioSettings,
     }, repository);
     engineRef.current = engine;
     const persistRunCheckpoint = () => {
-      if (activeSessionKind !== 'production-campaign'
+      if (!['production-campaign', 'v4-campaign'].includes(activeSessionKind)
         || (engine.mode !== 'play' && engine.mode !== 'paused')) return;
       const snapshot = engine.snapshot();
-      const previous = getStageOneRunCheckpoint(saveRef.current, snapshot.levelKey);
+      const previous = activeSessionKind === 'v4-campaign'
+        ? getV4RunCheckpoint(saveRef.current, snapshot.levelKey)
+        : getStageOneRunCheckpoint(saveRef.current, snapshot.levelKey);
       const wardenStats = snapshot.warden ? {
         attempts: snapshot.warden.duelAttempts,
         damageTaken: snapshot.warden.duelDamageTaken,
@@ -423,14 +491,17 @@ export default function App() {
         && (!wardenStats || (previous.warden?.attempts >= wardenStats.attempts
           && previous.warden?.damageTaken >= wardenStats.damageTaken
           && previous.warden?.combatTimeSeconds >= wardenStats.combatTimeSeconds))) return;
-      const updated = recordStageOneRunCheckpoint(saveRef.current, {
-        levelKey: snapshot.levelKey,
-        levelTime: snapshot.levelTime,
-        levelDeaths: snapshot.levelDeaths,
-        wardenStats,
-      });
+      const checkpointInput = {
+        levelKey: snapshot.levelKey, levelTime: snapshot.levelTime,
+        levelDeaths: snapshot.levelDeaths, wardenStats,
+      };
+      const updated = activeSessionKind === 'v4-campaign'
+        ? recordV4RunCheckpoint(saveRef.current, checkpointInput)
+        : recordStageOneRunCheckpoint(saveRef.current, checkpointInput);
       if (!updated) return;
-      const persisted = persistCampaignSave({ storage: getBrowserStorage(), save: updated });
+      const persisted = activeSessionKind === 'v4-campaign'
+        ? persistV4Save({ storage: getBrowserStorage(), save: updated })
+        : persistCampaignSave({ storage: getBrowserStorage(), save: updated });
       saveRef.current = persisted.save || updated;
       if (!persisted.persisted) setSaveWarning('Run statistics are held for this session only · browser storage is unavailable.');
     };
@@ -484,6 +555,16 @@ export default function App() {
 
   const startOuterVeilAt = async (index) => {
     setSaveWarning('');
+    if (v4Campaign && index === 0
+      && saveRef.current?.progress.completedLevelKeys?.length === V4_LEVEL_KEYS.length) {
+      const restarted = beginNewV4Run(saveRef.current);
+      if (restarted) {
+        const persisted = persistV4Save({ storage: getBrowserStorage(), save: restarted });
+        saveRef.current = persisted.save || restarted;
+        setV4Progress(saveRef.current.progress);
+        setSaveWarning(persisted.persisted ? '' : 'Replay progress is held for this session only · browser storage is unavailable.');
+      }
+    }
     if (productionCampaign && index === 0
       && saveRef.current?.progress.completedRealmKeys?.includes('outer-veil')) {
       const restarted = beginStageOneRun(saveRef.current);
@@ -498,7 +579,9 @@ export default function App() {
     const opened = await engineRef.current?.startAt(index, { demo: false });
     if (opened) {
       const levelKey = engineRef.current?.level?.levelKey;
-      const checkpoint = getStageOneRunCheckpoint(saveRef.current, levelKey);
+      const checkpoint = v4Campaign
+        ? getV4RunCheckpoint(saveRef.current, levelKey)
+        : getStageOneRunCheckpoint(saveRef.current, levelKey);
       if (checkpoint) engineRef.current?.restoreLevelRunStats({
         levelTime: checkpoint.timeSeconds,
         levelDeaths: checkpoint.deaths,
@@ -509,7 +592,13 @@ export default function App() {
   };
 
   const continueOuterVeil = () => {
-    const target = getOuterVeilContinueTarget(saveRef.current);
+    const target = v4Campaign
+      ? getV4ContinueTarget(saveRef.current)
+      : getOuterVeilContinueTarget(saveRef.current);
+    if (target.kind === 'complete') {
+      void openV4Leaderboard();
+      return;
+    }
     if (target.kind === 'realm-slot') {
       setScreen('realm-slot');
       return;
@@ -528,6 +617,34 @@ export default function App() {
 
   const rememberChronicleName = (event) => {
     event.preventDefault();
+    if (v4Campaign) {
+      const recorded = recordV4PlayerNameAndScore(saveRef.current, { name: chronicleName });
+      if (!recorded.save) {
+        setChronicleNameError(recorded.validation?.message || 'Enter a name or nickname.');
+        return;
+      }
+      const persisted = persistV4Save({ storage: getBrowserStorage(), save: recorded.save });
+      saveRef.current = persisted.save || recorded.save;
+      setChronicleName(recorded.validation.name);
+      setChronicleNameError('');
+      setChronicleView('chronicle');
+      setV4LatestScore(recorded.score);
+      setLocalTopTen(getV4LocalTopTen(saveRef.current));
+      setSaveWarning(recorded.score
+        ? persisted.persisted ? '' : 'The result is held for this session only · browser storage is unavailable.'
+        : 'Name remembered, but this migrated journey lacks complete timing evidence and is not ranked.');
+      if (recorded.score) {
+        void submitGlobalV4Score(recorded.score).then((submission) => {
+          setGlobalHall(submission.status === 'accepted'
+            ? { configured: true, message: submission.position ? `Global Hall position · #${submission.position}` : 'Score accepted by the Global Hall' }
+            : { configured: submission.status !== 'disabled', message: submission.message });
+          return fetchGlobalTopTen();
+        }).then((hall) => {
+          if (hall.status === 'ready') setGlobalTopTen(hall.scores);
+        });
+      }
+      return;
+    }
     const recorded = recordStageOnePlayerName(saveRef.current, { name: chronicleName });
     if (!recorded.save) {
       setChronicleNameError(recorded.validation?.message || 'Enter a name or nickname.');
@@ -540,6 +657,14 @@ export default function App() {
     setChronicleNameError('');
     setChronicleView('chronicle');
     setSaveWarning(persisted.persisted ? '' : 'The Chronicle is held for this session only · browser storage is unavailable.');
+  };
+
+  const openV4Leaderboard = async () => {
+    setLocalTopTen(getV4LocalTopTen(saveRef.current));
+    setScreen('leaderboard');
+    const hall = await fetchGlobalTopTen();
+    setGlobalHall({ configured: hall.status !== 'disabled', message: hall.message || 'Global Hall connected' });
+    if (hall.status === 'ready') setGlobalTopTen(hall.scores);
   };
 
   const resume = () => {
@@ -572,8 +697,10 @@ export default function App() {
     if (next) setAudioSettings(next);
   };
   const productionCampaign = sessionKind === 'production-campaign';
-  const outerContinueTarget = productionCampaign && saveRef.current
-    ? getOuterVeilContinueTarget(saveRef.current)
+  const v4Campaign = sessionKind === 'v4-campaign';
+  const authoredCampaign = productionCampaign || v4Campaign;
+  const outerContinueTarget = authoredCampaign && saveRef.current
+    ? v4Campaign ? getV4ContinueTarget(saveRef.current) : getOuterVeilContinueTarget(saveRef.current)
     : null;
 
   return (
@@ -600,13 +727,15 @@ export default function App() {
         <section className="title-screen">
           <div className="title-layout">
             <div className="title-content">
-              <div className="eyebrow">{productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
+              <div className="eyebrow">{v4Campaign ? 'V4 · TWO REALMS · TWENTY CHAPTERS' : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
               <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
-              <p className="title-subtitle">{productionCampaign
-                ? 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
+              <p className="title-subtitle">{authoredCampaign
+                ? v4Campaign
+                  ? 'Twenty playable chapters across the Outer Veil and Inner Kingdom. Restore the first Warden, follow the road of missing names, and break the second eclipse.'
+                  : 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
                 : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
               <div className="title-actions">
-                {productionCampaign ? (
+                {authoredCampaign ? (
                   <>
                     <button
                       ref={titlePrimaryRef}
@@ -614,15 +743,18 @@ export default function App() {
                       disabled={progress < 1}
                       onClick={outerContinueTarget?.kind === 'realm-slot' ? viewStageOneChronicle : continueOuterVeil}
                     >
-                      {outerContinueTarget?.kind === 'realm-slot'
+                      {outerContinueTarget?.kind === 'complete'
+                        ? 'View Top 10'
+                        : outerContinueTarget?.kind === 'realm-slot'
                         ? 'View Stage I Chronicle'
                         : outerContinueTarget?.campaignOrder > 1
                           ? `Continue · Chapter ${String(outerContinueTarget.campaignOrder).padStart(2, '0')}`
                           : 'Begin Buried Dawn'}
                     </button>
-                    {outerContinueTarget?.campaignOrder > 1 || outerContinueTarget?.kind === 'realm-slot'
-                      ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>Replay Stage I</button>
+                    {outerContinueTarget?.campaignOrder > 1 || ['realm-slot', 'complete'].includes(outerContinueTarget?.kind)
+                      ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>{v4Campaign ? 'New 20-level journey' : 'Replay Stage I'}</button>
                       : null}
+                    {v4Campaign && <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Top 10</button>}
                   </>
                 ) : (
                   <>
@@ -638,8 +770,10 @@ export default function App() {
                 onMusicVolume={setMusicVolume}
                 onEffectsVolume={setEffectsVolume}
               />
-              <div className="best-time">{productionCampaign
-                ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
+              <div className="best-time">{authoredCampaign
+                ? v4Campaign
+                  ? `${v4Progress?.completedLevelKeys?.length || 0}/20 chapters restored${outerContinueTarget?.kind === 'complete' ? ' · Top 10 available' : ''}`
+                  : `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
                 : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
             </div>
           </div>
@@ -651,7 +785,11 @@ export default function App() {
           <header className="hud" aria-hidden={screen !== 'play'}>
             <div className="hud-left">
               <div>
-              <div className="hud-kicker">{sessionKind === 'production-preview' ? 'PRODUCTION PREVIEW · ' : productionCampaign ? 'OUTER VEIL · ' : ''}LVL {hud.level}</div>
+              <div className="hud-kicker">{sessionKind === 'production-preview'
+                ? 'PRODUCTION PREVIEW · '
+                : v4Campaign
+                  ? hud.level <= 10 ? 'OUTER VEIL · ' : 'INNER KINGDOM · '
+                  : productionCampaign ? 'OUTER VEIL · ' : ''}LVL {hud.level}</div>
                 <div className="hud-level">{hud.levelName}</div>
               </div>
               <div className="health">
@@ -822,8 +960,73 @@ export default function App() {
           aria-labelledby="completion-heading"
           aria-describedby="completion-story"
         >
-          <div className={`overlay-card${productionCampaign ? ' chronicle-card' : ''}`}>
-            {productionCampaign ? (
+          <div className={`overlay-card${authoredCampaign ? ' chronicle-card' : ''}`}>
+            {v4Campaign ? (
+              chronicleView === 'name' ? (
+                <>
+                  <div className="eyebrow">KINGDOM PATH CLEAR · 20 / 20</div>
+                  <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">What name shall the kingdom remember?</h2>
+                  <p id="completion-story">The Outer Veil and Inner Kingdom now carry one continuous record. Your name stays on this device and enters the Global Hall only when it is connected.</p>
+                  <form className="chronicle-name-form" onSubmit={rememberChronicleName} noValidate>
+                    <label htmlFor="chronicle-player-name">Name or nickname · 1–24 characters</label>
+                    <input
+                      id="chronicle-player-name"
+                      name="playerName"
+                      type="text"
+                      value={chronicleName}
+                      onChange={(event) => { setChronicleName(event.currentTarget.value); setChronicleNameError(''); }}
+                      maxLength="512"
+                      autoComplete="nickname"
+                      dir="auto"
+                      aria-invalid={Boolean(chronicleNameError)}
+                      aria-describedby={chronicleNameError ? 'chronicle-name-error' : undefined}
+                    />
+                    {chronicleNameError && <div id="chronicle-name-error" className="chronicle-name-error" role="alert">{chronicleNameError}</div>}
+                    {saveWarning && <div className="save-warning" role="status">{saveWarning}</div>}
+                    <div className="overlay-actions">
+                      <button className="primary" type="submit">Enter the Chronicle</button>
+                      <button className="secondary" type="button" onClick={returnToTitle}>Title screen</button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">V4 COMPLETE · TWO REALMS RESTORED</div>
+                  <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">The kingdom remembers <span dir="auto">{chronicleName}</span></h2>
+                  <p id="completion-story">Twenty roads now form one Crown Path. The third veil is visible, but it is not yet open.</p>
+                  {v4LatestScore ? (
+                    <>
+                      <div className="chronicle-rank" aria-label={`Performance rank ${v4LatestScore.rank.key}`}>
+                        <span>{v4LatestScore.rank.key}</span>
+                        <div>
+                          <strong>{`Rank ${v4LatestScore.rank.key} · ${v4LatestScore.rank.title}`}</strong>
+                          <small>{v4LatestScore.rank.criteria}</small>
+                        </div>
+                      </div>
+                      <dl className="chronicle-grid">
+                        <div><dt>Levels restored</dt><dd>20 / 20</dd></div>
+                        <div><dt>Total journey time</dt><dd>{formatRecordedTime(v4LatestScore.totalTimeSeconds)}</dd></div>
+                        <div><dt>Falls</dt><dd>{v4LatestScore.deaths}</dd></div>
+                        <div><dt>Warden attempts</dt><dd>{v4LatestScore.wardenAttempts ?? 'Not recorded'}</dd></div>
+                        <div><dt>Warden damage</dt><dd>{v4LatestScore.damageTaken ?? 'Not recorded'}</dd></div>
+                        <div><dt>Completion date</dt><dd>{formatCompletionDate(v4LatestScore.completedAt)}</dd></div>
+                      </dl>
+                    </>
+                  ) : <div className="chronicle-history-note">This journey was migrated from an earlier version, so incomplete timing evidence was not placed in the Top 10.</div>}
+                  {saveWarning && <div className="save-warning" role="status">{saveWarning}</div>}
+                  <div className="chronicle-next">
+                    <span>NEXT · THE THIRD VEIL</span>
+                    <strong>Names Beneath the Crown</strong>
+                    <small>Coming next · no placeholder levels have been added</small>
+                  </div>
+                  <div className="overlay-actions">
+                    <button className="primary" onClick={() => { void openV4Leaderboard(); }}>View Top 10</button>
+                    <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>New journey</button>
+                    <button className="secondary" onClick={returnToTitle}>Title screen</button>
+                  </div>
+                </>
+              )
+            ) : productionCampaign ? (
               chronicleView === 'name' ? (
                 <>
                   <div className="eyebrow">STAGE I CLEAR · THE OUTER VEIL RESTORED</div>
@@ -910,6 +1113,52 @@ export default function App() {
                 </div>
               </>
             )}
+          </div>
+        </section>
+      )}
+
+      {screen === 'leaderboard' && v4Campaign && (
+        <section className="overlay chronicle-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-heading">
+          <div className="overlay-card chronicle-card leaderboard-card">
+            <div className="eyebrow">V4 · HALL OF THE RESTORED</div>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="leaderboard-heading">Top 10 players</h2>
+            <p>Your personal records work offline. The Global Hall appears only after its separately protected Supabase service is connected.</p>
+            <div className="leaderboard-columns">
+              <section aria-labelledby="personal-top-ten">
+                <h3 id="personal-top-ten">On this device</h3>
+                {localTopTen.length ? (
+                  <ol className="leaderboard-list">
+                    {localTopTen.map((score, index) => (
+                      <li key={score.id}>
+                        <span className="leaderboard-position">{index + 1}</span>
+                        <strong dir="auto">{score.playerName}</strong>
+                        <time>{formatRecordedTime(score.totalTimeSeconds)}</time>
+                        <small>{score.deaths} falls · Rank {score.rank.key}</small>
+                      </li>
+                    ))}
+                  </ol>
+                ) : <div className="leaderboard-empty">Complete all 20 chapters to set the first record.</div>}
+              </section>
+              <section aria-labelledby="global-top-ten">
+                <h3 id="global-top-ten">Global Hall</h3>
+                {globalTopTen.length ? (
+                  <ol className="leaderboard-list">
+                    {globalTopTen.map((score, index) => (
+                      <li key={`${score.player_name}-${score.completed_at}-${index}`}>
+                        <span className="leaderboard-position">{score.position || index + 1}</span>
+                        <strong dir="auto">{score.player_name}</strong>
+                        <time>{formatRecordedTime(Number(score.total_time_seconds))}</time>
+                        <small>{score.deaths} falls</small>
+                      </li>
+                    ))}
+                  </ol>
+                ) : <div className="leaderboard-empty">{globalHall.message}</div>}
+              </section>
+            </div>
+            <div className="overlay-actions">
+              <button className="primary" onClick={outerContinueTarget?.kind === 'complete' ? () => { void startOuterVeilAt(0); } : continueOuterVeil}>{outerContinueTarget?.kind === 'complete' ? 'Replay completed journey' : `Continue · Chapter ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')}`}</button>
+              <button className="secondary" onClick={returnToTitle}>Title screen</button>
+            </div>
           </div>
         </section>
       )}
