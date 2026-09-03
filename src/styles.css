@@ -277,7 +277,7 @@ h1 span { color: var(--gold); display: block; }
   position: absolute;
   z-index: 9;
   left: 50%;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  bottom: max(clamp(24px, 5vh, 44px), env(safe-area-inset-bottom));
   transform: translateX(-50%);
   padding: 9px 15px;
   background: rgba(3,6,14,.65);
@@ -543,9 +543,24 @@ h1 span { color: var(--gold); display: block; }
   .touch-down { grid-column: 2; grid-row: 2; }
   .touch-right { grid-column: 3; grid-row: 2; }
   .touch-jump { width: 62px; height: 62px; grid-row: 1 / span 2; align-self: end; }
-  .context-hint { bottom: 132px; }
+  .context-hint {
+    bottom: max(18px, env(safe-area-inset-bottom));
+    max-width: min(46vw, 440px);
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
   .title-layout { align-items: flex-end; padding-bottom: 42px; }
   h1 { font-size: clamp(38px, 11vw, 72px); }
+}
+
+@media (hover: none) and (orientation: portrait),
+  (pointer: coarse) and (orientation: portrait),
+  (max-width: 900px) and (orientation: portrait) {
+  .context-hint {
+    bottom: max(140px, calc(env(safe-area-inset-bottom) + 140px));
+    max-width: calc(100vw - 20px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
