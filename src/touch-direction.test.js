@@ -34,10 +34,44 @@ describe('eight-direction touch movement', () => {
     expect(getTouchDirectionActions('down-left')).toEqual(['left', 'down']);
   });
 
-  it('holds the current sector near a direction boundary to prevent flicker', () => {
-    const twentyEightDegrees = 28 * Math.PI / 180;
-    const dx = Math.cos(twentyEightDegrees) * radius;
-    const dy = Math.sin(twentyEightDegrees) * radius;
+  it.each([
+    ['right', 29],
+    ['down-right', 31],
+    ['down-right', 59],
+    ['down', 61],
+    ['down', 119],
+    ['down-left', 121],
+    ['left', 151],
+    ['up-left', 211],
+    ['up', 241],
+    ['up-right', 301],
+    ['right', 331],
+  ])('uses wider cardinal zones and deliberate diagonals: %s at %d degrees', (direction, degrees) => {
+    const angle = degrees * Math.PI / 180;
+    const dx = Math.cos(angle) * radius;
+    const dy = Math.sin(angle) * radius;
+    expect(resolveTouchDirection(dx, dy, radius)).toBe(direction);
+  });
+
+  it('keeps slight downward thumb drift horizontal but retains a deliberate diagonal', () => {
+    const slightDrift = 28 * Math.PI / 180;
+    const deliberateDiagonal = 45 * Math.PI / 180;
+    expect(resolveTouchDirection(
+      Math.cos(slightDrift) * radius,
+      Math.sin(slightDrift) * radius,
+      radius,
+    )).toBe('right');
+    expect(resolveTouchDirection(
+      Math.cos(deliberateDiagonal) * radius,
+      Math.sin(deliberateDiagonal) * radius,
+      radius,
+    )).toBe('down-right');
+  });
+
+  it('holds the current cardinal near its new boundary to prevent flicker', () => {
+    const thirtyFourDegrees = 34 * Math.PI / 180;
+    const dx = Math.cos(thirtyFourDegrees) * radius;
+    const dy = Math.sin(thirtyFourDegrees) * radius;
     expect(resolveTouchDirection(dx, dy, radius)).toBe('down-right');
     expect(resolveTouchDirection(dx, dy, radius, 'right')).toBe('right');
   });

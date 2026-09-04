@@ -1,5 +1,6 @@
 const FULL_TURN = Math.PI * 2;
-const SECTOR_ANGLE = Math.PI / 4;
+const CARDINAL_HALF_ANGLE = Math.PI / 6;
+const DIAGONAL_HALF_ANGLE = Math.PI / 12;
 
 export const TOUCH_DIRECTION_DEAD_ZONE = 0.24;
 export const TOUCH_DIRECTION_RELEASE_ZONE = 0.16;
@@ -14,6 +15,28 @@ export const TOUCH_DIRECTIONS = Object.freeze([
   'up-left',
   'up',
   'up-right',
+]);
+
+const DIRECTION_CENTERS = Object.freeze([
+  0,
+  Math.PI / 4,
+  Math.PI / 2,
+  Math.PI * 3 / 4,
+  Math.PI,
+  -Math.PI * 3 / 4,
+  -Math.PI / 2,
+  -Math.PI / 4,
+]);
+
+const DIRECTION_HALF_ANGLES = Object.freeze([
+  CARDINAL_HALF_ANGLE,
+  DIAGONAL_HALF_ANGLE,
+  CARDINAL_HALF_ANGLE,
+  DIAGONAL_HALF_ANGLE,
+  CARDINAL_HALF_ANGLE,
+  DIAGONAL_HALF_ANGLE,
+  CARDINAL_HALF_ANGLE,
+  DIAGONAL_HALF_ANGLE,
 ]);
 
 const DIRECTION_ACTIONS = Object.freeze({
@@ -48,17 +71,17 @@ export function resolveTouchDirection(dx, dy, radius, previousDirection = null) 
   if (distanceRatio <= releaseThreshold) return null;
 
   const angle = Math.atan2(dy, dx);
-  const candidateIndex = (Math.round(angle / SECTOR_ANGLE) + TOUCH_DIRECTIONS.length)
-    % TOUCH_DIRECTIONS.length;
-
   const previousIndex = TOUCH_DIRECTIONS.indexOf(previousDirection);
   if (previousIndex >= 0) {
-    const previousCenter = previousIndex * SECTOR_ANGLE;
-    const holdRange = SECTOR_ANGLE / 2 + TOUCH_DIRECTION_HYSTERESIS;
+    const previousCenter = DIRECTION_CENTERS[previousIndex];
+    const holdRange = DIRECTION_HALF_ANGLES[previousIndex] + TOUCH_DIRECTION_HYSTERESIS;
     if (angularDistance(angle, previousCenter) <= holdRange) return previousDirection;
   }
 
-  return TOUCH_DIRECTIONS[candidateIndex];
+  const candidateIndex = DIRECTION_CENTERS.findIndex((center, index) => (
+    angularDistance(angle, center) <= DIRECTION_HALF_ANGLES[index]
+  ));
+  return TOUCH_DIRECTIONS[candidateIndex < 0 ? 0 : candidateIndex];
 }
 
 export function clampTouchVector(dx, dy, maximumDistance) {

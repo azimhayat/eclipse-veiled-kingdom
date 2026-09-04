@@ -1128,7 +1128,7 @@ h1 span { color: var(--gold); display: block; }
     inset: 7px;
     border: 1px solid rgba(232,197,106,.12);
     border-radius: 50%;
-    background: repeating-conic-gradient(from 22.5deg, rgba(232,197,106,.22) 0 1deg, transparent 1deg 45deg);
+    background: repeating-conic-gradient(from 0deg, rgba(232,197,106,.22) 0 1deg, transparent 1deg 45deg);
     opacity: .72;
   }
   .touch-direction-pad::after {
