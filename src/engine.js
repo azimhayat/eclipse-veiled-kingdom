@@ -64,6 +64,7 @@ import {
 import {
   captureMotion,
   consumeFixedSteps,
+  extrapolateMotion,
   interpolateMotion,
   interpolationAlpha,
   measureRenderCadence,
@@ -261,6 +262,9 @@ export class GameEngine {
     GameEngine.prototype.forEachInterpolatedMotion.call(this, (entity, fields) => {
       interpolateMotion(entity, alpha, fields);
     });
+    // Aren is locally controlled: present from the current physics state and
+    // predict only the remaining fraction, avoiding interpolation's full-step lag.
+    extrapolateMotion(this.player, alpha, ['x', 'y'], FIXED_DT);
   }
 
   resetRenderInterpolation({ clearAccumulator = true } = {}) {

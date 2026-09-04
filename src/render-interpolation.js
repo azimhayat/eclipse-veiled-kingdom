@@ -69,6 +69,22 @@ export function interpolateMotion(entity, alpha, fields = ['x', 'y']) {
   }
 }
 
+export function extrapolateMotion(entity, alpha, fields = ['x', 'y'], fixedDt = null) {
+  if (!entity) return;
+  for (const field of fields) {
+    if (!Number.isFinite(entity[field])) continue;
+    const velocityField = field === 'x' ? 'vx' : field === 'y' ? 'vy' : null;
+    const velocity = velocityField ? entity[velocityField] : null;
+    const previous = entity.renderPrevious?.[field];
+    const change = Number.isFinite(fixedDt) && Number.isFinite(velocity)
+      ? velocity * fixedDt
+      : Number.isFinite(previous)
+        ? entity[field] - previous
+        : 0;
+    entity[`render${field[0].toUpperCase()}${field.slice(1)}`] = entity[field] + change * alpha;
+  }
+}
+
 export function snapMotionAxis(entity, field) {
   if (!entity || !Number.isFinite(entity[field])) return;
   entity.renderPrevious ||= {};

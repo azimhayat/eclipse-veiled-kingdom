@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   captureMotion,
   consumeFixedSteps,
+  extrapolateMotion,
   interpolateMotion,
   interpolationAlpha,
   measureRenderCadence,
@@ -68,5 +69,18 @@ describe('fixed-step render interpolation', () => {
     snapMotionAxis(actor, 'x');
     interpolateMotion(actor, 0);
     expect(actor.renderX).toBe(184);
+  });
+
+  it('presents the local player from current state without a full-step interpolation delay', () => {
+    const actor = { x: 20, y: 40, vx: 180, vy: -120 };
+    resetMotion(actor);
+    captureMotion(actor);
+    actor.x = 23;
+    actor.y = 38;
+
+    extrapolateMotion(actor, .5, ['x', 'y'], FIXED_DT);
+
+    expect(actor.renderX).toBeCloseTo(24.5);
+    expect(actor.renderY).toBeCloseTo(37);
   });
 });
