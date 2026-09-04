@@ -296,6 +296,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [hint, setHint] = useState('');
   const [hintVisible, setHintVisible] = useState(false);
+  const [hintPanelOpen, setHintPanelOpen] = useState(false);
   const [guidanceSettings, setGuidanceSettings] = useState(() => (
     loadGuidanceSettings({ storage: getBrowserStorage() }).settings || DEFAULT_GUIDANCE_SETTINGS
   ));
@@ -511,6 +512,7 @@ export default function App() {
       return true;
     };
     const announceLevel = (entry) => {
+      setHintPanelOpen(false);
       void ensureCombatVisualAssets(assets, entry.levelKey);
       const entryIndex = Number.isInteger(entry.level) ? entry.level - 1 : -1;
       if (entryIndex >= 0 && entryIndex + 1 < repository.length) {
@@ -583,6 +585,7 @@ export default function App() {
         });
       },
       mode: (mode) => {
+        if (mode !== 'play') setHintPanelOpen(false);
         if (levelTransitionRef.current && ['loading', 'play'].includes(mode)) return;
         if (mode === 'load-error') {
           window.clearTimeout(levelTransitionTimerRef.current);
@@ -853,13 +856,9 @@ export default function App() {
     setGuidanceSettings(result.settings);
   };
 
-  const showCurrentHint = () => {
+  const toggleHintPanel = () => {
     if (!hint) return;
-    window.clearTimeout(hintVisibilityTimerRef.current);
-    setHintVisible(true);
-    if (guidanceSettings.mode !== 'on') {
-      hintVisibilityTimerRef.current = window.setTimeout(() => setHintVisible(false), 5000);
-    }
+    setHintPanelOpen((open) => !open);
   };
 
   const startOuterVeilAt = async (index, { restartCompletedV4 = true } = {}) => {
@@ -1304,11 +1303,13 @@ export default function App() {
             </div>
             <div className="hud-right">
               <button
-                className={`icon-button hint-button${hintVisible ? ' active' : ''}`}
+                className={`icon-button hint-button${hintVisible || hintPanelOpen ? ' active' : ''}`}
                 disabled={screen !== 'play' || !hint}
-                aria-label={`Show current hint. Guidance ${guidanceSettings.mode}`}
+                aria-label={`${hintPanelOpen ? 'Close' : 'Open'} hint and guidance. Guidance ${guidanceSettings.mode}`}
+                aria-controls="hint-guidance-panel"
+                aria-expanded={hintPanelOpen}
                 title={`Hints: ${guidanceSettings.mode}`}
-                onClick={showCurrentHint}
+                onClick={toggleHintPanel}
               >?</button>
               <button className="icon-button" disabled={screen !== 'play'} aria-label="Mute all audio" aria-pressed={audioSettings.muted} onClick={toggleMute}>{audioSettings.muted ? '◇' : '◆'}</button>
               <button
@@ -1319,7 +1320,43 @@ export default function App() {
               >Ⅱ</button>
             </div>
           </header>
-          {screen === 'play' && !presentationCard && hintVisible && <div className="context-hint" role="status" aria-live="polite" aria-atomic="true">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && hintPanelOpen && (
+            <aside
+              id="hint-guidance-panel"
+              className="hint-guidance-panel"
+              role="dialog"
+              aria-label="Current hint and guidance settings"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setHintPanelOpen(false);
+              }}
+            >
+              <div className="hint-panel-heading">
+                <div><span>Current hint</span><strong>Guidance · {guidanceSettings.mode}</strong></div>
+                <button type="button" aria-label="Close hint and guidance" onClick={() => setHintPanelOpen(false)}>×</button>
+              </div>
+              <p>{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</p>
+              <div className="guidance-options" role="group" aria-label="Guidance mode">
+                {['auto', 'on', 'off'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={guidanceSettings.mode === mode ? 'active' : ''}
+                    aria-pressed={guidanceSettings.mode === mode}
+                    onClick={() => setGuidanceMode(mode)}
+                  >{mode}</button>
+                ))}
+              </div>
+              <small>Auto appears briefly · On stays visible · Off shows only essential warnings. Tap ? anytime.</small>
+            </aside>
+          )}
+          {screen === 'play' && !presentationCard && hintVisible && (
+            <div className="context-hint" role="status" aria-live="polite" aria-atomic="true">
+              {hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}
+              {hud.level === 1 && guidanceSettings.mode === 'auto' && (
+                <span className="context-hint-coach">Tap ? to view or change guidance.</span>
+              )}
+            </div>
+          )}
           {screen === 'play' && (
             <div className="sr-only" id="game-status">
               Level {hud.level}: {hud.levelName}. Hero health {hud.hp} of {hud.maxHp}. Objective: {hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent} of ${hud.objectiveTarget}`}.

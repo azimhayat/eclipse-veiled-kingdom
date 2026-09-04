@@ -98,6 +98,10 @@ export function reducedMotionRequested(matchMedia = globalThis.matchMedia) {
   }
 }
 
+export function cinematicPlaybackFailureStatus(error) {
+  return error?.name === 'NotAllowedError' ? 'blocked' : 'error';
+}
+
 export function formatCinematicTime(seconds) {
   const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
   const minutes = Math.floor(safe / 60);

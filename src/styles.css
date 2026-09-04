@@ -427,6 +427,47 @@ h1 span { color: var(--gold); display: block; }
   pointer-events: none;
 }
 
+.context-hint-coach {
+  display: block;
+  margin-top: 3px;
+  color: #a9edf4;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.hint-guidance-panel {
+  position: absolute;
+  z-index: 18;
+  top: max(68px, calc(env(safe-area-inset-top) + 54px));
+  right: max(20px, env(safe-area-inset-right));
+  width: min(360px, calc(100vw - 40px));
+  padding: 14px;
+  border: 1px solid rgba(232,197,106,.34);
+  color: #fff4d6;
+  background: linear-gradient(145deg, rgba(4,7,16,.96), rgba(6,11,22,.92));
+  box-shadow: 0 18px 48px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter: blur(14px);
+}
+.hint-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hint-panel-heading span { display: block; color: var(--gold); font-size: 8px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.hint-panel-heading strong { display: block; margin-top: 3px; font: 600 12px 'Cinzel', serif; letter-spacing: .07em; text-transform: uppercase; }
+.hint-panel-heading button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 1px solid rgba(232,197,106,.25);
+  color: rgba(255,255,255,.72);
+  background: rgba(2,4,10,.58);
+  font-size: 20px;
+  line-height: 1;
+}
+.hint-guidance-panel p { margin: 12px 0; color: rgba(255,255,255,.82); font-size: 12px; line-height: 1.45; }
+.hint-guidance-panel .guidance-options { margin-bottom: 9px; }
+.hint-guidance-panel .guidance-options button { flex: 1; min-height: 36px; }
+.hint-guidance-panel > small { display: block; color: rgba(255,255,255,.48); font-size: 9px; line-height: 1.35; }
+
 .chapter-card {
   position: absolute;
   z-index: 14;
@@ -730,9 +771,9 @@ h1 span { color: var(--gold); display: block; }
 
 .cinematic-video {
   position: absolute;
-  inset: 0 0 92px;
+  inset: 0;
   width: 100%;
-  height: calc(100% - 92px);
+  height: 100%;
   object-fit: contain;
   background: #02040a;
   transition: opacity .2s ease;
@@ -742,7 +783,7 @@ h1 span { color: var(--gold); display: block; }
 
 .cinematic-poster {
   position: absolute;
-  inset: 0 0 92px;
+  inset: 0;
   z-index: 0;
   display: grid;
   place-items: center;
@@ -778,7 +819,7 @@ h1 span { color: var(--gold); display: block; }
 
 .cinematic-scrim {
   position: absolute;
-  inset: 0 0 92px;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(2,4,10,.78), transparent 30%, transparent 70%, rgba(2,4,10,.56));
@@ -794,7 +835,12 @@ h1 span { color: var(--gold); display: block; }
   border-left: 1px solid rgba(232,197,106,.62);
   background: linear-gradient(90deg, rgba(2,4,10,.76), rgba(2,4,10,0));
   text-shadow: 0 2px 14px #000;
+  transition: opacity .35s ease, transform .35s ease;
 }
+
+.cinematic-status-loading .cinematic-copy,
+.cinematic-status-playing .cinematic-copy { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+.cinematic-status-loading .cinematic-poster-mark { opacity: 0; }
 
 .cinematic-eyebrow {
   color: var(--gold);
@@ -818,11 +864,15 @@ h1 span { color: var(--gold); display: block; }
   position: absolute;
   z-index: 3;
   right: max(22px, env(safe-area-inset-right));
-  bottom: 92px;
+  bottom: max(14px, env(safe-area-inset-bottom));
   left: max(22px, env(safe-area-inset-left));
   height: 3px;
   background: rgba(255,255,255,.18);
 }
+
+.cinematic-status-ready .cinematic-progress,
+.cinematic-status-blocked .cinematic-progress,
+.cinematic-status-error .cinematic-progress { opacity: 0; }
 
 .cinematic-progress i {
   display: block;
@@ -842,23 +892,51 @@ h1 span { color: var(--gold); display: block; }
   letter-spacing: .08em;
 }
 
-.cinematic-actions {
+.cinematic-skip {
   position: absolute;
-  z-index: 4;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  min-height: 92px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px max(20px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
-  border-top: 1px solid rgba(232,197,106,.2);
-  background: rgba(2,4,10,.96);
+  z-index: 5;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  min-height: 44px;
+  padding: 0 17px;
+  border: 1px solid rgba(232,197,106,.46);
+  color: #fff1ca;
+  background: rgba(2,4,10,.68);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
 }
 
-.cinematic-actions button { min-height: 44px; }
+.cinematic-resume {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: max(54px, calc(env(safe-area-inset-bottom) + 44px));
+  transform: translateX(-50%);
+  min-height: 46px;
+}
+
+.cinematic-fallback-actions {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  padding: 10px;
+  border: 1px solid rgba(232,197,106,.18);
+  background: rgba(2,4,10,.82);
+  backdrop-filter: blur(12px);
+}
+.cinematic-fallback-actions > button { min-height: 44px; white-space: nowrap; }
+.cinematic-accessibility { min-width: 132px; color: rgba(255,255,255,.68); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.cinematic-accessibility summary { cursor: pointer; padding: 10px 12px; }
+.cinematic-accessibility button { width: 100%; min-height: 38px; margin-top: 5px; border: 1px solid rgba(232,197,106,.24); color: #fff1ca; background: rgba(7,10,20,.94); font-size: 9px; }
+.cinematic-video-active { cursor: pointer; }
 .results { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: rgba(232,197,106,.18); margin: 25px 0; }
 .result { background: #090e20; padding: 16px; }
 .result strong { display: block; color: var(--gold-bright); font-family: 'Cinzel', serif; font-size: 22px; }
@@ -1007,6 +1085,8 @@ h1 span { color: var(--gold); display: block; }
 @media (hover: none), (pointer: coarse), (max-width: 900px) {
   .hud-kicker, .relic-count { font-size: 12px; }
   .audio-controls input[type='range'], .audio-mute { min-height: 36px; }
+  .hint-panel-heading button { width: 42px; height: 42px; flex-basis: 42px; }
+  .hint-guidance-panel .guidance-options button { min-height: 42px; }
   .touch-controls { position: absolute; inset: auto 0 max(16px, env(safe-area-inset-bottom)); z-index: 16; display: flex; justify-content: space-between; padding: 0 20px; pointer-events: none; }
   .touch-cluster { display: grid; gap: 8px; pointer-events: auto; }
   .touch-move { grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 54px); }
@@ -1188,8 +1268,6 @@ h1 span { color: var(--gold); display: block; }
 }
 
 @media (max-width: 700px) {
-  .cinematic-video,
-  .cinematic-scrim { bottom: 132px; height: calc(100% - 132px); }
   .cinematic-copy {
     top: max(12px, env(safe-area-inset-top));
     left: max(12px, env(safe-area-inset-left));
@@ -1198,23 +1276,15 @@ h1 span { color: var(--gold); display: block; }
   }
   .cinematic-copy h2 { font-size: clamp(20px, 7vw, 31px); }
   .cinematic-copy p { font-size: 12px; line-height: 1.4; }
-  .cinematic-progress { bottom: 132px; }
-  .cinematic-actions {
-    min-height: 132px;
-    align-content: center;
-    flex-wrap: wrap;
-    padding-block: 12px max(12px, env(safe-area-inset-bottom));
-  }
-  .cinematic-actions button { min-height: 42px; padding-inline: 13px; font-size: 9px; }
+  .cinematic-skip { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); min-height: 42px; padding-inline: 13px; }
+  .cinematic-fallback-actions { width: calc(100vw - 24px); justify-content: center; flex-wrap: wrap; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
-  .cinematic-video,
-  .cinematic-scrim { bottom: 72px; height: calc(100% - 72px); }
   .cinematic-copy { top: max(8px, env(safe-area-inset-top)); padding: 8px 12px; }
   .cinematic-copy h2 { margin-block: 3px 5px; font-size: clamp(18px, 7vh, 28px); }
   .cinematic-copy p { max-width: 600px; font-size: 10px; line-height: 1.3; }
-  .cinematic-progress { bottom: 72px; }
-  .cinematic-actions { min-height: 72px; padding-block: 8px; }
-  .cinematic-actions button { min-height: 38px; }
+  .cinematic-skip { min-height: 38px; }
+  .cinematic-fallback-actions { bottom: max(12px, env(safe-area-inset-bottom)); padding: 7px; }
+  .cinematic-fallback-actions > button { min-height: 38px; }
 }

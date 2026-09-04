@@ -7,6 +7,7 @@ import {
 } from './catalog.js';
 import {
   cinematicAudioSettings,
+  cinematicPlaybackFailureStatus,
   createCinematicSequenceController,
   formatCinematicTime,
   isolateGameForCinematic,
@@ -112,5 +113,11 @@ describe('cinematic runtime isolation', () => {
     expect(reducedMotionRequested(() => ({ matches: true }))).toBe(true);
     expect(reducedMotionRequested(() => { throw new Error('blocked'); })).toBe(false);
     expect(formatCinematicTime(125.9)).toBe('02:05');
+  });
+
+  it('uses a branded play fallback only when browser autoplay policy blocks the film', () => {
+    expect(cinematicPlaybackFailureStatus({ name: 'NotAllowedError' })).toBe('blocked');
+    expect(cinematicPlaybackFailureStatus({ name: 'NotSupportedError' })).toBe('error');
+    expect(cinematicPlaybackFailureStatus(new Error('network'))).toBe('error');
   });
 });

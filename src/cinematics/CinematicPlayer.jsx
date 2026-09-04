@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   cinematicAudioSettings,
+  cinematicPlaybackFailureStatus,
   createCinematicSequenceController,
   formatCinematicTime,
   reducedMotionRequested,
@@ -29,6 +30,7 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
   const reducedMotion = useMemo(() => reducedMotionRequested(), []);
   const mediaAudio = cinematicAudioSettings(audioSettings);
   const controllerRef = useRef(null);
+  const autoStartedIndexRef = useRef(-1);
 
   completeRef.current = onComplete;
   if (!controllerRef.current) {
@@ -84,6 +86,8 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
     if (!video) return;
     try {
       onBeforePlay?.();
+      video.muted = mediaAudio.muted;
+      video.volume = mediaAudio.volume;
       if (!mediaStarted) {
         video.src = cinematic.src;
         video.load();
@@ -92,7 +96,9 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
       showDefaultCaptions(video);
       const pending = video.play();
       setStatus('loading');
-      if (pending?.catch) pending.catch(() => setStatus('error'));
+      if (pending?.catch) {
+        pending.catch((error) => setStatus(cinematicPlaybackFailureStatus(error)));
+      }
     } catch {
       setStatus('error');
     }
@@ -111,8 +117,27 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
     play();
   };
 
+  useLayoutEffect(() => {
+    if (reducedMotion || autoStartedIndexRef.current === index) return;
+    autoStartedIndexRef.current = index;
+    play();
+  }, [index, reducedMotion]);
+
+  const togglePlayback = () => {
+    if (status === 'playing') pause();
+    else if (status === 'paused') play();
+  };
+
+  const handleVideoKeyDown = (event) => {
+    if (!['Enter', ' '].includes(event.key) || !['playing', 'paused'].includes(status)) return;
+    event.preventDefault();
+    togglePlayback();
+  };
+
+  const awaitingPlayerAction = ['ready', 'blocked', 'error', 'fallback'].includes(status);
+
   return (
-    <section className="cinematic-layer" role="dialog" aria-modal="true" aria-labelledby="cinematic-heading" aria-describedby="cinematic-description">
+    <section className={`cinematic-layer cinematic-status-${status}`} role="dialog" aria-modal="true" aria-labelledby="cinematic-heading" aria-describedby="cinematic-description">
       <div className="cinematic-shell">
         <video
           key={cinematic.id}
@@ -121,6 +146,10 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
           preload="metadata"
           playsInline
           muted={mediaAudio.muted}
+          tabIndex={['playing', 'paused'].includes(status) ? 0 : -1}
+          aria-label={status === 'paused' ? 'Film paused. Activate to resume.' : 'Film playing. Activate to pause.'}
+          onClick={togglePlayback}
+          onKeyDown={handleVideoKeyDown}
           onLoadedMetadata={(event) => {
             showDefaultCaptions(event.currentTarget);
             setPosition({ current: 0, duration: event.currentTarget.duration || 0 });
@@ -161,9 +190,13 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
               ? 'The film could not be loaded. Your journey is safe; retry or continue with the story summary.'
               : status === 'fallback'
                 ? cinematic.synopsis
+                : status === 'blocked'
+                  ? 'Your browser paused automatic playback. Tap Play to begin with captions.'
+                  : status === 'paused'
+                    ? 'Film paused. Tap the picture or resume below.'
                 : reducedMotion
                   ? 'Reduced motion is enabled. Play the film when ready, or continue with the written story.'
-                  : 'Captions are on. Playback begins only when you choose Play.'}
+                  : 'Captions are on. The story begins automatically.'}
           </p>
         </div>
 
@@ -174,24 +207,31 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
           </div>
         )}
 
-        <div className="cinematic-actions">
-          {status === 'playing' ? (
-            <button type="button" className="primary" onClick={pause}>Pause</button>
-          ) : status === 'error' ? (
-            <button type="button" className="primary" onClick={retry}>Retry film</button>
-          ) : status === 'fallback' ? (
-            <button type="button" className="primary" onClick={() => finishCurrent('text-fallback', index)}>Continue story</button>
-          ) : (
-            <button type="button" className="primary" onClick={play}>{status === 'paused' ? 'Resume film' : 'Play film'}</button>
-          )}
-          {status !== 'fallback' && (
-            <button type="button" className="secondary" onClick={readFallback}>
-              {status === 'error' ? 'Continue without video' : 'Read story instead'}
-            </button>
-          )}
-          <button type="button" className="secondary" onClick={() => finishCurrent('skip', index)}>Skip film</button>
-          {sequence.length > 1 && <button type="button" className="secondary" onClick={skipAll}>Skip all films</button>}
-        </div>
+        <button type="button" className="cinematic-skip" onClick={skipAll}>Skip story</button>
+
+        {status === 'paused' && (
+          <button type="button" className="primary cinematic-resume" onClick={play}>Resume film</button>
+        )}
+
+        {awaitingPlayerAction && (
+          <div className="cinematic-fallback-actions">
+            {status === 'error' ? (
+              <button type="button" className="primary" onClick={retry}>Retry film</button>
+            ) : status === 'fallback' ? (
+              <button type="button" className="primary" onClick={() => finishCurrent('text-fallback', index)}>Continue story</button>
+            ) : (
+              <button type="button" className="primary" onClick={play}>Play film</button>
+            )}
+            {status !== 'fallback' && (
+              <details className="cinematic-accessibility">
+                <summary>Accessibility</summary>
+                <button type="button" onClick={readFallback}>
+                  {status === 'error' ? 'Continue with written story' : 'Read story instead'}
+                </button>
+              </details>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
