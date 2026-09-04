@@ -5326,7 +5326,7 @@ export class GameEngine {
     drawDoor(ctx, this.level.door, this.isExitReady(), time);
     if (benchmarkPresentation) drawCombatEvents(ctx, this.combatEvents, this.totalTime, this.assets);
     drawParticles(ctx, this.particles);
-    drawHero(ctx, this.player, combatActorTime, this.assets.hero);
+    drawHero(ctx, this.player, combatActorTime, this.assets.hero, this.assets.heroAttack);
     ctx.restore();
 
     const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .2, VIEW_W / 2, VIEW_H / 2, VIEW_W * .72);

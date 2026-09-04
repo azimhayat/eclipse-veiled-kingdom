@@ -1,7 +1,7 @@
 import { CHUNK_COLS, CHUNK_COUNT, CHUNK_W, TILE, Tile, VIEW_H, VIEW_W, WORLD_COLS, WORLD_H, WORLD_W } from './levels/constants.js';
 import { releaseRenderedLevel } from './rendered-level-cache.js';
 import { getTimedTeethState } from './teeth-timing.js';
-import { getHeroPoseFrame } from './combat-presentation.js';
+import { getHeroPoseFrame, HERO_FORWARD_ATTACK_FRAME } from './combat-presentation.js';
 import {
   drawSpriteFrame,
   getVeilRaiderFrame,
@@ -2309,7 +2309,7 @@ export function drawProjectile(ctx, projectile) {
   ctx.restore();
 }
 
-export function drawHero(ctx, player, time, heroSheet) {
+export function drawHero(ctx, player, time, heroSheet, heroAttackSprite) {
   const playerX = presentedX(player);
   const playerY = presentedY(player);
   const landingProgress = player.landingClock > 0
@@ -2326,7 +2326,8 @@ export function drawHero(ctx, player, time, heroSheet) {
           : !player.grounded || state === 'airborne' ? 'jump'
             : running || state === 'advance' || state === 'backpedal' ? 'run'
               : 'idle';
-    const frame = getHeroPoseFrame(pose);
+    const usesForwardAttackSprite = pose === 'attack' && Boolean(heroAttackSprite);
+    const frame = usesForwardAttackSprite ? HERO_FORWARD_ATTACK_FRAME : getHeroPoseFrame(pose);
     const { col, row, size: drawSize, anchorX, anchorY } = frame;
     const presentationClock = player.presentation?.clock ?? time;
     const presentationEnabled = Boolean(player.combatPresentationEnabled);
@@ -2340,8 +2341,10 @@ export function drawHero(ctx, player, time, heroSheet) {
     const offsetY = presentationEnabled && pose === 'run'
       ? -Math.abs(Math.sin(presentationClock * 15)) * 2
       : 0;
-    const cellW = heroSheet.width / 3;
-    const cellH = heroSheet.height / 2;
+    const poseSheet = usesForwardAttackSprite ? heroAttackSprite : heroSheet;
+    const cellW = usesForwardAttackSprite ? poseSheet.width : poseSheet.width / 3;
+    const cellH = usesForwardAttackSprite ? poseSheet.height : poseSheet.height / 2;
+    const usesAuthoredAnchor = presentationEnabled || usesForwardAttackSprite;
     ctx.save();
     ctx.translate(playerX + player.w / 2, playerY + player.h);
     ctx.scale(player.facing, 1);
@@ -2361,13 +2364,13 @@ export function drawHero(ctx, player, time, heroSheet) {
     ctx.shadowColor = player.attackTimer > 0 ? '#f3c861' : 'rgba(81,156,220,.42)';
     ctx.shadowBlur = player.attackTimer > 0 ? 15 : 5;
     ctx.drawImage(
-      heroSheet,
-      col * cellW,
-      row * cellH,
+      poseSheet,
+      (col || 0) * cellW,
+      (row || 0) * cellH,
       cellW,
       cellH,
-      presentationEnabled ? -drawSize * anchorX : -drawSize / 2 + legacyOffsetX,
-      presentationEnabled ? -drawSize * anchorY + offsetY : -drawSize + legacyOffsetY,
+      usesAuthoredAnchor ? -drawSize * anchorX : -drawSize / 2 + legacyOffsetX,
+      usesAuthoredAnchor ? -drawSize * anchorY + offsetY : -drawSize + legacyOffsetY,
       drawSize,
       drawSize,
     );
@@ -2435,12 +2438,12 @@ export function drawHero(ctx, player, time, heroSheet) {
   if (attacking) {
     const p = 1 - player.attackTimer / .32;
     ctx.save();
-    ctx.rotate(-1.8 + p * 2.7);
+    ctx.rotate(-.7 + p * 1.4);
     ctx.strokeStyle = '#dde8ef'; ctx.lineWidth = 4;
     ctx.shadowColor = '#f6c75e'; ctx.shadowBlur = 14;
     ctx.beginPath(); ctx.moveTo(8, -52); ctx.lineTo(63, -52); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,210,104,.45)'; ctx.lineWidth = 12;
-    ctx.beginPath(); ctx.arc(8, -52, 58, -1.25, .5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(8, -52, 58, -.65, .65); ctx.stroke();
     ctx.restore();
   } else {
     ctx.strokeStyle = '#d9e1e5'; ctx.lineWidth = 3;

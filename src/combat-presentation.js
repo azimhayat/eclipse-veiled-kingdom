@@ -34,6 +34,12 @@ export const HERO_POSE_FRAMES = Object.freeze({
   climb: Object.freeze({ col: 2, row: 1, size: 120, anchorX: .51, anchorY: .75 }),
 });
 
+export const HERO_FORWARD_ATTACK_FRAME = Object.freeze({
+  size: 126,
+  anchorX: .452,
+  anchorY: .82,
+});
+
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 
 export function getPlayerCombatClip(kind, comboStep = 1) {

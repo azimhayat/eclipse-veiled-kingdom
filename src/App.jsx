@@ -76,6 +76,7 @@ const ASSET_URLS = {
   background: `${import.meta.env.BASE_URL}assets/kingdom-panorama.png`,
   outerVeilBackground: `${import.meta.env.BASE_URL}assets/outer-veil-buried-dawn-v1.png`,
   hero: `${import.meta.env.BASE_URL}assets/hero-sheet-v2.png`,
+  heroAttack: `${import.meta.env.BASE_URL}assets/hero-attack-forward-v1.png`,
 };
 
 const OPTIONAL_COMBAT_ASSET_URLS = Object.freeze({

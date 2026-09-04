@@ -92,6 +92,28 @@ describe('deterministic combat rendering', () => {
     ]);
   });
 
+  it('uses the dedicated forward-strike art and mirrors it with Aren facing', () => {
+    const player = {
+      x: 100, y: 200, w: 28, h: 44, vx: 0, facing: 1,
+      grounded: true, wallSide: 0, climbing: false, invuln: 0,
+      attackTimer: .2, digTimer: 0, guarding: false,
+      combatPresentationEnabled: false,
+      presentation: { state: 'attack-active', clock: .12 },
+    };
+    const sheet = { width: 1536, height: 1024 };
+    const forwardStrike = { width: 512, height: 512 };
+    const facingRight = recordingContext();
+    const facingLeft = recordingContext();
+    drawHero(facingRight, player, 12, sheet, forwardStrike);
+    drawHero(facingLeft, { ...player, facing: -1 }, 12, sheet, forwardStrike);
+    expect(facingRight.calls).toContainEqual(['scale', 1, 1]);
+    expect(facingLeft.calls).toContainEqual(['scale', -1, 1]);
+    expect(facingRight.calls.find((call) => call[0] === 'drawImage')).toEqual([
+      'drawImage', forwardStrike, 0, 0, 512, 512,
+      -126 * .452, -126 * .82, 126, 126,
+    ]);
+  });
+
   it('derives contact flashes only from simulation timestamps', () => {
     const event = {
       id: 1, type: 'hit', createdAt: 8, expiresAt: 8.4,
