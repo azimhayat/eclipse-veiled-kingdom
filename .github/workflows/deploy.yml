@@ -21,6 +21,7 @@ jobs:
       - name: Check out V5
         uses: actions/checkout@v6
         with:
+          ref: v5-release-candidate
           path: v5-source
 
       - name: Check out preserved V4
