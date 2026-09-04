@@ -5,10 +5,12 @@ import { cloneLevel, TILE, Tile, WORLD_COLS, WORLD_ROWS, createLevels } from './
 describe('Eclipse of the Veiled Kingdom', () => {
   it('keeps the authored physics contract', () => {
     expect(PHYSICS).toMatchObject({
-      RUN_SPEED: 290,
-      GROUND_ACCEL: 2700,
+      RUN_SPEED: 320,
+      AIR_SPEED: 290,
+      WATER_SPEED: 197.2,
+      GROUND_ACCEL: 3000,
       AIR_ACCEL: 1750,
-      GROUND_FRICTION: 3000,
+      GROUND_FRICTION: 3200,
       AIR_DRAG: 720,
       JUMP_VEL: -850,
       JUMP_CUT_SPEED: -360,

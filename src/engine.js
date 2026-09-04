@@ -1357,7 +1357,12 @@ export class GameEngine {
       const guardScale = p.guarding ? .24 : 1;
       const hurtScale = p.reactionClock > 0 ? .15 : 1;
       const motionScale = Math.min(guardScale, combatMotion.movementScale, hurtScale);
-      const runSpeed = (p.inWater ? PHYSICS.RUN_SPEED * .68 : PHYSICS.RUN_SPEED) * motionScale;
+      const baseRunSpeed = p.inWater
+        ? PHYSICS.WATER_SPEED
+        : p.grounded
+          ? PHYSICS.RUN_SPEED
+          : PHYSICS.AIR_SPEED;
+      const runSpeed = baseRunSpeed * motionScale;
       if (!p.grounded && p.wallJumpControlLock > 0) {
         // Preserve the authored wall-jump launch briefly even if a thumb is
         // still resting toward the wall. Control returns well before apex.

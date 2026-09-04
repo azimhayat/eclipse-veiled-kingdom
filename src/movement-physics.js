@@ -1,10 +1,12 @@
 export const FIXED_DT = 1 / 60;
 
 export const PHYSICS = Object.freeze({
-  RUN_SPEED: 290,
-  GROUND_ACCEL: 2700,
+  RUN_SPEED: 320,
+  AIR_SPEED: 290,
+  WATER_SPEED: 197.2,
+  GROUND_ACCEL: 3000,
   AIR_ACCEL: 1750,
-  GROUND_FRICTION: 3000,
+  GROUND_FRICTION: 3200,
   AIR_DRAG: 720,
   JUMP_VEL: -850,
   JUMP_CUT_SPEED: -360,
@@ -92,7 +94,10 @@ function jumpMeasure({
       if (vy < physics.JUMP_CUT_SPEED) vy = physics.JUMP_CUT_SPEED;
     }
     if (wallControlLock > 0) wallControlLock = Math.max(0, wallControlLock - fixedDt);
-    else if (horizontalInput) vx = approach(vx, horizontalInput * physics.RUN_SPEED, physics.AIR_ACCEL * fixedDt);
+    else if (horizontalInput) {
+      const airSpeed = physics.AIR_SPEED ?? physics.RUN_SPEED;
+      vx = approach(vx, horizontalInput * airSpeed, physics.AIR_ACCEL * fixedDt);
+    }
     else vx = approach(vx, 0, physics.AIR_DRAG * fixedDt);
     vy = Math.min(physics.TERMINAL, vy + gravityForVelocity(vy, physics) * fixedDt);
     x += vx * fixedDt;

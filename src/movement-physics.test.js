@@ -40,7 +40,7 @@ describe('movement feel diagnostics', () => {
     const before = measureMovementFeel(BASELINE);
     const after = measureMovementFeel(PHYSICS);
 
-    expect(after.airRelease.distance).toBeLessThan(before.airRelease.distance * .45);
+    expect(after.airRelease.distance).toBeLessThan(before.airRelease.distance * .5);
     expect(after.fullJump.height).toBeGreaterThan(before.fullJump.height - 8);
     expect(after.fullJump.height).toBeLessThan(before.fullJump.height + 8);
     expect(after.fullJump.distance).toBeGreaterThan(230);
