@@ -41,6 +41,24 @@ describe('Eclipse of the Veiled Kingdom', () => {
     expect(KEY_ACTIONS.KeyW).toBe('climb');
   });
 
+  it('keeps vertical and horizontal touch actions active together for diagonals', () => {
+    const engine = {
+      input: {
+        left: false, right: false, climb: false, down: false,
+        jump: false, attack: false, dig: false, attackIntent: null,
+        pressed: new Set(), released: new Set(),
+      },
+    };
+    GameEngine.prototype.setInput.call(engine, 'climb', true);
+    GameEngine.prototype.setInput.call(engine, 'right', true);
+    expect(engine.input).toMatchObject({ climb: true, right: true });
+    expect(engine.input.pressed).toEqual(new Set(['climb', 'right']));
+
+    GameEngine.prototype.setInput.call(engine, 'climb', false);
+    expect(engine.input).toMatchObject({ climb: false, right: true });
+    expect(engine.input.released).toEqual(new Set(['climb']));
+  });
+
   it('does not consume game shortcuts while the player is typing a Chronicle name', () => {
     const engine = {
       mode: 'win',

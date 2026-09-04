@@ -10,6 +10,11 @@ import { TILE, VIEW_H, VIEW_W } from './levels/constants.js';
 import { bakeAllLevels } from './render.js';
 import { releaseRenderedLevel, RenderedLevelCache } from './rendered-level-cache.js';
 import {
+  clampTouchVector,
+  getTouchDirectionActions,
+  resolveTouchDirection,
+} from './touch-direction.js';
+import {
   beginStageOneRun,
   getStageOneRunCheckpoint,
   getStageOneChronicle,
@@ -224,6 +229,131 @@ function TouchButton({ action, label, className = '', engineRef }) {
       onClick={assistiveClick}
       onContextMenu={(event) => event.preventDefault()}
     >{label}</button>
+  );
+}
+
+const TOUCH_MOVEMENT_ACTIONS = Object.freeze(['left', 'right', 'climb', 'down']);
+
+function TouchDirectionPad({ engineRef }) {
+  const padRef = useRef(null);
+  const knobRef = useRef(null);
+  const pointerRef = useRef(null);
+  const directionRef = useRef(null);
+  const activeActionsRef = useRef(new Set());
+  const [direction, setDirection] = useState(null);
+
+  const applyDirection = (nextDirection) => {
+    const nextActions = new Set(getTouchDirectionActions(nextDirection));
+    TOUCH_MOVEMENT_ACTIONS.forEach((action) => {
+      const wasActive = activeActionsRef.current.has(action);
+      const isActive = nextActions.has(action);
+      if (wasActive !== isActive) engineRef.current?.setInput(action, isActive);
+    });
+    activeActionsRef.current = nextActions;
+  };
+
+  const presentPointer = (dx, dy, radius) => {
+    const vector = clampTouchVector(dx, dy, radius * .58);
+    knobRef.current?.style.setProperty('--touch-stick-x', `${vector.x.toFixed(2)}px`);
+    knobRef.current?.style.setProperty('--touch-stick-y', `${vector.y.toFixed(2)}px`);
+  };
+
+  const resetDirection = () => {
+    pointerRef.current = null;
+    directionRef.current = null;
+    setDirection(null);
+    applyDirection(null);
+    presentPointer(0, 0, 0);
+  };
+
+  const updatePointer = (event) => {
+    if (pointerRef.current !== event.pointerId) return;
+    event.preventDefault();
+    const bounds = padRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const dx = event.clientX - (bounds.left + bounds.width / 2);
+    const dy = event.clientY - (bounds.top + bounds.height / 2);
+    const radius = Math.min(bounds.width, bounds.height) / 2;
+    const nextDirection = resolveTouchDirection(dx, dy, radius, directionRef.current);
+    if (nextDirection !== directionRef.current) {
+      directionRef.current = nextDirection;
+      setDirection(nextDirection);
+      applyDirection(nextDirection);
+    }
+    presentPointer(dx, dy, radius);
+  };
+
+  const releasePointer = (event) => {
+    if (event?.pointerId !== undefined
+      && pointerRef.current !== null
+      && event.pointerId !== pointerRef.current) return;
+    event?.preventDefault();
+    const activePointer = pointerRef.current;
+    resetDirection();
+    if (activePointer !== null && event?.currentTarget?.hasPointerCapture?.(activePointer)) {
+      try { event.currentTarget.releasePointerCapture(activePointer); } catch { /* cancelled pointers release themselves */ }
+    }
+  };
+
+  const startPointer = (event) => {
+    if (pointerRef.current !== null && pointerRef.current !== event.pointerId) return;
+    event.preventDefault();
+    pointerRef.current = event.pointerId;
+    try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* synthetic pointers need no capture */ }
+    updatePointer(event);
+  };
+
+  useEffect(() => {
+    const handleWindowBlur = () => resetDirection();
+    const handleVisibilityChange = () => {
+      if (document.hidden) resetDirection();
+    };
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      pointerRef.current = null;
+      directionRef.current = null;
+      TOUCH_MOVEMENT_ACTIONS.forEach((action) => {
+        if (activeActionsRef.current.has(action)) engineRef.current?.setInput(action, false);
+      });
+      activeActionsRef.current.clear();
+    };
+  }, [engineRef]);
+
+  return (
+    <div className="touch-direction-control" role="group" aria-label="Eight direction movement joystick">
+      <div
+        ref={padRef}
+        className={`touch-direction-pad${direction ? ` is-active direction-${direction}` : ''}`}
+        data-direction={direction || 'neutral'}
+        onPointerDown={startPointer}
+        onPointerMove={updatePointer}
+        onPointerUp={releasePointer}
+        onPointerCancel={releasePointer}
+        onLostPointerCapture={releasePointer}
+        onContextMenu={(event) => event.preventDefault()}
+        aria-hidden="true"
+      >
+        <span className="touch-direction-orbit" />
+        <span className="touch-direction-mark mark-up">⌃</span>
+        <span className="touch-direction-mark mark-right">›</span>
+        <span className="touch-direction-mark mark-down">⌄</span>
+        <span className="touch-direction-mark mark-left">‹</span>
+        <span className="touch-direction-diagonal diagonal-up-right" />
+        <span className="touch-direction-diagonal diagonal-down-right" />
+        <span className="touch-direction-diagonal diagonal-down-left" />
+        <span className="touch-direction-diagonal diagonal-up-left" />
+        <span ref={knobRef} className="touch-direction-knob"><span>◇</span></span>
+      </div>
+      <div className="touch-direction-accessible">
+        <TouchButton engineRef={engineRef} action="climb" label="Move up" className="touch-direction-assist" />
+        <TouchButton engineRef={engineRef} action="left" label="Move left" className="touch-direction-assist" />
+        <TouchButton engineRef={engineRef} action="down" label="Move down" className="touch-direction-assist" />
+        <TouchButton engineRef={engineRef} action="right" label="Move right" className="touch-direction-assist" />
+      </div>
+    </div>
   );
 }
 
@@ -1398,10 +1528,7 @@ export default function App() {
           {screen === 'play' && (
             <div className="touch-controls" role="group" aria-label="Touch controls">
               <div className="touch-cluster touch-move">
-                <TouchButton engineRef={engineRef} action="climb" label="Up" className="touch-up" />
-                <TouchButton engineRef={engineRef} action="left" label="←" className="touch-left" />
-                <TouchButton engineRef={engineRef} action="down" label="Down" className="touch-down" />
-                <TouchButton engineRef={engineRef} action="right" label="→" className="touch-right" />
+                <TouchDirectionPad engineRef={engineRef} />
               </div>
               <div className="touch-cluster touch-actions">
                 <TouchButton engineRef={engineRef} action="attack" label="Strike" />
