@@ -697,9 +697,9 @@ export class GameEngine {
     return true;
   }
 
-  pause(paused) {
+  pause(paused, { silent = false } = {}) {
     if (this.mode !== 'play' && this.mode !== 'paused') return;
-    this.audio?.play('menu');
+    if (!silent) this.audio?.play('menu');
     this.mode = paused ? 'paused' : 'play';
     this.clearInputs();
   }

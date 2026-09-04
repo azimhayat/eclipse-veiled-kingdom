@@ -23,6 +23,7 @@ describe('V5 cinematic catalog', () => {
       '/eclipse-veiled-kingdom/assets/cinematics/chapter-one-introduction-v2.mp4',
     ]);
     for (const item of sequence) {
+      expect(item.poster).toMatch(/-v2-poster\.jpg$/);
       expect(item.captions).toHaveLength(1);
       expect(item.captions[0]).toMatchObject({ kind: 'captions', srcLang: 'en', default: true });
       expect(item.captions[0].src).toMatch(/\.en\.vtt$/);

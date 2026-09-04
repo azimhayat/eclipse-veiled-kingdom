@@ -43,6 +43,25 @@ export function detectPresentationInput(windowObject = globalThis.window) {
   }
 }
 
+export function buildLevelTransitionPresentation(entry, {
+  completedLevel,
+  nextLevel,
+  totalLevels = 10,
+  nextLevelKey = entry?.levelKey || null,
+} = {}) {
+  if (!entry || !Number.isInteger(completedLevel) || !Number.isInteger(nextLevel)) return null;
+  return {
+    completedLevel,
+    nextLevel,
+    totalLevels,
+    nextLevelKey,
+    title: entry.name || entry.title || 'The next path',
+    subtitle: entry.subtitle || '',
+    storyLine: entry.storyLine || '',
+    objective: entry.objectiveTitle || entry.mechanic || 'Restore the path ahead.',
+  };
+}
+
 export function buildLevelPresentation(entry, {
   productionCampaign = false,
   inputMode = 'keyboard',

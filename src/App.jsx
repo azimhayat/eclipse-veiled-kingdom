@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DEFAULT_AUDIO_SETTINGS } from './audio-settings.js';
 import { GameEngine } from './engine.js';
-import { buildLevelPresentation, detectPresentationInput } from './level-presentation.js';
+import {
+  buildLevelPresentation,
+  buildLevelTransitionPresentation,
+  detectPresentationInput,
+} from './level-presentation.js';
 import { TILE, VIEW_H, VIEW_W } from './levels/constants.js';
 import { bakeAllLevels } from './render.js';
 import { releaseRenderedLevel, RenderedLevelCache } from './rendered-level-cache.js';
@@ -29,6 +33,7 @@ import {
 } from './campaign/outerVeilCampaign.js';
 import {
   createV4CampaignRepository,
+  V4_CAMPAIGN_CATALOG,
   V4_LEVEL_KEYS,
   V5_LAUNCH_PRESENTATION,
 } from './campaign/v4Campaign.js';
@@ -244,6 +249,38 @@ function AudioControls({ settings, onToggleMute, onMusicVolume, onEffectsVolume,
   );
 }
 
+function PresentationPanel({ card, className = '' }) {
+  if (!card) return null;
+  return (
+    <div
+      key={`${card.sequenceId}-${card.sequenceIndex}-${card.kind}`}
+      className={`chapter-card presentation-card presentation-${card.kind}${className ? ` ${className}` : ''}`}
+      data-presentation-kind={card.kind}
+      aria-live="polite"
+      role="status"
+      style={{ '--presentation-duration': `${card.durationMs}ms` }}
+    >
+      {card.portraitPath && (
+        <img
+          className="chapter-portrait"
+          src={`${import.meta.env.BASE_URL}${card.portraitPath}`}
+          alt={card.portraitAlt}
+        />
+      )}
+      <div className="chapter-rule" />
+      <div className="chapter-kicker">{card.kicker}</div>
+      <div className="chapter-title">{card.title}</div>
+      {card.subtitle && <div className="chapter-subtitle">{card.subtitle}</div>}
+      {card.detail && <div className="chapter-story">{card.detail}</div>}
+      {card.input && (
+        <div className="presentation-input">
+          <span>{card.inputLabel}</span>{card.input}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const canvasRef = useRef(null);
   const titlePrimaryRef = useRef(null);
@@ -284,13 +321,19 @@ export default function App() {
   const hintVisibilityTimerRef = useRef(null);
   const cinematicSessionRef = useRef(null);
   const cinematicGenerationRef = useRef(0);
+  const dismissPresentationRef = useRef(null);
+  const finishLevelTransitionRef = useRef(null);
+  const levelTransitionRef = useRef(null);
+  const levelTransitionTimerRef = useRef(null);
   const [cinematicSession, setCinematicSession] = useState(null);
+  const [levelTransition, setLevelTransition] = useState(null);
   const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN', wardenFightActive: false, bossPhase: null, bossAction: null, bossGuard: null, bossGuardMax: null, playerCombo: 0, playerGuard: null, playerGuardMax: null });
 
   useEffect(() => () => {
     cinematicSessionRef.current?.isolation.restore();
     cinematicSessionRef.current = null;
     window.clearTimeout(hintVisibilityTimerRef.current);
+    window.clearTimeout(levelTransitionTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -415,7 +458,57 @@ export default function App() {
       presentationGenerationRef.current += 1;
       window.clearTimeout(presentationTimerRef.current);
       presentationTimerRef.current = null;
+      dismissPresentationRef.current = null;
       if (hide) setPresentationCard(null);
+    };
+    const revealPreparedLevel = () => {
+      const transition = levelTransitionRef.current;
+      if (!transition?.ready) return false;
+      window.clearTimeout(levelTransitionTimerRef.current);
+      levelTransitionTimerRef.current = null;
+      levelTransitionRef.current = null;
+      finishLevelTransitionRef.current = null;
+      setLevelTransition(null);
+      engine.pause(false, { silent: true });
+      setScreen('play');
+      window.requestAnimationFrame(() => canvasRef.current?.focus({ preventScroll: true }));
+      return true;
+    };
+    const beginLevelTransition = ({
+      campaignOrder,
+      nextCampaignOrder,
+      nextLevelKey,
+      totalLevels,
+      proceed,
+    }) => {
+      const nextEntry = repository.entryAt?.(nextCampaignOrder - 1) || null;
+      const authoredNextEntry = repository.peekTemplate?.(nextCampaignOrder - 1) || nextEntry;
+      const presentation = buildLevelTransitionPresentation(authoredNextEntry, {
+        completedLevel: campaignOrder,
+        nextLevel: nextCampaignOrder,
+        totalLevels,
+        nextLevelKey,
+      });
+      const transition = {
+        id: `${nextLevelKey || nextCampaignOrder}-${Date.now()}`,
+        ...presentation,
+        ready: false,
+        minimumVisibleUntil: performance.now() + 4200,
+      };
+      clearPresentation();
+      window.clearTimeout(levelTransitionTimerRef.current);
+      levelTransitionRef.current = transition;
+      finishLevelTransitionRef.current = revealPreparedLevel;
+      setLevelTransition(transition);
+      setScreen('level-transition');
+      void proceed().then((opened) => {
+        if (!opened && levelTransitionRef.current?.id === transition.id) {
+          levelTransitionRef.current = null;
+          finishLevelTransitionRef.current = null;
+          setLevelTransition(null);
+        }
+      });
+      return true;
     };
     const announceLevel = (entry) => {
       void ensureCombatVisualAssets(assets, entry.levelKey);
@@ -424,6 +517,20 @@ export default function App() {
         void ensureCombatVisualAssets(assets, repository.keyAt(entryIndex + 1));
       }
       clearPresentation();
+      const pendingTransition = levelTransitionRef.current;
+      if (pendingTransition?.nextLevelKey === entry.levelKey) {
+        engine.pause(true, { silent: true });
+        const readyTransition = {
+          ...pendingTransition,
+          ...buildLevelTransitionPresentation(entry, pendingTransition),
+          ready: true,
+        };
+        levelTransitionRef.current = readyTransition;
+        setLevelTransition(readyTransition);
+        const remaining = Math.max(0, pendingTransition.minimumVisibleUntil - performance.now());
+        levelTransitionTimerRef.current = window.setTimeout(revealPreparedLevel, remaining);
+        return;
+      }
       const cards = buildLevelPresentation(entry, {
         productionCampaign: activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign',
         inputMode: detectPresentationInput(window),
@@ -434,13 +541,29 @@ export default function App() {
         unitLabel: activeSessionKind === 'v4-campaign' ? 'Level' : 'Chapter',
       });
       if (cards.length === 0) return;
+      engine.pause(true, { silent: true });
+      setScreen('level-intro');
       const generation = presentationGenerationRef.current;
+      const finish = () => {
+        if (presentationGenerationRef.current !== generation) return false;
+        presentationGenerationRef.current += 1;
+        window.clearTimeout(presentationTimerRef.current);
+        presentationTimerRef.current = null;
+        dismissPresentationRef.current = null;
+        setPresentationCard(null);
+        engine.pause(false, { silent: true });
+        setScreen('play');
+        window.requestAnimationFrame(() => canvasRef.current?.focus({ preventScroll: true }));
+        return true;
+      };
+      dismissPresentationRef.current = finish;
       const show = (index) => {
         if (presentationGenerationRef.current !== generation) return;
         const card = cards[index] || null;
         setPresentationCard(card ? { ...card, sequenceId: generation, sequenceIndex: index } : null);
         if (!card) {
           presentationTimerRef.current = null;
+          finish();
           return;
         }
         presentationTimerRef.current = window.setTimeout(() => show(index + 1), card.durationMs);
@@ -460,6 +583,14 @@ export default function App() {
         });
       },
       mode: (mode) => {
+        if (levelTransitionRef.current && ['loading', 'play'].includes(mode)) return;
+        if (mode === 'load-error') {
+          window.clearTimeout(levelTransitionTimerRef.current);
+          levelTransitionTimerRef.current = null;
+          levelTransitionRef.current = null;
+          finishLevelTransitionRef.current = null;
+          setLevelTransition(null);
+        }
         if (mode !== 'play') clearPresentation();
         setScreen(mode);
       },
@@ -543,20 +674,28 @@ export default function App() {
       beforeLevelTransition: ({
         sessionKind: transitioningSessionKind,
         campaignOrder,
+        nextLevelKey,
         nextCampaignOrder,
         proceed,
       }) => {
-        if (transitioningSessionKind !== 'v4-campaign'
-          || campaignOrder !== 10
-          || nextCampaignOrder !== 11
+        if (!['production-campaign', 'v4-campaign'].includes(transitioningSessionKind)
           || (localV4LevelDemo && !manualLevelDemo)) return false;
-        return openCinematicSequence('chapter-one-to-two-bridge', {
-          returnScreen: 'play',
-          after: () => {
-            setScreen('play');
-            return proceed();
-          },
-        });
+        const transition = {
+          campaignOrder,
+          nextLevelKey,
+          nextCampaignOrder,
+          totalLevels: transitioningSessionKind === 'v4-campaign' ? 20 : 10,
+          proceed,
+        };
+        if (transitioningSessionKind === 'v4-campaign'
+          && campaignOrder === 10
+          && nextCampaignOrder === 11) {
+          return openCinematicSequence('chapter-one-to-two-bridge', {
+            returnScreen: 'play',
+            after: () => beginLevelTransition(transition),
+          });
+        }
+        return beginLevelTransition(transition);
       },
       win: ({ time, deaths, campaignId, sessionKind: completedSessionKind, completedLevels, targetTime }) => {
         setResults({ time, deaths, targetTime });
@@ -688,6 +827,11 @@ export default function App() {
       clearPresentation({ hide: false });
       window.clearTimeout(demoRespawnTimer);
       window.clearInterval(runCheckpointTimer);
+      window.clearTimeout(levelTransitionTimerRef.current);
+      levelTransitionTimerRef.current = null;
+      levelTransitionRef.current = null;
+      finishLevelTransitionRef.current = null;
+      dismissPresentationRef.current = null;
       document.removeEventListener('visibilitychange', persistHiddenRun);
       window.removeEventListener('pagehide', persistRunCheckpoint);
       runCheckpointRef.current = () => {};
@@ -699,7 +843,6 @@ export default function App() {
   const start = (demo = false) => {
     setSaveWarning('');
     engineRef.current?.start(demo);
-    setScreen('play');
   };
 
   const setGuidanceMode = (mode) => {
@@ -757,7 +900,6 @@ export default function App() {
         levelDeaths: checkpoint.deaths,
         wardenStats: checkpoint.warden,
       });
-      setScreen('play');
     }
   };
 
@@ -884,6 +1026,10 @@ export default function App() {
     : null;
   const v4ChapterOneTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 1) : null;
   const v4ChapterTwoTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 2) : null;
+  const v4CompletedCount = v4Progress?.completedLevelKeys?.length || 0;
+  const v4CurrentEntry = v4Campaign && outerContinueTarget?.kind === 'level'
+    ? V4_CAMPAIGN_CATALOG[outerContinueTarget.campaignOrder - 1]
+    : null;
 
   const completeCinematicSession = (detail) => {
     const session = cinematicSessionRef.current;
@@ -934,6 +1080,11 @@ export default function App() {
     }
   };
 
+  const enterV4Journey = () => {
+    if (v4CompletedCount === 0) beginChapterOne();
+    else continueOuterVeil();
+  };
+
   return (
     <main
       className="app"
@@ -955,46 +1106,75 @@ export default function App() {
       )}
 
       {screen === 'title' && (
-        <section className="title-screen">
+        <section className={`title-screen${v4Campaign ? ' title-screen-v5' : ''}`}>
           <div className="title-layout">
-            <div className="title-content">
-              <div className="eyebrow">{v4Campaign
-                ? V5_LAUNCH_PRESENTATION.releaseLabel
-                : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
-              <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
-              <p className="title-subtitle">{authoredCampaign
-                ? v4Campaign
-                  ? 'Twenty playable levels across two chapters. Restore the Outer Veil, follow the road of missing names into the Inner Kingdom, and open the second Crown Path.'
-                  : 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
-                : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
-              <div className="title-actions">
-                {v4Campaign ? (
-                  <>
+            <div className={`title-content${v4Campaign ? ' title-content-v5' : ''}`}>
+              {v4Campaign ? (
+                <>
+                  <div className="title-brand">
+                    <div className="eyebrow">{V5_LAUNCH_PRESENTATION.releaseLabel}</div>
+                    <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
+                    <p className="title-subtitle">Restore the Outer Veil. Recover the kingdom’s missing names. Open the second Crown Path.</p>
+                  </div>
+                  <div className="title-command-deck">
+                    <div className="title-journey-status">
+                      <span>{v4CompletedCount >= 20 ? 'Story One · Chapters I–II restored' : `Current journey · ${v4CompletedCount} of 20 restored`}</span>
+                      <div className="title-progress-track" aria-hidden="true"><i style={{ width: `${(v4CompletedCount / 20) * 100}%` }} /></div>
+                    </div>
                     <button
                       ref={titlePrimaryRef}
-                      className={(v4Progress?.completedLevelKeys?.length || 0) < 10 ? 'primary' : 'secondary'}
+                      className="primary title-enter"
                       disabled={progress < 1}
-                      onClick={beginChapterOne}
+                      onClick={enterV4Journey}
                     >
-                      Chapter I
+                      <span>{v4CompletedCount >= 20 ? 'View Chronicle' : v4CompletedCount === 0 ? 'Begin Story' : 'Continue Journey'}</span>
+                      <small>{v4CompletedCount >= 20
+                        ? 'Your restored path awaits'
+                        : `Level ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')} · ${v4CurrentEntry?.title || 'Buried Dawn'}`}</small>
                     </button>
-                    <button
-                      className={(v4Progress?.completedLevelKeys?.length || 0) >= 10 ? 'primary' : 'secondary'}
-                      disabled={progress < 1 || !v4ChapterTwoTarget.unlocked}
-                      title={v4ChapterTwoTarget.unlocked ? '' : 'Complete Chapter I to unlock'}
-                      aria-label={v4ChapterTwoTarget.unlocked ? 'Chapter II' : 'Chapter II · complete Chapter I to unlock'}
-                      onClick={() => { void startOuterVeilAt(v4ChapterTwoTarget.campaignOrder - 1, { restartCompletedV4: false }); }}
-                    >
-                      Chapter II
-                    </button>
-                    <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Founders’ Chronicle</button>
-                    <button className="secondary" onClick={() => openCinematicSequence(
-                      (v4Progress?.completedLevelKeys?.length || 0) >= 20 ? 'story-one-films' : 'chapter-one-opening',
-                      { returnScreen: 'title' },
-                    )}>Replay story films</button>
-                    <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
-                  </>
-                ) : authoredCampaign ? (
+                    <div className="title-chapters" aria-label="Chapter selection">
+                      <button className={v4CompletedCount < 10 ? 'active' : ''} disabled={progress < 1} onClick={beginChapterOne}>
+                        <span>Chapter I</span><small>The Outer Veil</small>
+                      </button>
+                      <button
+                        className={v4CompletedCount >= 10 && v4CompletedCount < 20 ? 'active' : ''}
+                        disabled={progress < 1 || !v4ChapterTwoTarget.unlocked}
+                        title={v4ChapterTwoTarget.unlocked ? '' : 'Complete Chapter I to unlock'}
+                        aria-label={v4ChapterTwoTarget.unlocked ? 'Chapter II · The Inner Kingdom' : 'Chapter II · complete Chapter I to unlock'}
+                        onClick={() => { void startOuterVeilAt(v4ChapterTwoTarget.campaignOrder - 1, { restartCompletedV4: false }); }}
+                      >
+                        <span>Chapter II</span><small>{v4ChapterTwoTarget.unlocked ? 'The Inner Kingdom' : 'Locked'}</small>
+                      </button>
+                    </div>
+                    <div className="title-utility-actions">
+                      <button onClick={() => { void openV4Leaderboard(); }}>Chronicle</button>
+                      <button onClick={() => openCinematicSequence(
+                        v4CompletedCount >= 20 ? 'story-one-films' : 'chapter-one-opening',
+                        { returnScreen: 'title' },
+                      )}>Story films</button>
+                      <button onClick={() => setScreen('help')}>How to play</button>
+                    </div>
+                    <details className="title-audio-drawer">
+                      <summary>Audio settings</summary>
+                      <AudioControls
+                        compact
+                        settings={audioSettings}
+                        onToggleMute={toggleMute}
+                        onMusicVolume={setMusicVolume}
+                        onEffectsVolume={setEffectsVolume}
+                      />
+                    </details>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">{productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
+                  <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
+                  <p className="title-subtitle">{authoredCampaign
+                    ? 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
+                    : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
+                  <div className="title-actions">
+                    {authoredCampaign ? (
                   <>
                     <button
                       ref={titlePrimaryRef}
@@ -1011,27 +1191,28 @@ export default function App() {
                           : 'Begin Buried Dawn'}
                     </button>
                     {outerContinueTarget?.campaignOrder > 1 || ['realm-slot', 'complete'].includes(outerContinueTarget?.kind)
-                      ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>{v4Campaign ? 'New 20-level journey' : 'Replay Stage I'}</button>
+                      ? <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>Replay Stage I</button>
                       : null}
                   </>
-                ) : (
+                    ) : (
                   <>
                     <button ref={titlePrimaryRef} className="primary" disabled={progress < 1} onClick={() => start(false)}>Enter the ruins</button>
                     <button className="secondary" onClick={() => start(true)}>Watch a run</button>
                   </>
-                )}
-                {!v4Campaign && <button className="secondary" onClick={() => setScreen('help')}>How to play</button>}
-              </div>
-              <AudioControls
-                settings={audioSettings}
-                onToggleMute={toggleMute}
-                onMusicVolume={setMusicVolume}
-                onEffectsVolume={setEffectsVolume}
-              />
-              {v4Campaign && <div className="best-time">{v4Progress?.completedLevelKeys?.length || 0}/20 levels restored</div>}
-              {!v4Campaign && <div className="best-time">{authoredCampaign
-                ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
-                : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>}
+                    )}
+                    <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
+                  </div>
+                  <AudioControls
+                    settings={audioSettings}
+                    onToggleMute={toggleMute}
+                    onMusicVolume={setMusicVolume}
+                    onEffectsVolume={setEffectsVolume}
+                  />
+                  <div className="best-time">{authoredCampaign
+                    ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
+                    : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -1047,7 +1228,55 @@ export default function App() {
         />
       )}
 
-      {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win' || screen === 'loading' || screen === 'load-error') && (
+      {screen === 'level-intro' && presentationCard && (
+        <section
+          className="level-entry-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Level introduction"
+        >
+          <div className="level-entry-shade" />
+          <PresentationPanel card={presentationCard} className="level-entry-card" />
+          <button className="level-entry-skip" type="button" onClick={() => dismissPresentationRef.current?.()}>
+            Skip intro
+          </button>
+        </section>
+      )}
+
+      {screen === 'level-transition' && levelTransition && (
+        <section
+          className="level-transition-layer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="next-level-title"
+        >
+          <div className="level-transition-complete">Level {String(levelTransition.completedLevel).padStart(2, '0')} restored</div>
+          <div className="level-transition-rule" />
+          <div className="level-transition-kicker">
+            Next · Level {String(levelTransition.nextLevel).padStart(2, '0')} of {levelTransition.totalLevels}
+          </div>
+          <h2 id="next-level-title">{levelTransition.title}</h2>
+          {levelTransition.subtitle && <div className="level-transition-subtitle">{levelTransition.subtitle}</div>}
+          {levelTransition.storyLine && <p>{levelTransition.storyLine}</p>}
+          <div className="level-transition-objective">
+            <span>Objective</span>
+            <strong>{levelTransition.objective}</strong>
+          </div>
+          <div className={`level-transition-status${levelTransition.ready ? ' ready' : ''}`}>
+            <i />{levelTransition.ready ? 'Path ready' : 'Forming the next path'}
+          </div>
+          <button
+            className="secondary level-transition-skip"
+            type="button"
+            disabled={!levelTransition.ready}
+            onClick={() => finishLevelTransitionRef.current?.()}
+          >
+            {levelTransition.ready ? 'Skip intro' : 'Loading'}
+          </button>
+        </section>
+      )}
+
+      {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win' || screen === 'loading' || screen === 'load-error' || screen === 'level-intro' || screen === 'level-transition') && (
         <>
           <header className={`hud${presentationCard?.kind === 'chapter' ? ' hud-title-suspended' : ''}`} aria-hidden={screen !== 'play'}>
             <div className="hud-left">
@@ -1097,32 +1326,7 @@ export default function App() {
             </div>
           )}
           {screen === 'play' && presentationCard && (
-            <div
-              key={`${presentationCard.sequenceId}-${presentationCard.sequenceIndex}-${presentationCard.kind}`}
-              className={`chapter-card presentation-card presentation-${presentationCard.kind}`}
-              data-presentation-kind={presentationCard.kind}
-              aria-live="polite"
-              role="status"
-              style={{ '--presentation-duration': `${presentationCard.durationMs}ms` }}
-            >
-              {presentationCard.portraitPath && (
-                <img
-                  className="chapter-portrait"
-                  src={`${import.meta.env.BASE_URL}${presentationCard.portraitPath}`}
-                  alt={presentationCard.portraitAlt}
-                />
-              )}
-              <div className="chapter-rule" />
-              <div className="chapter-kicker">{presentationCard.kicker}</div>
-              <div className="chapter-title">{presentationCard.title}</div>
-              {presentationCard.subtitle && <div className="chapter-subtitle">{presentationCard.subtitle}</div>}
-              {presentationCard.detail && <div className="chapter-story">{presentationCard.detail}</div>}
-              {presentationCard.input && (
-                <div className="presentation-input">
-                  <span>{presentationCard.inputLabel}</span>{presentationCard.input}
-                </div>
-              )}
-            </div>
+            <PresentationPanel card={presentationCard} />
           )}
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">

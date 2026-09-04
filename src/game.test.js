@@ -69,6 +69,20 @@ describe('Eclipse of the Veiled Kingdom', () => {
     expect(engine.input.released.size).toBe(0);
   });
 
+  it('can hold and reveal a level silently without a menu sound', () => {
+    const engine = {
+      mode: 'play',
+      audio: { play: vi.fn() },
+      clearInputs: vi.fn(),
+    };
+    GameEngine.prototype.pause.call(engine, true, { silent: true });
+    expect(engine.mode).toBe('paused');
+    GameEngine.prototype.pause.call(engine, false, { silent: true });
+    expect(engine.mode).toBe('play');
+    expect(engine.audio.play).not.toHaveBeenCalled();
+    expect(engine.clearInputs).toHaveBeenCalledTimes(2);
+  });
+
   it('authors ten full 90 by 28 maps with three relics each', () => {
     const levels = createLevels();
     expect(levels).toHaveLength(10);

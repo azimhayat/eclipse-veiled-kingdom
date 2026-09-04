@@ -7,6 +7,7 @@ const CINEMATICS = Object.freeze({
     eyebrow: 'Story One · Prologue',
     title: 'The Eclipse of Orun',
     videoPath: 'assets/cinematics/opening-prologue-v2.mp4',
+    posterPath: 'assets/cinematics/opening-prologue-v2-poster.jpg',
     captions: Object.freeze([Object.freeze({
       id: 'opening-prologue-en',
       path: 'assets/cinematics/opening-prologue-v2.en.vtt',
@@ -23,6 +24,7 @@ const CINEMATICS = Object.freeze({
     eyebrow: 'Chapter I · The Outer Veil',
     title: 'The First Buried Path',
     videoPath: 'assets/cinematics/chapter-one-introduction-v2.mp4',
+    posterPath: 'assets/cinematics/chapter-one-introduction-v2-poster.jpg',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-one-introduction-en',
       path: 'assets/cinematics/chapter-one-introduction-v2.en.vtt',
@@ -39,6 +41,7 @@ const CINEMATICS = Object.freeze({
     eyebrow: 'Chapter I Complete · First Crown Path',
     title: 'The Kingdom Without Names',
     videoPath: 'assets/cinematics/chapter-one-to-two-bridge-v2.mp4',
+    posterPath: 'assets/cinematics/chapter-one-to-two-bridge-v2-poster.jpg',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-one-to-two-bridge-en',
       path: 'assets/cinematics/chapter-one-to-two-bridge-v2.en.vtt',
@@ -55,6 +58,7 @@ const CINEMATICS = Object.freeze({
     eyebrow: 'Chapter II Complete · Second Crown Path',
     title: 'The Sundered Aqueduct',
     videoPath: 'assets/cinematics/chapter-two-to-three-bridge-v2.mp4',
+    posterPath: 'assets/cinematics/chapter-two-to-three-bridge-v2-poster.jpg',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-two-to-three-bridge-en',
       path: 'assets/cinematics/chapter-two-to-three-bridge-v2.en.vtt',
@@ -92,6 +96,7 @@ export function getCinematic(id, { baseUrl = '/' } = {}) {
   return Object.freeze({
     ...entry,
     src: joinBaseUrl(baseUrl, entry.videoPath),
+    poster: joinBaseUrl(baseUrl, entry.posterPath),
     captions: Object.freeze(entry.captions.map((caption) => Object.freeze({
       ...caption,
       src: joinBaseUrl(baseUrl, caption.path),
@@ -115,6 +120,9 @@ export function validateCinematicCatalog() {
     }
     if (!entry.videoPath.endsWith(`-v${entry.version}.mp4`)) {
       throw new Error(`Cinematic media path must be versioned: ${id}`);
+    }
+    if (!entry.posterPath.endsWith(`-v${entry.version}-poster.jpg`)) {
+      throw new Error(`Cinematic poster path must be versioned: ${id}`);
     }
     const defaults = entry.captions.filter((caption) => caption.default);
     if (defaults.length !== 1 || defaults[0].kind !== 'captions' || !defaults[0].path.endsWith('.vtt')) {

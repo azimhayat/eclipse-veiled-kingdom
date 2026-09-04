@@ -24,6 +24,7 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
   const completeRef = useRef(onComplete);
   const [index, setIndex] = useState(0);
   const [status, setStatus] = useState('ready');
+  const [mediaStarted, setMediaStarted] = useState(false);
   const [position, setPosition] = useState({ current: 0, duration: 0 });
   const reducedMotion = useMemo(() => reducedMotionRequested(), []);
   const mediaAudio = cinematicAudioSettings(audioSettings);
@@ -63,6 +64,7 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
     if (!result.accepted || result.done) return;
     setIndex(result.index);
     setStatus('ready');
+    setMediaStarted(false);
     setPosition({ current: 0, duration: 0 });
   };
 
@@ -73,6 +75,7 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
 
   const readFallback = () => {
     videoRef.current?.pause();
+    setMediaStarted(false);
     setStatus('fallback');
   };
 
@@ -81,6 +84,11 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
     if (!video) return;
     try {
       onBeforePlay?.();
+      if (!mediaStarted) {
+        video.src = cinematic.src;
+        video.load();
+        setMediaStarted(true);
+      }
       showDefaultCaptions(video);
       const pending = video.play();
       setStatus('loading');
@@ -109,8 +117,7 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
         <video
           key={cinematic.id}
           ref={videoRef}
-          className="cinematic-video"
-          src={cinematic.src}
+          className={`cinematic-video${['playing', 'paused'].includes(status) ? ' cinematic-video-active' : ' cinematic-video-dormant'}`}
           preload="metadata"
           playsInline
           muted={mediaAudio.muted}
@@ -137,6 +144,13 @@ export function CinematicPlayer({ sequence, audioSettings, onBeforePlay, onCompl
             />
           ))}
         </video>
+
+        {!['playing', 'paused'].includes(status) && status !== 'fallback' && (
+          <div className="cinematic-poster" aria-hidden="true">
+            <img src={cinematic.poster} alt="" />
+            <div className="cinematic-poster-mark"><i /></div>
+          </div>
+        )}
 
         <div className="cinematic-scrim" aria-hidden="true" />
         <div className="cinematic-copy">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildLevelPresentation,
+  buildLevelTransitionPresentation,
   detectPresentationInput,
   PRESENTATION_DURATIONS,
 } from './level-presentation.js';
@@ -20,6 +21,36 @@ const level = {
 };
 
 describe('level presentation sequence', () => {
+  it('builds the between-level reveal from authored story and objective data', () => {
+    expect(buildLevelTransitionPresentation(level, {
+      completedLevel: 3,
+      nextLevel: 4,
+      totalLevels: 20,
+      nextLevelKey: 'outer-veil-04-weight-of-oaths',
+    })).toEqual({
+      completedLevel: 3,
+      nextLevel: 4,
+      totalLevels: 20,
+      nextLevelKey: 'outer-veil-04-weight-of-oaths',
+      title: 'The Weight of Oaths',
+      subtitle: 'A Promise Given Shape',
+      storyLine: 'The civic road remembers what it was built to carry.',
+      objective: 'Restore the civic promise',
+    });
+  });
+
+  it('falls back cleanly while a lazily loaded level is still forming', () => {
+    expect(buildLevelTransitionPresentation({ title: 'Road of Missing Names' }, {
+      completedLevel: 10,
+      nextLevel: 11,
+      totalLevels: 20,
+    })).toMatchObject({
+      title: 'Road of Missing Names',
+      objective: 'Restore the path ahead.',
+    });
+    expect(buildLevelTransitionPresentation(null, { completedLevel: 1, nextLevel: 2 })).toBeNull();
+  });
+
   it('keeps the prototype presentation to one preserved chapter card', () => {
     expect(buildLevelPresentation(level)).toEqual([expect.objectContaining({
       kind: 'chapter',
