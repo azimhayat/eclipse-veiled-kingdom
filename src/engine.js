@@ -53,26 +53,26 @@ import {
   getWardenFighterPhase,
   wardenAttackCanHit,
 } from './warden-fighter.js';
+import {
+  CAMERA,
+  FIXED_DT,
+  PHYSICS,
+  approach,
+  gravityForVelocity,
+  measureMovementFeel,
+} from './movement-physics.js';
+import {
+  captureMotion,
+  consumeFixedSteps,
+  interpolateMotion,
+  interpolationAlpha,
+  measureRenderCadence,
+  resetMotion,
+  snapMotionAxis,
+} from './render-interpolation.js';
 
-export const PHYSICS = Object.freeze({
-  RUN_SPEED: 290,
-  GROUND_ACCEL: 2400,
-  AIR_ACCEL: 1500,
-  GROUND_FRICTION: 2100,
-  AIR_DRAG: 280,
-  JUMP_VEL: -860,
-  GRAVITY_UP: 1850,
-  GRAVITY_DOWN: 3050,
-  TERMINAL: 1250,
-  COYOTE: .1,
-  JUMP_BUFFER: .12,
-  CLIMB_SPEED: 170,
-  WALL_SLIDE: 85,
-  WALL_JUMP_X: 340,
-  MAX_HP: 4,
-});
+export { PHYSICS } from './movement-physics.js';
 
-const FIXED_DT = 1 / 60;
 const SUBSTEPS = 3;
 const EPS = .01;
 const AUDIO_TENSION_PHASES = new Set([
@@ -80,7 +80,6 @@ const AUDIO_TENSION_PHASES = new Set([
   'ascent', 'chorus', 'flank', 'finale', 'relay', 'keystone', 'duel',
 ]);
 
-const approach = (value, target, amount) => value < target ? Math.min(value + amount, target) : Math.max(value - amount, target);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const levelCacheKey = (level) => level.levelKey || level.id;
@@ -138,7 +137,11 @@ export class GameEngine {
     this.deaths = 0;
     this.levelDeaths = 0;
     this.levelCompletionEmitted = false;
-    this.camera = { x: 0, y: WORLD_H - VIEW_H };
+    this.camera = {
+      x: 0, y: WORLD_H - VIEW_H,
+      focusX: 0, focusY: WORLD_H - VIEW_H / 2,
+      lookAheadX: 0,
+    };
     this.input = {
       left: false, right: false, climb: false, down: false,
       jump: false, attack: false, dig: false,
@@ -180,6 +183,8 @@ export class GameEngine {
     this.transitionRetryBlocked = false;
     this.transitionBoundaryPending = false;
     this.transitionBoundaryGeneration = 0;
+    GameEngine.prototype.resetCameraTracking.call(this);
+    GameEngine.prototype.resetRenderInterpolation.call(this, { clearAccumulator: false });
 
     this.audioUnlock = () => { void this.audio.unlock(); };
 
@@ -206,6 +211,9 @@ export class GameEngine {
       x: spawn.x, y: spawn.y, w: 28, h: 44,
       vx: 0, vy: 0, facing: 1,
       grounded: false, wallSide: 0, climbing: false,
+      lastWallSide: 0, wallCoyote: 0, wallRegrabTimer: 0, wallJumpControlLock: 0,
+      groundPlatform: null, platformVelocityX: 0, platformVelocityY: 0,
+      carriedPlatformThisStep: null,
       hp: PHYSICS.MAX_HP, invuln: 0,
       coyote: 0, jumpBuffer: 0, dropTimer: 0,
       attackTimer: 0, attackBuffer: 0, attackBufferKind: null, attackKind: null,
@@ -217,18 +225,72 @@ export class GameEngine {
       combatAction: null,
       combatMove: 'idle',
       reactionClock: 0,
+      landingClock: 0,
+      landingDuration: PHYSICS.LANDING_PRESENTATION_SECONDS,
+      landingIntensity: 0,
       presentation: { state: 'idle', clock: 0 },
       combatPresentationEnabled: false,
     };
   }
 
+  forEachInterpolatedMotion(callback) {
+    callback(this.player, ['x', 'y']);
+    callback(this.camera, ['x', 'y']);
+    callback(this.level?.block, ['x', 'y']);
+    callback(this.level?.boss, ['x', 'y']);
+    callback(this.level?.objective?.duel?.boss?.target, ['x', 'y']);
+    callback(this.level?.objective?.skycut?.seesaw, ['angle']);
+    for (const collection of [
+      this.level?.movers,
+      this.level?.crushers,
+      this.level?.ships,
+      this.soldiers,
+      this.projectiles,
+    ]) {
+      for (const entity of collection || []) callback(entity, ['x', 'y']);
+    }
+  }
+
+  captureRenderInterpolation() {
+    GameEngine.prototype.forEachInterpolatedMotion.call(this, captureMotion);
+  }
+
+  applyRenderInterpolation(alpha, { respondX = false, respondY = false } = {}) {
+    if (respondX) snapMotionAxis(this.player, 'x');
+    if (respondY) snapMotionAxis(this.player, 'y');
+    GameEngine.prototype.forEachInterpolatedMotion.call(this, (entity, fields) => {
+      interpolateMotion(entity, alpha, fields);
+    });
+  }
+
+  resetRenderInterpolation({ clearAccumulator = true } = {}) {
+    if (clearAccumulator) this.accumulator = 0;
+    GameEngine.prototype.forEachInterpolatedMotion.call(this, resetMotion);
+  }
+
+  resetCameraTracking() {
+    const p = this.player;
+    if (!p || !this.camera) return;
+    const horizontalLead = this.level?.gameplay?.cameraHorizontalLead ?? 105;
+    this.camera.focusX = p.x + p.w / 2;
+    this.camera.focusY = p.y + p.h / 2;
+    this.camera.lookAheadX = (p.facing || 1) * horizontalLead;
+  }
+
   publishDebugApi() {
-    window.__EOTVK__ = {
+    const api = {
       snapshot: () => this.snapshot(),
       setInput: (action, active) => this.setInput(action, active),
       startDemo: () => this.start(true),
       engine: this,
     };
+    if (import.meta.env.DEV) {
+      api.movementDiagnostics = () => ({
+        ...measureMovementFeel(PHYSICS, FIXED_DT),
+        frameCadence: [60, 90, 120].map((hz) => measureRenderCadence(hz, FIXED_DT)),
+      });
+    }
+    window.__EOTVK__ = api;
   }
 
   snapshot() {
@@ -737,6 +799,8 @@ export class GameEngine {
     this.combatDefeated = 0;
     this.transitionRetryBlocked = false;
     this.hintHoldUntil = 0;
+    GameEngine.prototype.resetCameraTracking.call(this);
+    GameEngine.prototype.resetRenderInterpolation.call(this);
     this.setHint(this.level.gameplay?.openingHint || this.level.mechanic || 'The inner paths demand every skill.');
     this.pushHud(true);
     this.scheduleNextLevel();
@@ -782,6 +846,8 @@ export class GameEngine {
     this.clearInputs();
     this.camera.x = clamp(this.player.x - VIEW_W * .4, 0, WORLD_W - VIEW_W);
     this.camera.y = clamp(this.player.y - VIEW_H * .58, 0, WORLD_H - VIEW_H);
+    GameEngine.prototype.resetCameraTracking.call(this);
+    GameEngine.prototype.resetRenderInterpolation.call(this);
     this.callbacks.mode?.('play');
     this.setHint(`THE WARDEN RISES AGAIN · fight attempt ${duel.attempt.count}.`, 3.2);
     this.pushHud(true);
@@ -948,10 +1014,28 @@ export class GameEngine {
   loop(now) {
     const frame = Math.min(.1, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
-    this.accumulator += frame;
-    while (this.accumulator >= FIXED_DT) {
-      if (this.mode === 'play') this.update(FIXED_DT);
-      this.accumulator -= FIXED_DT;
+    if (this.mode === 'play') {
+      let respondX = false;
+      let respondY = false;
+      this.accumulator = consumeFixedSteps(this.accumulator, frame, (dt) => {
+        if (this.mode !== 'play') return;
+        const horizontalPressed = this.input.pressed.has('left') || this.input.pressed.has('right');
+        const jumpPressed = this.input.pressed.has('jump');
+        const previousCombatPhase = this.player.combatAction?.phase || null;
+        GameEngine.prototype.captureRenderInterpolation.call(this);
+        this.update(dt);
+        respondX ||= horizontalPressed
+          || (previousCombatPhase !== 'active' && this.player.combatAction?.phase === 'active');
+        respondY ||= jumpPressed;
+      }, FIXED_DT);
+      GameEngine.prototype.applyRenderInterpolation.call(
+        this,
+        interpolationAlpha(this.accumulator, FIXED_DT),
+        { respondX, respondY },
+      );
+    } else {
+      this.accumulator = 0;
+      GameEngine.prototype.resetRenderInterpolation.call(this, { clearAccumulator: false });
     }
     this.audio.update(this.audioScene(), frame);
     this.render(now / 1000);
@@ -1114,13 +1198,43 @@ export class GameEngine {
     this.input.released.clear();
   }
 
+  carryPlayerWithPlatform(dt) {
+    const p = this.player;
+    const platform = p.groundPlatform;
+    if (!platform || !(this.level.movers || []).includes(platform)) {
+      p.groundPlatform = null;
+      p.platformVelocityX = 0;
+      p.platformVelocityY = 0;
+      return null;
+    }
+    const dx = Number.isFinite(platform.dx) ? platform.dx : 0;
+    const dy = Number.isFinite(platform.dy) ? platform.dy : 0;
+    p.platformVelocityX = dx / dt;
+    p.platformVelocityY = dy / dt;
+    if (dx) GameEngine.prototype.movePlayerHorizontal.call(this, dx);
+    if (dy < 0) GameEngine.prototype.movePlayerVertical.call(this, dy);
+    else if (dy > 0) p.y += dy;
+    return {
+      platform,
+      velocityX: p.platformVelocityX,
+      velocityY: p.platformVelocityY,
+    };
+  }
+
   updatePlayer(dt) {
     const p = this.player;
+    const platformCarry = GameEngine.prototype.carryPlayerWithPlatform.call(this, dt);
+    p.carriedPlatformThisStep = platformCarry?.platform || null;
+    let inheritedPlatformLaunch = false;
     if (GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) {
       GameEngine.prototype.advancePlayerCombatPresentation.call(this, dt);
     }
     p.invuln = Math.max(0, p.invuln - dt);
     p.reactionClock = Math.max(0, (p.reactionClock || 0) - dt);
+    p.landingClock = Math.max(0, (p.landingClock || 0) - dt);
+    p.wallCoyote = Math.max(0, (p.wallCoyote || 0) - dt);
+    p.wallRegrabTimer = Math.max(0, (p.wallRegrabTimer || 0) - dt);
+    p.wallJumpControlLock = Math.max(0, (p.wallJumpControlLock || 0) - dt);
     p.dropTimer = Math.max(0, p.dropTimer - dt);
     p.attackTimer = Math.max(0, p.attackTimer - dt);
     p.attackBuffer = Math.max(0, (p.attackBuffer || 0) - dt);
@@ -1132,6 +1246,7 @@ export class GameEngine {
     p.digTimer = Math.max(0, p.digTimer - dt);
     p.jumpBuffer = this.input.pressed.has('jump') ? PHYSICS.JUMP_BUFFER : Math.max(0, p.jumpBuffer - dt);
     p.coyote = p.grounded ? PHYSICS.COYOTE : Math.max(0, p.coyote - dt);
+    if (p.grounded) p.wallCoyote = 0;
     const readableCombat = GameEngine.prototype.usesUnifiedCombat.call(this);
     const combatControlsActive = GameEngine.prototype.usesActiveFightControls.call(this);
     const guardingWarden = this.level.objective?.type === 'warden-restoration'
@@ -1217,24 +1332,47 @@ export class GameEngine {
     p.combatMove = move === 0 ? 'idle' : move === p.facing ? 'forward' : 'backward';
     const touchingLeft = this.solidProbe(p.x - 3, p.y + 4, 3, p.h - 7);
     const touchingRight = this.solidProbe(p.x + p.w, p.y + 4, 3, p.h - 7);
-    p.wallSide = touchingRight ? 1 : touchingLeft ? -1 : 0;
+    const detectedWallSide = touchingRight ? 1 : touchingLeft ? -1 : 0;
+    p.wallSide = p.wallRegrabTimer <= 0 ? detectedWallSide : 0;
+    if (p.wallSide) {
+      p.lastWallSide = p.wallSide;
+      p.wallCoyote = PHYSICS.WALL_COYOTE;
+    }
 
     const intoWall = p.wallSide && move === p.wallSide;
+    const wallJumpSide = p.wallSide || (p.wallCoyote > 0 ? p.lastWallSide : 0);
+    const towardWallJumpSide = wallJumpSide && move === wallJumpSide;
     if (!p.grounded && intoWall) this.recordPilgrimGrip(dt, p.wallSide);
     p.climbing = !p.grounded && this.input.climb && intoWall;
     if (p.climbing) {
       p.vy = this.input.down ? PHYSICS.CLIMB_SPEED : -PHYSICS.CLIMB_SPEED;
       p.vx = approach(p.vx, 0, PHYSICS.AIR_ACCEL * dt);
     } else {
-      const accel = p.grounded ? PHYSICS.GROUND_ACCEL : PHYSICS.AIR_ACCEL;
+      const accel = p.grounded
+        ? PHYSICS.GROUND_ACCEL
+        : p.inWater
+          ? PHYSICS.WATER_ACCEL
+          : PHYSICS.AIR_ACCEL;
       const combatMotion = getPlayerCombatMotion(p.combatAction);
       const guardScale = p.guarding ? .24 : 1;
       const hurtScale = p.reactionClock > 0 ? .15 : 1;
       const motionScale = Math.min(guardScale, combatMotion.movementScale, hurtScale);
       const runSpeed = (p.inWater ? PHYSICS.RUN_SPEED * .68 : PHYSICS.RUN_SPEED) * motionScale;
-      if (move) p.vx = approach(p.vx, move * runSpeed, accel * dt);
-      else p.vx = approach(p.vx, 0, (p.grounded ? PHYSICS.GROUND_FRICTION : PHYSICS.AIR_DRAG) * dt);
-      const gravity = (p.vy < 0 ? PHYSICS.GRAVITY_UP : PHYSICS.GRAVITY_DOWN) * (p.inWater ? .2 : 1);
+      if (!p.grounded && p.wallJumpControlLock > 0) {
+        // Preserve the authored wall-jump launch briefly even if a thumb is
+        // still resting toward the wall. Control returns well before apex.
+      } else if (move) p.vx = approach(p.vx, move * runSpeed, accel * dt);
+      else {
+        const drag = p.grounded
+          ? PHYSICS.GROUND_FRICTION
+          : p.inWater
+            ? PHYSICS.WATER_DRAG
+            : PHYSICS.AIR_DRAG;
+        p.vx = approach(p.vx, 0, drag * dt);
+      }
+      const gravity = p.inWater
+        ? (p.vy < 0 ? PHYSICS.WATER_GRAVITY_UP : PHYSICS.WATER_GRAVITY_DOWN) * .2
+        : gravityForVelocity(p.vy, PHYSICS);
       p.vy = Math.min(PHYSICS.TERMINAL, p.vy + gravity * dt);
       if (p.inWater) {
         const zone = this.level.water.find((item) => overlaps(p, item));
@@ -1246,38 +1384,57 @@ export class GameEngine {
     }
 
     if (p.jumpBuffer > 0) {
-      if (p.climbing || (!p.grounded && p.wallSide && intoWall)) {
-        this.recordPilgrimWallJump(p.wallSide);
-        p.vx = -p.wallSide * PHYSICS.WALL_JUMP_X;
-        p.vy = PHYSICS.JUMP_VEL * .88;
-        p.facing = -p.wallSide;
+      if (p.climbing || (!p.grounded && wallJumpSide && towardWallJumpSide && p.wallRegrabTimer <= 0)) {
+        this.recordPilgrimWallJump(wallJumpSide);
+        p.vx = -wallJumpSide * PHYSICS.WALL_JUMP_X;
+        p.vy = PHYSICS.JUMP_VEL * PHYSICS.WALL_JUMP_Y_SCALE;
+        p.facing = -wallJumpSide;
         p.jumpBuffer = 0;
         p.climbing = false;
+        p.wallSide = 0;
+        p.wallCoyote = 0;
+        p.wallRegrabTimer = PHYSICS.WALL_REGRAB_DELAY;
+        p.wallJumpControlLock = PHYSICS.WALL_JUMP_CONTROL_LOCK;
         this.audio.play('jump');
       } else if (p.inWater) {
         p.vy = -430;
         p.jumpBuffer = 0;
         this.audio.play('jump');
       } else if (p.grounded || p.coyote > 0) {
-        p.vy = PHYSICS.JUMP_VEL;
+        const inheritedX = clamp(platformCarry?.velocityX || 0, -160, 160);
+        const inheritedY = Math.min(0, platformCarry?.velocityY || 0);
+        p.vx += inheritedX;
+        p.vy = PHYSICS.JUMP_VEL + inheritedY;
+        inheritedPlatformLaunch = Boolean(platformCarry);
         p.grounded = false;
+        p.groundPlatform = null;
         p.coyote = 0;
         p.jumpBuffer = 0;
         this.audio.play('jump');
       }
     }
 
-    if (this.input.released.has('jump') && p.vy < -360) p.vy = -360;
+    if (this.input.released.has('jump') && p.vy < PHYSICS.JUMP_CUT_SPEED) p.vy = PHYSICS.JUMP_CUT_SPEED;
 
     const wasGrounded = p.grounded;
+    const landingSpeed = Math.max(0, p.vy);
     p.grounded = false;
+    p.groundPlatform = null;
     let groundCell = null;
     for (let i = 0; i < SUBSTEPS; i += 1) {
       this.movePlayerHorizontal(p.vx * dt / SUBSTEPS);
       const hitGround = this.movePlayerVertical(p.vy * dt / SUBSTEPS);
       if (hitGround) groundCell = hitGround;
     }
-    if (!wasGrounded && p.grounded && Math.abs(p.vy) < 1) this.audio.play('land');
+    if (!wasGrounded && p.grounded && Math.abs(p.vy) < 1) {
+      p.landingClock = PHYSICS.LANDING_PRESENTATION_SECONDS;
+      p.landingIntensity = clamp(landingSpeed / PHYSICS.LANDING_STRONG_SPEED, .35, 1);
+      this.audio.play('land');
+    }
+    if (platformCarry && !p.grounded && !inheritedPlatformLaunch && p.wallJumpControlLock <= 0) {
+      p.vx += clamp(platformCarry.velocityX, -160, 160);
+      p.vy += Math.min(0, platformCarry.velocityY);
+    }
     if (groundCell?.tile === Tile.CRUMBLE || groundCell?.tile === Tile.CRYSTAL) this.armCrumble(groundCell.tx, groundCell.ty, groundCell.tile);
     this.armBellTowerCollapseLedge();
 
@@ -1387,9 +1544,14 @@ export class GameEngine {
         const crossedTop = oldBottom <= platform.y + 9 && p.y + p.h >= platform.y;
         if (horizontal && crossedTop) {
           p.y = platform.y - p.h;
-          p.x += platform.dx || 0;
+          if (p.carriedPlatformThisStep !== platform) p.x += platform.dx || 0;
           p.vy = 0;
           p.grounded = true;
+          if ((this.level.movers || []).includes(platform)) {
+            p.groundPlatform = platform;
+            p.platformVelocityX = (platform.dx || 0) / FIXED_DT;
+            p.platformVelocityY = (platform.dy || 0) / FIXED_DT;
+          }
           groundCell = { tx: -1, ty: -1, tile: Tile.ONEWAY };
           break;
         }
@@ -2069,9 +2231,10 @@ export class GameEngine {
         : p.guarding ? 'guard'
           : p.climbing ? 'climb'
             : !p.grounded ? 'airborne'
-              : Math.abs(p.vx) > 25
-                ? (p.combatMove === 'backward' ? 'backpedal' : 'advance')
-                : 'idle';
+              : p.landingClock > 0 ? 'landing'
+                : Math.abs(p.vx) > 25
+                  ? (p.combatMove === 'backward' ? 'backpedal' : 'advance')
+                  : 'idle';
     setActorPresentation(p, playerState, dt);
     for (const soldier of this.soldiers) {
       const state = soldier.mode === 'para' ? 'descent'
@@ -2118,8 +2281,8 @@ export class GameEngine {
     const grounded = this.soldiers.filter((soldier) => (soldier.raidMember
       || soldier.standardCombatMember || soldier.gateMember)
       && soldier.mode !== 'para' && soldier.hp > 0);
-    const minimumGap = 31;
-    const maximumCorrection = 90 * dt;
+    const minimumGap = 42;
+    const maximumCorrection = 140 * dt;
     for (let leftIndex = 0; leftIndex < grounded.length; leftIndex += 1) {
       for (let rightIndex = leftIndex + 1; rightIndex < grounded.length; rightIndex += 1) {
         const first = grounded[leftIndex];
@@ -2157,6 +2320,51 @@ export class GameEngine {
     return true;
   }
 
+  carrySoldierWithPlatform(soldier, dt) {
+    const platform = soldier?.groundPlatform;
+    if (!platform || !(this.level.movers || []).includes(platform)) {
+      if (soldier) soldier.groundPlatform = null;
+      return null;
+    }
+    const dx = Number.isFinite(platform.dx) ? platform.dx : 0;
+    const dy = Number.isFinite(platform.dy) ? platform.dy : 0;
+    const minX = Number.isFinite(soldier.minX) ? soldier.minX : 2 * TILE;
+    const maxX = Number.isFinite(soldier.maxX) ? soldier.maxX : WORLD_W - TILE;
+    soldier.x = clamp(soldier.x + dx, minX, maxX - soldier.w);
+    soldier.y += dy;
+    return { platform, velocityX: dx / dt, velocityY: dy / dt };
+  }
+
+  moveSoldierVertical(soldier, dt) {
+    const oldBottom = soldier.y + soldier.h;
+    const nextY = soldier.y + soldier.vy * dt;
+    const footY = nextY + soldier.h;
+    const tx = Math.floor((soldier.x + soldier.w / 2) / TILE);
+    const ty = Math.floor(footY / TILE);
+    const tile = this.tileAt(tx, ty);
+    soldier.groundPlatform = null;
+    if ((this.isSolidTile(tile) || tile === Tile.ONEWAY)
+      && oldBottom <= ty * TILE + 12 && soldier.vy >= 0) {
+      soldier.y = ty * TILE - soldier.h;
+      soldier.vy = 0;
+      return true;
+    }
+    if (soldier.vy >= 0) {
+      for (const platform of this.level.movers || []) {
+        const horizontal = soldier.x + soldier.w > platform.x + 2
+          && soldier.x < platform.x + platform.w - 2;
+        const crossedTop = oldBottom <= platform.y + 10 && footY >= platform.y;
+        if (!horizontal || !crossedTop) continue;
+        soldier.y = platform.y - soldier.h;
+        soldier.vy = 0;
+        soldier.groundPlatform = platform;
+        return true;
+      }
+    }
+    soldier.y = nextY;
+    return false;
+  }
+
   readableSoldierCanAdvance(soldier, direction = Math.sign(soldier?.vx || 0)) {
     if (!soldier || !direction || soldier.mode === 'para') return true;
     const leadingX = direction > 0 ? soldier.x + soldier.w + 3 : soldier.x - 3;
@@ -2165,7 +2373,12 @@ export class GameEngine {
     if (this.isSolidTile(this.tileAt(wallTx, chestTy))) return false;
     const floorTy = Math.floor((soldier.y + soldier.h + 4) / TILE);
     const floorTile = this.tileAt(wallTx, floorTy);
-    return this.isSolidTile(floorTile) || floorTile === Tile.ONEWAY;
+    if (this.isSolidTile(floorTile) || floorTile === Tile.ONEWAY) return true;
+    const support = soldier.groundPlatform;
+    return Boolean(support
+      && leadingX >= support.x + 2
+      && leadingX <= support.x + support.w - 2
+      && Math.abs(soldier.y + soldier.h - support.y) <= 12);
   }
 
   horizontalCombatLineClear(fromX, toX, y) {
@@ -3070,6 +3283,8 @@ export class GameEngine {
     this.combatActionSequence = 0;
     this.combatHitstop = 0;
     this.meleeAttackToken = null;
+    GameEngine.prototype.resetCameraTracking.call(this);
+    GameEngine.prototype.resetRenderInterpolation.call(this);
     this.audio.play('gate');
     this.setHint(`THE SEVERED COURT · ${UNIFIED_COMBAT_GUIDANCE}.`, 6.2);
     this.pushHud(true);
@@ -3700,8 +3915,24 @@ export class GameEngine {
     }
 
     const distance = Math.abs((this.player.x + this.player.w / 2) - (soldier.x + soldier.w / 2));
-    soldier.facing = this.player.x + this.player.w / 2 >= soldier.x + soldier.w / 2 ? 1 : -1;
+    const targetFacing = this.player.x + this.player.w / 2 >= soldier.x + soldier.w / 2 ? 1 : -1;
+    if (targetFacing !== soldier.facing && Math.abs(soldier.vx) > 14) {
+      soldier.vx = approach(soldier.vx, 0, 720 * dt);
+      return;
+    }
+    soldier.facing = targetFacing;
     const attackRange = soldier.kind === 'spear' ? 92 : soldier.kind === 'shield' ? 68 : 62;
+    if (this.meleeAttackToken && this.meleeAttackToken !== soldier.id) {
+      const holdRange = soldier.kind === 'spear' ? 126 : soldier.kind === 'shield' ? 82 : 96;
+      const desired = distance < holdRange - 10
+        ? -soldier.facing * (soldier.kind === 'shield' ? 32 : 48)
+        : distance > holdRange + 16
+          ? soldier.facing * (soldier.kind === 'spear' ? 58 : 42)
+          : 0;
+      const formationAccel = soldier.kind === 'shield' ? 260 : soldier.kind === 'spear' ? 360 : 480;
+      soldier.vx = approach(soldier.vx, desired, formationAccel * dt);
+      return;
+    }
     if (distance <= attackRange) {
       if (!GameEngine.prototype.claimMeleeAttackToken.call(this, soldier)) {
         const owner = this.soldiers.find((candidate) => candidate.id === this.meleeAttackToken);
@@ -3728,7 +3959,8 @@ export class GameEngine {
     const desired = GameEngine.prototype.readableSoldierCanAdvance.call(this, soldier, soldier.facing)
       ? soldier.facing * speed
       : 0;
-    soldier.vx = approach(soldier.vx, desired, 420 * dt);
+    const moveAcceleration = soldier.kind === 'shield' ? 260 : soldier.kind === 'spear' ? 360 : 480;
+    soldier.vx = approach(soldier.vx, desired, moveAcceleration * dt);
   }
 
   spawnStandardSoldier() {
@@ -3824,7 +4056,12 @@ export class GameEngine {
     const playerCenter = this.player.x + this.player.w / 2;
     const soldierCenter = soldier.x + soldier.w / 2;
     const distance = Math.abs(playerCenter - soldierCenter);
-    soldier.facing = playerCenter >= soldierCenter ? 1 : -1;
+    const targetFacing = playerCenter >= soldierCenter ? 1 : -1;
+    if (targetFacing !== soldier.facing && Math.abs(soldier.vx) > 14) {
+      soldier.vx = approach(soldier.vx, 0, 720 * dt);
+      return;
+    }
+    soldier.facing = targetFacing;
     const lineClear = GameEngine.prototype.horizontalCombatLineClear.call(
       this,
       soldierCenter,
@@ -3842,7 +4079,7 @@ export class GameEngine {
     const desired = GameEngine.prototype.readableSoldierCanAdvance.call(this, soldier, desiredDirection)
       ? desiredDirection * (distance < 150 ? 78 : 64)
       : 0;
-    soldier.vx = approach(soldier.vx, desired, 420 * dt);
+    soldier.vx = approach(soldier.vx, desired, 360 * dt);
   }
 
   updateStandardUnifiedCombat(dt) {
@@ -3859,6 +4096,7 @@ export class GameEngine {
     }
 
     for (const soldier of this.soldiers) {
+      GameEngine.prototype.carrySoldierWithPlatform.call(this, soldier, dt);
       if (soldier.kind === 'archer') GameEngine.prototype.updateStandardArcher.call(this, soldier, dt);
       else GameEngine.prototype.updateRaidSoldier.call(this, soldier, dt);
       if (soldier.mode !== 'para') {
@@ -3872,23 +4110,15 @@ export class GameEngine {
         }
       }
       soldier.x = clamp(soldier.x + soldier.vx * dt, soldier.minX, soldier.maxX - soldier.w);
-      const nextY = soldier.y + soldier.vy * dt;
-      const footY = nextY + soldier.h;
-      const tx = Math.floor((soldier.x + soldier.w / 2) / TILE);
-      const ty = Math.floor(footY / TILE);
-      const tile = this.tileAt(tx, ty);
-      if ((this.isSolidTile(tile) || tile === Tile.ONEWAY)
-        && soldier.y + soldier.h <= ty * TILE + 12 && soldier.vy >= 0) {
-        soldier.y = ty * TILE - soldier.h;
-        soldier.vy = 0;
-        if (soldier.mode === 'para') {
-          soldier.mode = 'walk';
-          soldier.attackPhase = 'landing';
-          soldier.attackClock = .62;
-          soldier.attackConsumed = true;
-          this.burst(soldier.x + soldier.w / 2, soldier.y + soldier.h, '#8fe4ef', 12, 95);
-        }
-      } else soldier.y = nextY;
+      const wasParachuting = soldier.mode === 'para';
+      const landed = GameEngine.prototype.moveSoldierVertical.call(this, soldier, dt);
+      if (landed && wasParachuting) {
+        soldier.mode = 'walk';
+        soldier.attackPhase = 'landing';
+        soldier.attackClock = .62;
+        soldier.attackConsumed = true;
+        this.burst(soldier.x + soldier.w / 2, soldier.y + soldier.h, '#8fe4ef', 12, 95);
+      }
       GameEngine.prototype.separatePlayerAndSoldier.call(this, soldier);
     }
     this.soldiers = this.soldiers.filter((soldier) => soldier.hp > 0
@@ -3917,6 +4147,7 @@ export class GameEngine {
     this.projectiles = [];
 
     for (const soldier of this.soldiers) {
+      GameEngine.prototype.carrySoldierWithPlatform.call(this, soldier, dt);
       this.updateRaidSoldier(soldier, dt);
       if (soldier.mode !== 'para' && !GameEngine.prototype.readableSoldierCanAdvance.call(this, soldier)) {
         soldier.vx = 0;
@@ -3926,23 +4157,15 @@ export class GameEngine {
         }
       }
       soldier.x = clamp(soldier.x + soldier.vx * dt, soldier.minX, soldier.maxX - soldier.w);
-      const nextY = soldier.y + soldier.vy * dt;
-      const footY = nextY + soldier.h;
-      const tx = Math.floor((soldier.x + soldier.w / 2) / TILE);
-      const ty = Math.floor(footY / TILE);
-      const tile = this.tileAt(tx, ty);
-      if ((this.isSolidTile(tile) || tile === Tile.ONEWAY)
-        && soldier.y + soldier.h <= ty * TILE + 12 && soldier.vy >= 0) {
-        soldier.y = ty * TILE - soldier.h;
-        soldier.vy = 0;
-        if (soldier.mode === 'para') {
-          soldier.mode = 'walk';
-          soldier.attackPhase = 'landing';
-          soldier.attackClock = .72;
-          soldier.attackConsumed = true;
-          this.burst(soldier.x + soldier.w / 2, soldier.y + soldier.h, '#8fe4ef', 13, 95);
-        }
-      } else soldier.y = nextY;
+      const wasParachuting = soldier.mode === 'para';
+      const landed = GameEngine.prototype.moveSoldierVertical.call(this, soldier, dt);
+      if (landed && wasParachuting) {
+        soldier.mode = 'walk';
+        soldier.attackPhase = 'landing';
+        soldier.attackClock = .72;
+        soldier.attackConsumed = true;
+        this.burst(soldier.x + soldier.w / 2, soldier.y + soldier.h, '#8fe4ef', 13, 95);
+      }
       GameEngine.prototype.separatePlayerAndSoldier.call(this, soldier);
     }
     this.soldiers = this.soldiers.filter((soldier) => soldier.hp > 0);
@@ -3982,6 +4205,7 @@ export class GameEngine {
     }
 
     for (const soldier of this.soldiers) {
+      GameEngine.prototype.carrySoldierWithPlatform.call(this, soldier, dt);
       if (soldier.mode === 'para') {
         soldier.vy = Math.min(260, soldier.vy + 260 * dt);
       } else {
@@ -4001,16 +4225,7 @@ export class GameEngine {
         }
       }
       soldier.x += soldier.vx * dt;
-      const nextY = soldier.y + soldier.vy * dt;
-      const footY = nextY + soldier.h;
-      const tx = Math.floor((soldier.x + soldier.w / 2) / TILE);
-      const ty = Math.floor(footY / TILE);
-      const tile = this.tileAt(tx, ty);
-      if ((this.isSolidTile(tile) || tile === Tile.ONEWAY) && soldier.y + soldier.h <= ty * TILE + 12 && soldier.vy >= 0) {
-        soldier.y = ty * TILE - soldier.h;
-        soldier.vy = 0;
-        soldier.mode = 'walk';
-      } else soldier.y = nextY;
+      if (GameEngine.prototype.moveSoldierVertical.call(this, soldier, dt)) soldier.mode = 'walk';
 
       if (overlaps(this.player, soldier)) this.damagePlayer(1, -430);
     }
@@ -4439,6 +4654,8 @@ export class GameEngine {
     this.crumble.clear();
     this.camera.x = clamp(this.player.x - VIEW_W * .4, 0, WORLD_W - VIEW_W);
     this.camera.y = WORLD_H - VIEW_H;
+    GameEngine.prototype.resetCameraTracking.call(this);
+    GameEngine.prototype.resetRenderInterpolation.call(this);
 
     if (!bound) {
       this.setHint('THE COLD LAMP COULD NOT HOLD YOU · bind it before crossing the mist.', 4);
@@ -4867,16 +5084,41 @@ export class GameEngine {
     const duelMidpoint = wardenDuel
       ? ((p.x + p.w / 2) + wardenDuel.boss.target.x) / 2
       : null;
-    const targetX = clamp(
-      wardenDuel ? duelMidpoint - VIEW_W / 2 : p.x + p.w / 2 - VIEW_W / 2 + p.facing * horizontalLead,
-      0,
-      WORLD_W - VIEW_W,
-    );
-    let targetY = p.y + p.h / 2 - VIEW_H * .58;
+    const playerCenterX = p.x + p.w / 2;
+    const playerCenterY = p.y + p.h / 2;
+    this.camera.focusX = Number.isFinite(this.camera.focusX) ? this.camera.focusX : playerCenterX;
+    this.camera.focusY = Number.isFinite(this.camera.focusY) ? this.camera.focusY : playerCenterY;
+    this.camera.lookAheadX = Number.isFinite(this.camera.lookAheadX) ? this.camera.lookAheadX : 0;
+
+    if (wardenDuel) {
+      this.camera.focusX = duelMidpoint;
+      this.camera.lookAheadX = 0;
+    } else {
+      if (playerCenterX < this.camera.focusX - CAMERA.HORIZONTAL_DEAD_ZONE) {
+        this.camera.focusX = playerCenterX + CAMERA.HORIZONTAL_DEAD_ZONE;
+      } else if (playerCenterX > this.camera.focusX + CAMERA.HORIZONTAL_DEAD_ZONE) {
+        this.camera.focusX = playerCenterX - CAMERA.HORIZONTAL_DEAD_ZONE;
+      }
+      if (Math.abs(p.vx) >= CAMERA.MOVEMENT_LEAD_THRESHOLD) {
+        const desiredLead = Math.sign(p.vx) * horizontalLead;
+        const leadSmoothing = 1 - Math.pow(CAMERA.LOOK_AHEAD_REMAINDER_PER_SECOND, dt);
+        this.camera.lookAheadX += (desiredLead - this.camera.lookAheadX) * leadSmoothing;
+      }
+    }
+    if (playerCenterY < this.camera.focusY - CAMERA.VERTICAL_DEAD_ZONE) {
+      this.camera.focusY = playerCenterY + CAMERA.VERTICAL_DEAD_ZONE;
+    } else if (playerCenterY > this.camera.focusY + CAMERA.VERTICAL_DEAD_ZONE) {
+      this.camera.focusY = playerCenterY - CAMERA.VERTICAL_DEAD_ZONE;
+    }
+
+    const targetX = clamp(this.camera.focusX - VIEW_W / 2 + this.camera.lookAheadX, 0, WORLD_W - VIEW_W);
+    const fallBias = p.vy > 260 ? Math.min(CAMERA.FALL_BIAS_MAX, (p.vy - 260) * .11) : 0;
+    const climbBias = p.climbing ? CAMERA.CLIMB_BIAS : 0;
+    let targetY = this.camera.focusY - VIEW_H * .58 + fallBias + climbBias;
     if (wardenDuel) targetY = wardenDuel.arena.feetTy * TILE - VIEW_H * .7;
     if (p.x > 80 * TILE) targetY -= 74;
     targetY = clamp(targetY, 0, WORLD_H - VIEW_H);
-    const smoothing = 1 - Math.pow(.001, dt);
+    const smoothing = 1 - Math.pow(CAMERA.FOLLOW_REMAINDER_PER_SECOND, dt);
     this.camera.x += (targetX - this.camera.x) * smoothing;
     this.camera.y += (targetY - this.camera.y) * smoothing;
   }
@@ -5048,14 +5290,18 @@ export class GameEngine {
 
   render(time) {
     const ctx = this.ctx;
+    this.renderCamera ||= { x: this.camera.x, y: this.camera.y };
+    this.renderCamera.x = Number.isFinite(this.camera.renderX) ? this.camera.renderX : this.camera.x;
+    this.renderCamera.y = Number.isFinite(this.camera.renderY) ? this.camera.renderY : this.camera.y;
+    const renderCamera = this.renderCamera;
     const benchmarkPresentation = GameEngine.prototype.usesBenchmarkCombatPresentation.call(this);
     const combatActorTime = benchmarkPresentation ? this.totalTime : time;
     const backdrop = this.assets[this.level.backgroundKey] || this.assets.background;
-    drawBackdrop(ctx, backdrop, this.camera, time, this.level);
-    drawVisibleChunks(ctx, this.bank.get(levelCacheKey(this.level)), this.camera);
+    drawBackdrop(ctx, backdrop, renderCamera, time, this.level);
+    drawVisibleChunks(ctx, this.bank.get(levelCacheKey(this.level)), renderCamera);
 
     ctx.save();
-    ctx.translate(-this.camera.x, -this.camera.y);
+    ctx.translate(-renderCamera.x, -renderCamera.y);
     // Objective restoration timestamps use simulation time, so mechanics must
     // render on the same clock. Backdrop, relic, and hero ambience remain on
     // the RAF clock below.

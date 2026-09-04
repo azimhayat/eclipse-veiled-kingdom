@@ -1,24 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GameEngine, KEY_ACTIONS, PHYSICS } from './engine.js';
-import { cloneLevel, Tile, WORLD_COLS, WORLD_ROWS, createLevels } from './levels.js';
+import { cloneLevel, TILE, Tile, WORLD_COLS, WORLD_ROWS, createLevels } from './levels.js';
 
 describe('Eclipse of the Veiled Kingdom', () => {
   it('keeps the authored physics contract', () => {
     expect(PHYSICS).toMatchObject({
       RUN_SPEED: 290,
-      GROUND_ACCEL: 2400,
-      AIR_ACCEL: 1500,
-      GROUND_FRICTION: 2100,
-      AIR_DRAG: 280,
-      JUMP_VEL: -860,
+      GROUND_ACCEL: 2700,
+      AIR_ACCEL: 1750,
+      GROUND_FRICTION: 3000,
+      AIR_DRAG: 720,
+      JUMP_VEL: -850,
+      JUMP_CUT_SPEED: -360,
       GRAVITY_UP: 1850,
-      GRAVITY_DOWN: 3050,
+      GRAVITY_DOWN: 3000,
+      WATER_ACCEL: 1500,
+      WATER_DRAG: 280,
+      WATER_GRAVITY_UP: 1850,
+      WATER_GRAVITY_DOWN: 3050,
+      APEX_SPEED: 110,
+      APEX_GRAVITY_SCALE: .82,
       TERMINAL: 1250,
-      COYOTE: .1,
-      JUMP_BUFFER: .12,
+      COYOTE: .11,
+      JUMP_BUFFER: .13,
       CLIMB_SPEED: 170,
       WALL_SLIDE: 85,
-      WALL_JUMP_X: 340,
+      WALL_JUMP_X: 350,
+      WALL_COYOTE: .08,
+      WALL_REGRAB_DELAY: .12,
+      WALL_JUMP_CONTROL_LOCK: .1,
       MAX_HP: 4,
     });
   });
@@ -140,6 +150,64 @@ describe('Eclipse of the Veiled Kingdom', () => {
 
     expect(block.x).toBe(1003);
     expect(player.x).toBe(975);
+  });
+
+  it('carries Aren with moving support and records launch velocity', () => {
+    const level = cloneLevel(createLevels()[0]);
+    const platform = { x: 10 * TILE, y: 5 * TILE, w: 4 * TILE, h: 18, dx: 3, dy: 2 };
+    level.movers = [platform];
+    const engine = Object.assign(Object.create(GameEngine.prototype), {
+      level,
+      demo: false,
+      player: {
+        x: platform.x + 20,
+        y: platform.y - 44,
+        w: 28,
+        h: 44,
+        vx: 0,
+        vy: 0,
+        groundPlatform: platform,
+      },
+    });
+
+    const carried = GameEngine.prototype.carryPlayerWithPlatform.call(engine, 1 / 60);
+
+    expect(engine.player).toMatchObject({
+      x: platform.x + 23,
+      y: platform.y - 42,
+      platformVelocityX: 180,
+      platformVelocityY: 120,
+    });
+    expect(carried).toMatchObject({ platform, velocityX: 180, velocityY: 120 });
+  });
+
+  it('eases camera lead through a rapid reversal instead of snapping on facing', () => {
+    const level = cloneLevel(createLevels()[0]);
+    const engine = Object.assign(Object.create(GameEngine.prototype), {
+      level,
+      player: {
+        x: 20 * TILE,
+        y: 18 * TILE,
+        w: 28,
+        h: 44,
+        vx: -PHYSICS.RUN_SPEED,
+        vy: 0,
+        facing: -1,
+        climbing: false,
+      },
+      camera: {
+        x: 0,
+        y: 0,
+        focusX: 20 * TILE + 14,
+        focusY: 18 * TILE + 22,
+        lookAheadX: 105,
+      },
+    });
+
+    GameEngine.prototype.updateCamera.call(engine, 1 / 60);
+    expect(engine.camera.lookAheadX).toBeGreaterThan(80);
+    for (let step = 0; step < 29; step += 1) GameEngine.prototype.updateCamera.call(engine, 1 / 60);
+    expect(engine.camera.lookAheadX).toBeLessThan(-80);
   });
 
   it('rebuilds the current realm when the player respawns', () => {

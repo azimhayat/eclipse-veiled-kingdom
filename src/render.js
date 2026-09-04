@@ -17,6 +17,13 @@ const roundRect = (ctx, x, y, w, h, r) => {
   ctx.roundRect(x, y, w, h, r);
 };
 
+const presentedValue = (entity, field) => {
+  const renderField = `render${field[0].toUpperCase()}${field.slice(1)}`;
+  return Number.isFinite(entity?.[renderField]) ? entity[renderField] : entity?.[field];
+};
+const presentedX = (entity) => presentedValue(entity, 'x');
+const presentedY = (entity) => presentedValue(entity, 'y');
+
 function seeded(n) {
   const x = Math.sin(n * 91.731) * 43758.5453;
   return x - Math.floor(x);
@@ -25,6 +32,8 @@ function seeded(n) {
 function drawWardenSpriteFighter(ctx, duel, time, wardenSheet) {
   const boss = duel.boss;
   const target = boss.target;
+  const targetX = presentedX(target);
+  const targetY = presentedY(target);
   const feetY = duel.arena.feetTy * TILE;
   const frame = getWardenFrame(duel);
   const hit = boss.hitFlash > 0 || boss.action === 'hitstun';
@@ -38,9 +47,9 @@ function drawWardenSpriteFighter(ctx, duel, time, wardenSheet) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,.58)';
   ctx.beginPath();
-  ctx.ellipse(target.x, feetY - 3, 80, 15, 0, 0, Math.PI * 2);
+  ctx.ellipse(targetX, feetY - 3, 80, 15, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.translate(target.x, feetY);
+  ctx.translate(targetX, feetY);
   ctx.scale(boss.facing || -1, 1);
   ctx.globalAlpha = duel.phase === 'finale' ? .9 : 1;
   ctx.shadowColor = hit ? '#c9fbff' : phaseColor;
@@ -70,7 +79,7 @@ function drawWardenSpriteFighter(ctx, duel, time, wardenSheet) {
 
   if (['dust-sweep', 'sand-wave'].includes(boss.attackKind) && (windup || active)) {
     const attackRange = boss.attackKind === 'sand-wave' ? 5.1 * TILE : 2.75 * TILE;
-    const startX = boss.attackKind === 'sand-wave' ? target.x - attackRange : target.x - attackRange * .55;
+    const startX = boss.attackKind === 'sand-wave' ? targetX - attackRange : targetX - attackRange * .55;
     const width = boss.attackKind === 'sand-wave' ? attackRange * 2 : attackRange * 1.1;
     ctx.save();
     ctx.strokeStyle = active ? '#ef715b' : '#dfb653';
@@ -96,7 +105,7 @@ function drawWardenSpriteFighter(ctx, duel, time, wardenSheet) {
     const threshold = phaseIndex === 0 ? duel.thresholds.commandHp : phaseIndex === 1 ? duel.thresholds.eclipseHp : 0;
     ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.45)';
     ctx.beginPath();
-    ctx.arc(target.x - 34 + phaseIndex * 34, target.y - 103, 6, 0, Math.PI * 2);
+    ctx.arc(targetX - 34 + phaseIndex * 34, targetY - 103, 6, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -109,6 +118,8 @@ function drawWardenFighter(ctx, duel, time, wardenSheet = null) {
   }
   const boss = duel.boss;
   const target = boss.target;
+  const targetX = presentedX(target);
+  const targetY = presentedY(target);
   const facing = boss.facing || -1;
   const phaseColor = boss.phase === 'eclipse' ? '#da6d75' : boss.phase === 'command' ? '#efbd5d' : '#7fe3ed';
   const active = boss.action === 'active';
@@ -130,7 +141,7 @@ function drawWardenFighter(ctx, duel, time, wardenSheet = null) {
   const bob = ['neutral', 'idle'].includes(boss.action) ? Math.sin(time * 5.2) * 2.5 : 0;
 
   ctx.save();
-  ctx.translate(target.x, feetY + bob);
+  ctx.translate(targetX, feetY + bob);
   ctx.scale(facing, 1);
 
   ctx.save();
@@ -280,7 +291,7 @@ function drawWardenFighter(ctx, duel, time, wardenSheet = null) {
 
   if (['dust-sweep', 'sand-wave'].includes(boss.attackKind) && (windup || active)) {
     const attackRange = boss.attackKind === 'sand-wave' ? 5.1 * TILE : 2.75 * TILE;
-    const startX = boss.attackKind === 'sand-wave' ? target.x - attackRange : target.x - attackRange * .55;
+    const startX = boss.attackKind === 'sand-wave' ? targetX - attackRange : targetX - attackRange * .55;
     const width = boss.attackKind === 'sand-wave' ? attackRange * 2 : attackRange * 1.1;
     ctx.save();
     ctx.strokeStyle = active ? '#ef715b' : '#dfb653';
@@ -306,7 +317,7 @@ function drawWardenFighter(ctx, duel, time, wardenSheet = null) {
     const threshold = phaseIndex === 0 ? duel.thresholds.commandHp : phaseIndex === 1 ? duel.thresholds.eclipseHp : 0;
     ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.45)';
     ctx.beginPath();
-    ctx.arc(target.x - 34 + phaseIndex * 34, target.y - 103, 6, 0, Math.PI * 2);
+    ctx.arc(targetX - 34 + phaseIndex * 34, targetY - 103, 6, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
@@ -970,7 +981,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
       ctx.shadowBlur = shelter.boundOnce ? 22 : 12;
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(level.block.x + level.block.w / 2, level.block.y - 18, 11, 0, Math.PI * 2);
+      ctx.arc(presentedX(level.block) + level.block.w / 2, presentedY(level.block) - 18, 11, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -1386,7 +1397,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
       ctx.fill();
       ctx.stroke();
 
-      ctx.rotate(seesaw.angle || 0);
+      ctx.rotate(presentedValue(seesaw, 'angle') || 0);
       for (let segment = 0; segment < seesaw.w / TILE; segment += 1) {
         const x = -seesaw.w / 2 + segment * TILE;
         ctx.fillStyle = '#34405b';
@@ -1822,15 +1833,17 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
   }
 
   for (const mover of level.movers || []) {
+    const moverX = presentedX(mover);
+    const moverY = presentedY(mover);
     ctx.save();
     ctx.shadowColor = level.theme?.accent || '#e8c56a';
     ctx.shadowBlur = 12;
-    const grad = ctx.createLinearGradient(mover.x, mover.y, mover.x, mover.y + mover.h);
+    const grad = ctx.createLinearGradient(moverX, moverY, moverX, moverY + mover.h);
     grad.addColorStop(0, level.theme?.accent || '#f3cf72');
     grad.addColorStop(.32, '#5b6177');
     grad.addColorStop(1, '#171c2b');
     ctx.fillStyle = grad;
-    roundRect(ctx, mover.x, mover.y, mover.w, mover.h, 5);
+    roundRect(ctx, moverX, moverY, mover.w, mover.h, 5);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = 'rgba(255,255,255,.45)';
@@ -1854,22 +1867,24 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
   }
 
   for (const crusher of level.crushers || []) {
+    const crusherX = presentedX(crusher);
+    const crusherY = presentedY(crusher);
     ctx.save();
-    const grad = ctx.createLinearGradient(crusher.x, crusher.y, crusher.x + crusher.w, crusher.y);
+    const grad = ctx.createLinearGradient(crusherX, crusherY, crusherX + crusher.w, crusherY);
     grad.addColorStop(0, '#151827');
     grad.addColorStop(.5, '#6d4937');
     grad.addColorStop(1, '#151827');
     ctx.fillStyle = grad;
-    ctx.fillRect(crusher.x, crusher.y, crusher.w, crusher.h);
+    ctx.fillRect(crusherX, crusherY, crusher.w, crusher.h);
     ctx.strokeStyle = '#db8748';
     ctx.lineWidth = 3;
-    ctx.strokeRect(crusher.x + 3, crusher.y + 3, crusher.w - 6, crusher.h - 6);
+    ctx.strokeRect(crusherX + 3, crusherY + 3, crusher.w - 6, crusher.h - 6);
     ctx.fillStyle = '#e2a45d';
-    for (let x = crusher.x + 8; x < crusher.x + crusher.w - 4; x += 16) {
+    for (let x = crusherX + 8; x < crusherX + crusher.w - 4; x += 16) {
       ctx.beginPath();
-      ctx.moveTo(x, crusher.y + crusher.h);
-      ctx.lineTo(x + 7, crusher.y + crusher.h + 13);
-      ctx.lineTo(x + 14, crusher.y + crusher.h);
+      ctx.moveTo(x, crusherY + crusher.h);
+      ctx.lineTo(x + 7, crusherY + crusher.h + 13);
+      ctx.lineTo(x + 14, crusherY + crusher.h);
       ctx.fill();
     }
     ctx.restore();
@@ -1907,8 +1922,10 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
 export function drawBoss(ctx, boss, time) {
   if (!boss || boss.hp <= 0) return;
   const magistrate = boss.visualStyle === 'nameless-magistrate';
+  const bossX = presentedX(boss);
+  const bossY = presentedY(boss);
   ctx.save();
-  ctx.translate(boss.x + boss.w / 2, boss.y + boss.h);
+  ctx.translate(bossX + boss.w / 2, bossY + boss.h);
   const pulse = .7 + Math.sin(time * 3) * .25;
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath(); ctx.ellipse(0, 3, 48, 12, 0, 0, Math.PI * 2); ctx.fill();
@@ -1947,9 +1964,9 @@ export function drawBoss(ctx, boss, time) {
 
   const barW = 150;
   ctx.fillStyle = 'rgba(3,5,12,.8)';
-  ctx.fillRect(boss.x + boss.w / 2 - barW / 2, boss.y - 24, barW, 8);
+  ctx.fillRect(bossX + boss.w / 2 - barW / 2, bossY - 24, barW, 8);
   ctx.fillStyle = magistrate ? '#72dfe8' : '#e8c56a';
-  ctx.fillRect(boss.x + boss.w / 2 - barW / 2, boss.y - 24, barW * (boss.hp / boss.maxHp), 8);
+  ctx.fillRect(bossX + boss.w / 2 - barW / 2, bossY - 24, barW * (boss.hp / boss.maxHp), 8);
 }
 
 export function drawVisibleChunks(ctx, chunks, camera) {
@@ -2029,6 +2046,8 @@ export function drawDoor(ctx, door, open, time) {
 }
 
 export function drawBlockAndPlate(ctx, block, plate, active) {
+  const blockX = presentedX(block);
+  const blockY = presentedY(block);
   ctx.save();
   if (plate && !plate.disabled) {
     ctx.shadowColor = active ? '#e8c56a' : 'transparent';
@@ -2044,26 +2063,26 @@ export function drawBlockAndPlate(ctx, block, plate, active) {
     ctx.shadowColor = '#82e8ff';
     ctx.shadowBlur = 18;
   }
-  const grad = ctx.createLinearGradient(block.x, block.y, block.x + block.w, block.y + block.h);
+  const grad = ctx.createLinearGradient(blockX, blockY, blockX + block.w, blockY + block.h);
   grad.addColorStop(0, block.bound ? '#477184' : '#596079');
   grad.addColorStop(.45, block.bound ? '#25465c' : '#30384e');
   grad.addColorStop(1, '#151b2d');
   ctx.fillStyle = grad;
-  roundRect(ctx, block.x, block.y, block.w, block.h, 5);
+  roundRect(ctx, blockX, blockY, block.w, block.h, 5);
   ctx.fill();
   ctx.strokeStyle = block.bound ? '#82e8ff' : '#b99247';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(block.x + block.w / 2, block.y + block.h / 2, 10, 0, Math.PI * 2);
+  ctx.arc(blockX + block.w / 2, blockY + block.h / 2, 10, 0, Math.PI * 2);
   ctx.strokeStyle = block.bound ? '#d4f8ff' : '#d8b45d';
   ctx.stroke();
   if (block.bound) {
     ctx.beginPath();
-    ctx.moveTo(block.x + 7, block.y + block.h - 7);
-    ctx.lineTo(block.x + block.w - 7, block.y + 7);
-    ctx.moveTo(block.x + 7, block.y + 7);
-    ctx.lineTo(block.x + block.w - 7, block.y + block.h - 7);
+    ctx.moveTo(blockX + 7, blockY + block.h - 7);
+    ctx.lineTo(blockX + block.w - 7, blockY + 7);
+    ctx.moveTo(blockX + 7, blockY + 7);
+    ctx.lineTo(blockX + block.w - 7, blockY + block.h - 7);
     ctx.strokeStyle = 'rgba(139,236,255,.7)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -2074,7 +2093,7 @@ export function drawBlockAndPlate(ctx, block, plate, active) {
 export function drawShip(ctx, ship, time) {
   ctx.save();
   const hover = Math.sin(time * 1.4 + ship.phase) * 8;
-  ctx.translate(ship.x, ship.y + hover);
+  ctx.translate(presentedX(ship), presentedY(ship) + hover);
   ctx.fillStyle = 'rgba(2,5,14,.9)';
   ctx.beginPath();
   ctx.moveTo(-54, -9);
@@ -2102,8 +2121,10 @@ export function drawShip(ctx, ship, time) {
 }
 
 export function drawSoldier(ctx, soldier, time, combatAssets = null) {
+  const soldierX = presentedX(soldier);
+  const soldierY = presentedY(soldier);
   ctx.save();
-  ctx.translate(soldier.x + soldier.w / 2, soldier.y + soldier.h);
+  ctx.translate(soldierX + soldier.w / 2, soldierY + soldier.h);
   const facing = soldier.facing || 1;
   ctx.scale(facing, 1);
   if (soldier.kind === 'shield') ctx.scale(1.12, 1.12);
@@ -2224,7 +2245,7 @@ export function drawSoldier(ctx, soldier, time, combatAssets = null) {
   const moving = soldier.mode === 'walk' && (!presentationState
     || presentationState === 'advance' || presentationState === 'backpedal');
   const strideDirection = presentationState === 'backpedal' ? -1 : 1;
-  const stride = moving ? Math.sin(strideClock * 10 + soldier.x * .04) * 5 * strideDirection : 0;
+  const stride = moving ? Math.sin(strideClock * 10 + soldierX * .04) * 5 * strideDirection : 0;
   ctx.strokeStyle = '#1a2237';
   ctx.lineWidth = 7;
   ctx.beginPath();
@@ -2268,7 +2289,7 @@ export function drawSoldier(ctx, soldier, time, combatAssets = null) {
 
 export function drawProjectile(ctx, projectile) {
   ctx.save();
-  ctx.translate(projectile.x, projectile.y);
+  ctx.translate(presentedX(projectile), presentedY(projectile));
   ctx.scale(projectile.vx < 0 ? -1 : 1, 1);
   ctx.strokeStyle = '#d8e0e5';
   ctx.lineWidth = 2;
@@ -2289,6 +2310,13 @@ export function drawProjectile(ctx, projectile) {
 }
 
 export function drawHero(ctx, player, time, heroSheet) {
+  const playerX = presentedX(player);
+  const playerY = presentedY(player);
+  const landingProgress = player.landingClock > 0
+    ? Math.max(0, Math.min(1, player.landingClock / (player.landingDuration || .11)))
+    : 0;
+  const landingCompression = Math.sin(landingProgress * Math.PI)
+    * .08 * Math.max(.35, player.landingIntensity || 0);
   if (heroSheet) {
     const running = player.grounded && Math.abs(player.vx) > 25;
     const state = player.presentation?.state || '';
@@ -2315,8 +2343,9 @@ export function drawHero(ctx, player, time, heroSheet) {
     const cellW = heroSheet.width / 3;
     const cellH = heroSheet.height / 2;
     ctx.save();
-    ctx.translate(player.x + player.w / 2, player.y + player.h);
+    ctx.translate(playerX + player.w / 2, playerY + player.h);
     ctx.scale(player.facing, 1);
+    if (landingCompression > 0) ctx.scale(1 + landingCompression * .55, 1 - landingCompression);
     if (state === 'hit') {
       ctx.translate(-6, 0);
       ctx.rotate(.075);
@@ -2357,8 +2386,9 @@ export function drawHero(ctx, player, time, heroSheet) {
   }
 
   ctx.save();
-  ctx.translate(player.x + player.w / 2, player.y + player.h);
+  ctx.translate(playerX + player.w / 2, playerY + player.h);
   ctx.scale(player.facing, 1);
+  if (landingCompression > 0) ctx.scale(1 + landingCompression * .55, 1 - landingCompression);
   if (player.invuln > 0 && Math.floor(player.invuln * 12) % 2 === 0) ctx.globalAlpha = .38;
   const running = player.grounded && Math.abs(player.vx) > 25;
   const stride = running ? Math.sin(time * 15) * 7 : 0;

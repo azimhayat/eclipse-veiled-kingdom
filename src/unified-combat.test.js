@@ -291,6 +291,82 @@ describe('shared V4 combat language', () => {
     expect(GameEngine.prototype.readableSoldierCanAdvance.call(engine, spear, 1)).toBe(false);
   });
 
+  it('keeps non-owning melee roles in a readable formation instead of dogpiling', () => {
+    const engine = combatHarness();
+    const shield = standardSoldier(engine, 'shield');
+    const spear = { ...standardSoldier(engine, 'spear'), id: 'spear-support' };
+    engine.soldiers = [shield, spear];
+    engine.meleeAttackToken = shield.id;
+    spear.x = engine.player.x + 76;
+
+    GameEngine.prototype.updateRaidSoldier.call(engine, spear, 1 / 60);
+
+    expect(spear.attackPhase).toBe('pursue');
+    expect(spear.vx).toBeGreaterThan(0);
+    expect(spear.vx).toBeLessThanOrEqual(6);
+  });
+
+  it('decelerates a readable soldier before turning to face Aren', () => {
+    const engine = combatHarness();
+    const spear = standardSoldier(engine, 'spear');
+    engine.soldiers = [spear];
+    Object.assign(spear, {
+      x: engine.player.x - 90,
+      facing: -1,
+      vx: -72,
+    });
+
+    GameEngine.prototype.updateRaidSoldier.call(engine, spear, 1 / 60);
+
+    expect(spear.facing).toBe(-1);
+    expect(spear.vx).toBeGreaterThan(-72);
+    expect(spear.vx).toBeLessThan(0);
+  });
+
+  it('carries grounded fighters with a moving platform and preserves support', () => {
+    const engine = combatHarness();
+    const platform = { x: 300, y: 500, w: 160, h: 18, dx: 3, dy: 2 };
+    engine.level.movers = [platform];
+    const spear = standardSoldier(engine, 'spear');
+    Object.assign(spear, {
+      x: 330,
+      y: platform.y - spear.h,
+      vx: 0,
+      vy: 0,
+      groundPlatform: platform,
+    });
+
+    const carry = GameEngine.prototype.carrySoldierWithPlatform.call(engine, spear, 1 / 60);
+    spear.vy += PHYSICS.GRAVITY_DOWN / 60;
+    const landed = GameEngine.prototype.moveSoldierVertical.call(engine, spear, 1 / 60);
+
+    expect(carry).toMatchObject({ platform, velocityX: 180, velocityY: 120 });
+    expect(spear.x).toBeCloseTo(333);
+    expect(spear.y).toBeCloseTo(platform.y - spear.h);
+    expect(spear.groundPlatform).toBe(platform);
+    expect(landed).toBe(true);
+  });
+
+  it('qualifies and smooths camera look-ahead by velocity across a fast reversal', () => {
+    const engine = combatHarness();
+    engine.camera = {
+      x: engine.player.x - 300,
+      y: engine.player.y - 200,
+      focusX: engine.player.x + engine.player.w / 2,
+      focusY: engine.player.y + engine.player.h / 2,
+      lookAheadX: 105,
+    };
+    engine.player.vx = -PHYSICS.RUN_SPEED;
+
+    GameEngine.prototype.updateCamera.call(engine, 1 / 60);
+    expect(engine.camera.lookAheadX).toBeGreaterThan(0);
+
+    for (let frame = 0; frame < 30; frame += 1) {
+      GameEngine.prototype.updateCamera.call(engine, 1 / 60);
+    }
+    expect(engine.camera.lookAheadX).toBeLessThan(0);
+  });
+
   it('caps ordinary reinforcements by both total roster and simultaneous attackers', () => {
     const engine = combatHarness({ combat: { maxActive: 2, maxSpawns: 3 } });
     engine.level.spawnEvery = .01;
