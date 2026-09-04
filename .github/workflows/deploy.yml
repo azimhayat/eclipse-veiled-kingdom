@@ -1,8 +1,8 @@
-name: Deploy V1, V2, V3, and V4 games to GitHub Pages
+name: Deploy V1, V2, V3, V4, and V5 games to GitHub Pages
 
 on:
   push:
-    branches: [v4]
+    branches: [v4, v5-release-candidate]
   workflow_dispatch:
 
 permissions:
@@ -18,9 +18,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out V4
+      - name: Check out V5
         uses: actions/checkout@v6
         with:
+          path: v5-source
+
+      - name: Check out preserved V4
+        uses: actions/checkout@v6
+        with:
+          ref: v4
           path: v4-source
 
       - name: Check out preserved V3
@@ -51,6 +57,7 @@ jobs:
             v2-source/package-lock.json
             v3-source/package-lock.json
             v4-source/package-lock.json
+            v5-source/package-lock.json
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -79,23 +86,32 @@ jobs:
           npm ci
           npm run build -- --base /eclipse-veiled-kingdom/v4/
 
+      - name: Build V5 at its own URL
+        working-directory: v5-source
+        run: |
+          npm ci
+          npm run build -- --base /eclipse-veiled-kingdom/v5/
+
       - name: Assemble all playable versions
         run: |
-          mkdir -p site/v2 site/v3 site/v4
+          mkdir -p site/v2 site/v3 site/v4 site/v5
           cp -a v1-source/dist/. site/
           cp -a v2-source/dist/. site/v2/
           cp -a v3-source/dist/. site/v3/
           cp -a v4-source/dist/. site/v4/
+          cp -a v5-source/dist/. site/v5/
           test -f site/index.html
           test -f site/v2/index.html
           test -f site/v3/index.html
           test -f site/v4/index.html
+          test -f site/v5/index.html
           grep -q '/eclipse-veiled-kingdom/assets/' site/index.html
           grep -q '/eclipse-veiled-kingdom/v2/assets/' site/v2/index.html
           grep -q '/eclipse-veiled-kingdom/v3/assets/' site/v3/index.html
           grep -q '/eclipse-veiled-kingdom/v4/assets/' site/v4/index.html
+          grep -q '/eclipse-veiled-kingdom/v5/assets/' site/v5/index.html
 
-      - name: Upload all games
+      - name: Upload all five games
         uses: actions/upload-pages-artifact@v4
         with:
           path: site
@@ -107,6 +123,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy V1, V2, V3, and V4
+      - name: Deploy V1, V2, V3, V4, and V5
         id: deployment
         uses: actions/deploy-pages@v4
