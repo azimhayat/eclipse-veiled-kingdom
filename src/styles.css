@@ -1087,11 +1087,11 @@ h1 span { color: var(--gold); display: block; }
   .audio-controls input[type='range'], .audio-mute { min-height: 36px; }
   .hint-panel-heading button { width: 42px; height: 42px; flex-basis: 42px; }
   .hint-guidance-panel .guidance-options button { min-height: 42px; }
-  .touch-controls { position: absolute; inset: auto 0 max(16px, env(safe-area-inset-bottom)); z-index: 16; display: flex; justify-content: space-between; padding: 0 20px; pointer-events: none; }
-  .touch-cluster { display: grid; gap: 8px; pointer-events: auto; }
+  .touch-controls { position: absolute; inset: auto 0 max(16px, env(safe-area-inset-bottom)); z-index: 16; display: flex; justify-content: space-between; padding: 0 20px; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .touch-cluster { display: grid; gap: 8px; pointer-events: auto; touch-action: none; }
   .touch-move { grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 54px); }
   .touch-actions { grid-template-columns: repeat(2, 62px); align-items: end; }
-  .touch-button { border: 1px solid rgba(232,197,106,.33); color: #fff4d6; background: rgba(5,8,18,.62); backdrop-filter: blur(7px); border-radius: 50%; width: 54px; height: 54px; pointer-events: auto; touch-action: none; font-size: 11px; text-transform: uppercase; }
+  .touch-button { border: 1px solid rgba(232,197,106,.33); color: #fff4d6; background: rgba(5,8,18,.62); backdrop-filter: blur(7px); border-radius: 50%; width: 54px; height: 54px; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; font-size: 11px; text-transform: uppercase; }
   .touch-button:active, .touch-button.active { background: rgba(232,197,106,.42); }
   .touch-up { grid-column: 2; }
   .touch-left { grid-column: 1; grid-row: 2; }

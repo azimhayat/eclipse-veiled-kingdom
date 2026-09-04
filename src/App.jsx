@@ -173,14 +173,28 @@ function getBrowserStorage() {
 function TouchButton({ action, label, className = '', engineRef }) {
   const assistiveReleaseRef = useRef(null);
   const lastKeyboardRef = useRef(0);
+  const pointersRef = useRef(new Set());
+  const [active, setActive] = useState(false);
   const set = (active, event) => {
     event?.preventDefault();
-    if (active && event?.pointerId !== undefined) {
-      try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* synthetic and cancelled pointers need no capture */ }
-    }
-    engineRef.current?.setInput(action, active);
+    let nextActive = active;
+    if (event?.pointerId !== undefined) {
+      if (active) {
+        pointersRef.current.add(event.pointerId);
+        try { event.currentTarget.setPointerCapture?.(event.pointerId); } catch { /* synthetic and cancelled pointers need no capture */ }
+      } else {
+        pointersRef.current.delete(event.pointerId);
+        nextActive = pointersRef.current.size > 0;
+      }
+    } else if (!active) pointersRef.current.clear();
+    setActive(nextActive);
+    engineRef.current?.setInput(action, nextActive);
   };
-  useEffect(() => () => window.clearTimeout(assistiveReleaseRef.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(assistiveReleaseRef.current);
+    pointersRef.current.clear();
+    engineRef.current?.setInput(action, false);
+  }, [action, engineRef]);
   const keyboard = (active, event) => {
     if (!['Enter', ' '].includes(event.key)) return;
     event.stopPropagation();
@@ -191,13 +205,14 @@ function TouchButton({ action, label, className = '', engineRef }) {
     if (event.detail !== 0 || Date.now() - lastKeyboardRef.current < 300) return;
     set(true, event);
     window.clearTimeout(assistiveReleaseRef.current);
-    assistiveReleaseRef.current = window.setTimeout(() => engineRef.current?.setInput(action, false), 130);
+    assistiveReleaseRef.current = window.setTimeout(() => set(false), 130);
   };
   return (
     <button
       type="button"
-      className={`touch-button ${className}`}
+      className={`touch-button ${className}${active ? ' active' : ''}`}
       aria-label={label}
+      aria-pressed={active}
       onPointerDown={(event) => set(true, event)}
       onPointerUp={(event) => set(false, event)}
       onPointerCancel={(event) => set(false, event)}
@@ -206,6 +221,7 @@ function TouchButton({ action, label, className = '', engineRef }) {
       onKeyUp={(event) => keyboard(false, event)}
       onBlur={(event) => set(false, event)}
       onClick={assistiveClick}
+      onContextMenu={(event) => event.preventDefault()}
     >{label}</button>
   );
 }
