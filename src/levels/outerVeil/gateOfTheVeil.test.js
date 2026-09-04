@@ -6,6 +6,7 @@ import {
 } from '../../campaign/productionPreview.js';
 import { assertValidAuthoredLevel, validateAuthoredLevel } from '../../campaign/levelSchema.js';
 import { GameEngine } from '../../engine.js';
+import { advanceCombatTimeline, createPlayerCombatTimeline } from '../../combat-presentation.js';
 import { createLevels } from '../../levels.js';
 import { cloneLevel } from '../cloneLevel.js';
 import { TILE, Tile, VIEW_H, WORLD_H } from '../constants.js';
@@ -94,7 +95,13 @@ function strikeKeeper(engine) {
   engine.player.x = soldier.x - engine.player.w + 8;
   engine.player.y = soldier.y;
   engine.player.facing = 1;
-  engine.player.attackTimer = .2;
+  engine.player.attackKind = 'normal';
+  engine.player.attackSequenceStep = 1;
+  engine.player.attackDamage = 1;
+  engine.player.attackFacing = 1;
+  engine.player.combatAction = createPlayerCombatTimeline({ id: 'keeper-test', kind: 'normal', comboStep: 1 });
+  engine.player.attackTimer = engine.player.combatAction.totalSeconds;
+  advanceCombatTimeline(engine.player.combatAction, engine.player.combatAction.startupSeconds);
   engine.player.attackHits.clear();
   GameEngine.prototype.resolveAttackHits.call(engine);
 }

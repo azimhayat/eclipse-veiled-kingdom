@@ -125,6 +125,21 @@ function beginDuelHarness() {
 }
 
 describe('Outer Veil Level 10 production preview', () => {
+  it('keeps ordinary DOWN drop-through before the duel activates', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createWardenOfDust(), identity));
+    const engine = engineHarness(level);
+    engine.player = GameEngine.prototype.makePlayer.call(engine, level.spawn);
+    engine.player.grounded = true;
+    engine.checkHazards = vi.fn();
+    engine.input.down = true;
+    engine.input.pressed.add('down');
+    engine.updatePlayer(1 / 60);
+    expect(engine.player).toMatchObject({ guarding: false });
+    expect(engine.player.dropTimer).toBeGreaterThan(0);
+    GameEngine.prototype.pushHud.call(engine, true);
+    expect(engine.callbacks.hud).toHaveBeenLastCalledWith(expect.objectContaining({ playerGuard: null }));
+  });
+
   it('authors the exact guardian identity and a separate pristine duel contract without a fifth unlock', () => {
     const level = assertValidAuthoredLevel(createWardenOfDust(), identity);
     expect(level).toMatchObject({
@@ -446,7 +461,7 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(engine.player.attackKind).toBe('heavy');
     expect(engine.player.combatAction).toMatchObject({ phase: 'startup' });
     expect(boss.hp).toBe(60);
-    for (let frame = 0; frame < 5; frame += 1) {
+    for (let frame = 0; frame < 24 && boss.hp === 60; frame += 1) {
       engine.updateWardenDuel(1 / 60);
       engine.updatePlayer(1 / 60);
       engine.input.pressed.clear();
@@ -498,6 +513,10 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(engine.player.hp).toBe(3);
     expect(duel.player).toMatchObject({ guarding: false, guardMeter: 0, guardBrokenClock: .72 });
     expect(boss.action).toBe('recovery');
+    engine.input.pressed.clear();
+    engine.updatePlayer(1 / 60);
+    expect(engine.player).toMatchObject({ guarding: false, guardMeter: 0 });
+    expect(engine.player.guardBrokenClock).toBeGreaterThan(.7);
   });
 
   it('keeps DOWN as guard on the one-way arena and allows jumps to clear low attacks', () => {
@@ -527,12 +546,33 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(engine.player.hp).toBe(4);
     expect(boss.action).toBe('recovery');
 
+    Object.assign(engine.player, {
+      grounded: true,
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      hp: 4,
+      invuln: 0,
+    });
+    Object.assign(boss, { action: 'active', actionClock: .1, attackKind: 'dust-sweep', attackConsumed: false });
+    engine.setInput('jump', true);
+    engine.updateWardenDuel(.01);
+    expect(engine.player.hp).toBe(4);
+    engine.updatePlayer(1 / 60);
+    expect(engine.player.grounded).toBe(false);
+
     engine.setInput('down', false);
     Object.assign(engine.player, { grounded: false, y: duel.arena.feetTy * TILE - engine.player.h - 30 });
     Object.assign(boss, { action: 'active', actionClock: .1, attackKind: 'dust-sweep', attackConsumed: false });
     engine.updateWardenDuel(.11);
     expect(engine.player.hp).toBe(4);
     expect(boss.action).toBe('recovery');
+  });
+
+  it('grants the full authored parry window on the frame DOWN is pressed', () => {
+    const { engine, duel } = beginDuelHarness();
+    engine.input.pressed.add('down');
+    engine.input.down = true;
+    engine.updateWardenDuel(1 / 60);
+    expect(duel.player.parryClock).toBe(duel.timing.parryWindow);
   });
 
   it('keeps the arena sealed until Dawnstroke, then restarts only the duel after a fatal attempt', () => {

@@ -2141,7 +2141,9 @@ export function drawSoldier(ctx, soldier, time, veilRaiderSheet = null) {
       ctx.restore();
     } else if (phase === 'landing' || phase === 'recovery' || phase === 'stun' || phase === 'guard') {
       ctx.save();
-      ctx.strokeStyle = phase === 'stun' ? '#ffe091' : phase === 'guard' ? '#d4eeff' : '#86e1eb';
+      ctx.strokeStyle = phase === 'stun' && !soldier.raidMember
+        ? '#ffe091'
+        : phase === 'guard' ? '#d4eeff' : '#86e1eb';
       ctx.globalAlpha = .75;
       ctx.lineWidth = phase === 'guard' ? 5 : 3;
       ctx.setLineDash([8, 7]);
@@ -2278,18 +2280,11 @@ export function drawHero(ctx, player, time, heroSheet) {
     const offsetY = presentationEnabled && pose === 'run'
       ? -Math.abs(Math.sin(presentationClock * 15)) * 2
       : 0;
-    const action = player.combatAction;
-    const actionShift = action?.phase === 'startup' ? -5 * action.phaseProgress
-      : action?.phase === 'active' ? 5 + 7 * action.phaseProgress
-        : action?.phase === 'recovery' ? 6 * (1 - action.phaseProgress)
-          : 0;
-
     const cellW = heroSheet.width / 3;
     const cellH = heroSheet.height / 2;
     ctx.save();
     ctx.translate(player.x + player.w / 2, player.y + player.h);
     ctx.scale(player.facing, 1);
-    if (actionShift) ctx.translate(actionShift, 0);
     if (state === 'hit') {
       ctx.translate(-6, 0);
       ctx.rotate(.075);

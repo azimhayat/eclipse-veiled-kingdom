@@ -34,15 +34,17 @@ export function getVeilRaiderFrame(soldier = {}) {
   if (state === 'landing') return VEIL_RAIDER_SHEET.frames.landing;
   if (state === 'anticipation') return VEIL_RAIDER_SHEET.frames.anticipation;
   if (state === 'contact') return VEIL_RAIDER_SHEET.frames.contact;
-  if (state === 'guard' || state === 'recovery') return VEIL_RAIDER_SHEET.frames.recovery;
-  if (state === 'hit' || soldier.attackPhase === 'stun') return VEIL_RAIDER_SHEET.frames.hit;
+  if (state === 'guard') return VEIL_RAIDER_SHEET.frames.anticipation;
+  if (state === 'recovery' || soldier.attackPhase === 'stun') return VEIL_RAIDER_SHEET.frames.recovery;
+  if (state === 'hit') return VEIL_RAIDER_SHEET.frames.hit;
   if (state === 'defeat' || soldier.hp <= 0) return VEIL_RAIDER_SHEET.frames.defeat;
   return VEIL_RAIDER_SHEET.frames.idle;
 }
 
 export function getWardenFrame(duel = {}) {
   const boss = duel.boss || {};
-  if (duel.phase === 'finale' || duel.complete) return WARDEN_SHEET.frames.restoration;
+  if (duel.complete) return WARDEN_SHEET.frames.restoration;
+  if (duel.phase === 'finale') return WARDEN_SHEET.frames.hit;
   if (boss.action === 'hitstun' || boss.hitFlash > 0) return WARDEN_SHEET.frames.hit;
   if (boss.action === 'guard' || boss.guarding) return WARDEN_SHEET.frames.guard;
   if (boss.action === 'windup') return WARDEN_SHEET.frames.windup;

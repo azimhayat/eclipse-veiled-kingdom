@@ -56,9 +56,10 @@ export function chooseWardenFighterAttack(boss, distance) {
   return phase.pattern[sequenceIndex % phase.pattern.length];
 }
 
-export function wardenAttackCanHit({ attackKind, distance, airborne }) {
+export function wardenAttackCanHit({ attackKind, distance, airborne, attackFacing = 0, targetDirection = 0 }) {
   const attack = getWardenFighterAttack(attackKind);
   if (distance > attack.range) return false;
   if (attack.low && airborne) return false;
+  if (attackFacing && targetDirection && attackFacing !== targetDirection) return false;
   return true;
 }

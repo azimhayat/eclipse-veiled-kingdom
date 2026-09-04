@@ -13,7 +13,8 @@ describe('production combat sprite contracts', () => {
     expect(getVeilRaiderFrame({ presentation: { state: 'landing' } })).toBe(VEIL_RAIDER_SHEET.frames.landing);
     expect(getVeilRaiderFrame({ presentation: { state: 'anticipation' } })).toBe(VEIL_RAIDER_SHEET.frames.anticipation);
     expect(getVeilRaiderFrame({ presentation: { state: 'contact' } })).toBe(VEIL_RAIDER_SHEET.frames.contact);
-    expect(getVeilRaiderFrame({ presentation: { state: 'guard' } })).toBe(VEIL_RAIDER_SHEET.frames.recovery);
+    expect(getVeilRaiderFrame({ presentation: { state: 'guard' } })).toBe(VEIL_RAIDER_SHEET.frames.anticipation);
+    expect(getVeilRaiderFrame({ attackPhase: 'stun' })).toBe(VEIL_RAIDER_SHEET.frames.recovery);
     expect(getVeilRaiderFrame({ presentation: { state: 'hit' } })).toBe(VEIL_RAIDER_SHEET.frames.hit);
     expect(getVeilRaiderFrame({ hp: 0 })).toBe(VEIL_RAIDER_SHEET.frames.defeat);
     expect(getVeilRaiderFrame({ presentation: { state: 'advance' }, hp: 2 })).toBe(VEIL_RAIDER_SHEET.frames.idle);
@@ -36,7 +37,8 @@ describe('production combat sprite contracts', () => {
     expect(getWardenFrame({ boss: { action: 'recovery' } })).toBe(WARDEN_SHEET.frames.recovery);
     expect(getWardenFrame({ boss: { action: 'hitstun' } })).toBe(WARDEN_SHEET.frames.hit);
     expect(getWardenFrame({ boss: { action: 'intro', phase: 'eclipse' } })).toBe(WARDEN_SHEET.frames.eclipse);
-    expect(getWardenFrame({ phase: 'finale', boss: {} })).toBe(WARDEN_SHEET.frames.restoration);
+    expect(getWardenFrame({ phase: 'finale', complete: false, boss: {} })).toBe(WARDEN_SHEET.frames.hit);
+    expect(getWardenFrame({ phase: 'finale', complete: true, boss: {} })).toBe(WARDEN_SHEET.frames.restoration);
     expect(getWardenFrame({ boss: { action: 'neutral' } })).toBe(WARDEN_SHEET.frames.idle);
   });
 

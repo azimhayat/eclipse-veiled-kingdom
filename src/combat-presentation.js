@@ -1,12 +1,27 @@
-const PLAYER_ATTACK_SECONDS = .32;
-
 export const PLAYER_COMBAT_CLIPS = Object.freeze({
-  'normal-1': Object.freeze({ key: 'normal-1', startup: .06, active: .12, recovery: .14 }),
-  'normal-2': Object.freeze({ key: 'normal-2', startup: .05, active: .13, recovery: .14 }),
-  'normal-3': Object.freeze({ key: 'normal-3', startup: .07, active: .14, recovery: .11 }),
-  heavy: Object.freeze({ key: 'heavy', startup: .10, active: .12, recovery: .10 }),
-  aerial: Object.freeze({ key: 'aerial', startup: .06, active: .15, recovery: .11 }),
+  'normal-1': Object.freeze({
+    key: 'normal-1', startup: .08, active: .10, recovery: .16,
+    movementScale: .54, lungeSpeed: 108, hitstop: .035, recoil: 24,
+  }),
+  'normal-2': Object.freeze({
+    key: 'normal-2', startup: .07, active: .11, recovery: .18,
+    movementScale: .48, lungeSpeed: 126, hitstop: .04, recoil: 28,
+  }),
+  'normal-3': Object.freeze({
+    key: 'normal-3', startup: .11, active: .12, recovery: .21,
+    movementScale: .34, lungeSpeed: 164, hitstop: .055, recoil: 36,
+  }),
+  heavy: Object.freeze({
+    key: 'heavy', startup: .18, active: .12, recovery: .24,
+    movementScale: .24, lungeSpeed: 138, hitstop: .065, recoil: 48,
+  }),
+  aerial: Object.freeze({
+    key: 'aerial', startup: .10, active: .14, recovery: .22,
+    movementScale: .42, lungeSpeed: 118, hitstop: .05, recoil: 32,
+  }),
 });
+
+export const PLAYER_ATTACK_BUFFER_SECONDS = .28;
 
 export const HERO_POSE_FRAMES = Object.freeze({
   idle: Object.freeze({ col: 0, row: 0, size: 116, anchorX: .54, anchorY: .94 }),
@@ -44,6 +59,7 @@ export function combatTimelinePhase(clip, elapsed = 0) {
 
 export function createPlayerCombatTimeline({ id, kind, comboStep = 1 } = {}) {
   const clip = getPlayerCombatClip(kind, comboStep);
+  const totalSeconds = clip.startup + clip.active + clip.recovery;
   return {
     id,
     kind,
@@ -58,7 +74,7 @@ export function createPlayerCombatTimeline({ id, kind, comboStep = 1 } = {}) {
     startupSeconds: clip.startup,
     activeSeconds: clip.active,
     recoverySeconds: clip.recovery,
-    totalSeconds: PLAYER_ATTACK_SECONDS,
+    totalSeconds,
   };
 }
 
@@ -70,7 +86,8 @@ export function advanceCombatTimeline(timeline, dt) {
   const previousElapsed = timeline.elapsed;
   const activeStart = clip.startup;
   const recoveryStart = clip.startup + clip.active;
-  timeline.elapsed = Math.min(PLAYER_ATTACK_SECONDS, previousElapsed + dt);
+  const totalSeconds = clip.startup + clip.active + clip.recovery;
+  timeline.elapsed = Math.min(totalSeconds, previousElapsed + dt);
   const next = combatTimelinePhase(clip, timeline.elapsed);
   timeline.phase = next.phase;
   timeline.phaseProgress = next.progress;
@@ -82,6 +99,22 @@ export function advanceCombatTimeline(timeline, dt) {
   }
   if (enteredRecovery) timeline.recoveryEmitted = true;
   return { enteredActive, enteredRecovery, complete: next.complete };
+}
+
+export function getPlayerCombatMotion(timeline) {
+  if (!timeline) return { movementScale: 1, lungeSpeed: 0 };
+  const clip = PLAYER_COMBAT_CLIPS[timeline.clipKey]
+    || getPlayerCombatClip(timeline.kind, timeline.comboStep);
+  const phaseScale = timeline.phase === 'startup' ? clip.movementScale
+    : timeline.phase === 'active' ? Math.min(.28, clip.movementScale)
+      : timeline.phase === 'recovery' ? Math.min(.62, clip.movementScale + .16)
+        : 1;
+  return { movementScale: phaseScale, lungeSpeed: clip.lungeSpeed };
+}
+
+export function getPlayerCombatImpact(kind, comboStep = 1) {
+  const clip = getPlayerCombatClip(kind, comboStep);
+  return { hitstop: clip.hitstop, recoil: clip.recoil };
 }
 
 export function isCombatTimelineActive(timeline) {

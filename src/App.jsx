@@ -155,6 +155,7 @@ function TouchButton({ action, label, className = '', engineRef }) {
   useEffect(() => () => window.clearTimeout(assistiveReleaseRef.current), []);
   const keyboard = (active, event) => {
     if (!['Enter', ' '].includes(event.key)) return;
+    event.stopPropagation();
     lastKeyboardRef.current = Date.now();
     set(active, event);
   };
@@ -969,6 +970,11 @@ export default function App() {
               <div className="health">
                 <div className="health-label"><span>HEALTH</span><span>{hud.hp}/{hud.maxHp}</span></div>
                 <div className="health-track" role="progressbar" aria-label="Hero health" aria-valuemin="0" aria-valuemax={hud.maxHp} aria-valuenow={hud.hp}><div className="health-value" style={{ width: `${(hud.hp / hud.maxHp) * 100}%` }} /></div>
+                {hud.playerGuard !== null && !hud.wardenFightActive && (
+                  <div className="combat-vitals" aria-live="polite">
+                    GUARD {hud.playerGuard}/{hud.playerGuardMax}{hud.playerCombo > 0 ? ` · CHAIN ${hud.playerCombo}/3` : ''}
+                  </div>
+                )}
               </div>
             </div>
             <div className="hud-center">
@@ -1051,8 +1057,12 @@ export default function App() {
               <div><span>Move</span><kbd>A / D · ← / →</kbd></div>
               <div><span>Jump</span><kbd>SPACE</kbd></div>
               <div><span>Climb wall</span><kbd>W / ↑ + toward</kbd></div>
-              <div><span>Drop through</span><kbd>S · ↓</kbd></div>
-              <div><span>Strike</span><kbd>J · X</kbd></div>
+              <div><span>Guard / late parry</span><kbd>S · ↓</kbd></div>
+              <div><span>Heavy guard-break</span><kbd>S / ↓ + Strike</kbd></div>
+              <div><span>Aerial attack</span><kbd>Jump + Strike</kbd></div>
+              <div><span>Drop through in combat</span><kbd>S / ↓ + Jump</kbd></div>
+              <div><span>Drop through elsewhere</span><kbd>S · ↓</kbd></div>
+              <div><span>Three-hit Strike chain</span><kbd>J · X</kbd></div>
               <div><span>Dig sand</span><kbd>K · SHIFT</kbd></div>
               <div><span>Pause</span><kbd>ESC · P</kbd></div>
               <div><span>Touch</span><kbd>On-screen pads</kbd></div>

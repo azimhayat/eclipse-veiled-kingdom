@@ -269,6 +269,7 @@ h1 span { color: var(--gold); display: block; }
 .health-label { display: flex; justify-content: space-between; font-size: 10px; color: rgba(255,255,255,.62); letter-spacing: .12em; margin-bottom: 5px; }
 .health-track { height: 7px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.16); }
 .health-value { height: 100%; background: linear-gradient(90deg, #b9584f, #f2a467); box-shadow: 0 0 12px rgba(226,118,99,.5); transition: width .2s; }
+.combat-vitals { margin-top: 5px; color: #91e7ef; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
 .relic-count { font-family: 'Cinzel', serif; color: var(--gold-bright); letter-spacing: .12em; font-size: 14px; }
 .diamond { display: inline-block; width: 8px; height: 8px; border: 1px solid var(--gold); transform: rotate(45deg); margin-right: 8px; box-shadow: 0 0 9px var(--gold); }
 .timer { font-variant-numeric: tabular-nums; color: rgba(255,255,255,.62); font-size: 12px; letter-spacing: .1em; margin-left: 12px; }

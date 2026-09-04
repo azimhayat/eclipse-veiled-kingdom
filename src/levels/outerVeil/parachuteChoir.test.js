@@ -100,7 +100,11 @@ function attackSoldier(engine, id) {
   engine.player.x = soldier.x - engine.player.w + 8;
   engine.player.y = soldier.y;
   engine.player.facing = 1;
+  engine.player.attackFacing = 1;
+  engine.player.attackKind = 'normal';
+  engine.player.attackDamage = 1;
   engine.player.attackTimer = .2;
+  soldier.attackPhase = 'recovery';
   engine.player.combatAction = createPlayerCombatTimeline({ id: 'test-strike', kind: 'normal', comboStep: 1 });
   engine.player.combatAction.phase = 'active';
   engine.player.attackHits.clear();
@@ -227,6 +231,31 @@ describe('Outer Veil Level 8 production preview', () => {
     expect(engine.player.hp).toBe(3);
   });
 
+  it('accepts damage only in the raider blue recovery window', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    engine.player.x = 13 * TILE;
+    engine.player.y = 23 * TILE - engine.player.h;
+    GameEngine.prototype.spawnParachuteRaider.call(engine, level.objective.roster[0]);
+    const soldier = engine.soldiers[0];
+    Object.assign(soldier, { x: engine.player.x + engine.player.w - 8, y: engine.player.y, mode: 'walk', attackPhase: 'windup' });
+    Object.assign(engine.player, { facing: 1, attackFacing: 1, attackKind: 'normal', attackDamage: 1 });
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'amber-test', kind: 'normal', comboStep: 1 });
+    engine.player.combatAction.phase = 'active';
+    engine.player.attackTimer = engine.player.combatAction.totalSeconds;
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(soldier.hp).toBe(soldier.maxHp);
+    expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('blue recovery'), 1.7);
+
+    engine.player.attackHits.clear();
+    soldier.attackPhase = 'recovery';
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'blue-test', kind: 'normal', comboStep: 1 });
+    engine.player.combatAction.phase = 'active';
+    engine.player.attackTimer = engine.player.combatAction.totalSeconds;
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(soldier.hp).toBe(soldier.maxHp - 1);
+  });
+
   it('arbitrates one melee attacker, releases the token on interruption, separates the pair, and hits once per strike', () => {
     const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
     const engine = engineHarness(level);
@@ -264,6 +293,7 @@ describe('Outer Veil Level 8 production preview', () => {
     second.x = engine.player.x + engine.player.w - 8;
     second.y = engine.player.y;
     second.hp = 2;
+    second.attackPhase = 'recovery';
     engine.player.facing = 1;
     engine.player.attackTimer = .2;
     engine.player.attackHits.clear();
@@ -285,11 +315,12 @@ describe('Outer Veil Level 8 production preview', () => {
     soldier.x = engine.player.x + engine.player.w - 8;
     soldier.y = engine.player.y;
     soldier.mode = 'walk';
+    soldier.attackPhase = 'recovery';
     engine.player.facing = 1;
     engine.player.attackTimer = 0;
     engine.player.attackHits.clear();
     engine.player.combatAction = createPlayerCombatTimeline({ id: 'stalled-engine-strike', kind: 'heavy' });
-    advanceCombatTimeline(engine.player.combatAction, .4);
+    advanceCombatTimeline(engine.player.combatAction, engine.player.combatAction.totalSeconds + .01);
 
     GameEngine.prototype.resolveAttackHits.call(engine);
     const hpAfterContact = soldier.hp;

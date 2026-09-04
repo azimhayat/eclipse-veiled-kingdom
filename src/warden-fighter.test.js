@@ -33,4 +33,15 @@ describe('Warden arcade-fighter contract', () => {
     expect(wardenAttackCanHit({ attackKind: 'dust-sweep', distance: 40, airborne: false })).toBe(true);
     expect(wardenAttackCanHit({ attackKind: 'sun-blade', distance: 999, airborne: false })).toBe(false);
   });
+
+  it('commits every active strike to the facing chosen during anticipation', () => {
+    expect(wardenAttackCanHit({
+      attackKind: 'sun-blade', distance: 40, airborne: false,
+      attackFacing: 1, targetDirection: 1,
+    })).toBe(true);
+    expect(wardenAttackCanHit({
+      attackKind: 'sun-blade', distance: 40, airborne: false,
+      attackFacing: 1, targetDirection: -1,
+    })).toBe(false);
+  });
 });

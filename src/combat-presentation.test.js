@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   HERO_POSE_FRAMES,
+  PLAYER_ATTACK_BUFFER_SECONDS,
   PLAYER_COMBAT_CLIPS,
   advanceCombatTimeline,
   combatTimelinePhase,
   consumeCombatTimelineContact,
   createPlayerCombatTimeline,
+  getPlayerCombatImpact,
+  getPlayerCombatMotion,
   getHeroPoseFrame,
   isCombatTimelineActive,
   setActorPresentation,
@@ -19,21 +22,25 @@ describe('deterministic combat presentation', () => {
     expect(combatTimelinePhase(clip, clip.startup).phase).toBe('active');
     expect(combatTimelinePhase(clip, clip.startup + clip.active - Number.EPSILON).phase).toBe('active');
     expect(combatTimelinePhase(clip, clip.startup + clip.active).phase).toBe('recovery');
-    expect(combatTimelinePhase(clip, .32 - Number.EPSILON).phase).toBe('recovery');
-    expect(combatTimelinePhase(clip, .32)).toEqual({ phase: 'complete', progress: 1, complete: true });
+    const total = clip.startup + clip.active + clip.recovery;
+    expect(combatTimelinePhase(clip, total - Number.EPSILON).phase).toBe('recovery');
+    expect(combatTimelinePhase(clip, total)).toEqual({ phase: 'complete', progress: 1, complete: true });
   });
 
-  it('preserves the existing 0.32 second cadence for every strike while exposing one contact entry', () => {
-    for (const clip of Object.values(PLAYER_COMBAT_CLIPS)) {
-      expect(clip.startup + clip.active + clip.recovery).toBeCloseTo(.32, 8);
-    }
+  it('uses distinct readable cadences while exposing one contact entry', () => {
+    const totals = Object.values(PLAYER_COMBAT_CLIPS)
+      .map((clip) => clip.startup + clip.active + clip.recovery);
+    expect(new Set(totals.map((total) => total.toFixed(3))).size).toBeGreaterThan(2);
+    expect(totals.every((total) => total >= .3 && total <= .6)).toBe(true);
+    expect(PLAYER_COMBAT_CLIPS.heavy.startup).toBeGreaterThan(PLAYER_COMBAT_CLIPS['normal-1'].startup);
+    expect(PLAYER_ATTACK_BUFFER_SECONDS).toBeGreaterThanOrEqual(PLAYER_COMBAT_CLIPS.heavy.recovery);
     const timeline = createPlayerCombatTimeline({ id: 'attack-1', kind: 'normal', comboStep: 2 });
     expect(isCombatTimelineActive(timeline)).toBe(false);
-    expect(advanceCombatTimeline(timeline, .049)).toMatchObject({ enteredActive: false, complete: false });
+    expect(advanceCombatTimeline(timeline, timeline.startupSeconds - .001)).toMatchObject({ enteredActive: false, complete: false });
     expect(advanceCombatTimeline(timeline, .001)).toMatchObject({ enteredActive: true, enteredRecovery: false });
     expect(isCombatTimelineActive(timeline)).toBe(true);
-    expect(advanceCombatTimeline(timeline, .13)).toMatchObject({ enteredActive: false, enteredRecovery: true });
-    expect(advanceCombatTimeline(timeline, .14)).toMatchObject({ complete: true });
+    expect(advanceCombatTimeline(timeline, timeline.activeSeconds)).toMatchObject({ enteredActive: false, enteredRecovery: true });
+    expect(advanceCombatTimeline(timeline, timeline.recoverySeconds)).toMatchObject({ complete: true });
     expect(timeline.phase).toBe('complete');
   });
 
@@ -57,13 +64,26 @@ describe('deterministic combat presentation', () => {
 
   it('latches one contact when a stalled update crosses the complete active window', () => {
     const timeline = createPlayerCombatTimeline({ id: 'stalled-strike', kind: 'heavy' });
-    expect(advanceCombatTimeline(timeline, .4)).toEqual({
+    expect(advanceCombatTimeline(timeline, timeline.totalSeconds + .1)).toEqual({
       enteredActive: true, enteredRecovery: true, complete: true,
     });
     expect(timeline).toMatchObject({ phase: 'complete', contactPending: true });
     expect(consumeCombatTimelineContact(timeline)).toBe(true);
     expect(timeline.contactPending).toBe(false);
     expect(consumeCombatTimelineContact(timeline)).toBe(false);
+  });
+
+  it('ties movement, lunge, hit-stop, and recoil to the authored action clip', () => {
+    const normal = createPlayerCombatTimeline({ id: 'normal', kind: 'normal', comboStep: 1 });
+    const heavy = createPlayerCombatTimeline({ id: 'heavy', kind: 'heavy' });
+    expect(getPlayerCombatMotion(normal).movementScale).toBeLessThan(1);
+    advanceCombatTimeline(heavy, heavy.startupSeconds);
+    expect(getPlayerCombatMotion(heavy)).toMatchObject({
+      movementScale: expect.any(Number),
+      lungeSpeed: PLAYER_COMBAT_CLIPS.heavy.lungeSpeed,
+    });
+    expect(getPlayerCombatImpact('heavy').hitstop).toBeGreaterThan(getPlayerCombatImpact('normal', 1).hitstop);
+    expect(getPlayerCombatImpact('heavy').recoil).toBeGreaterThan(getPlayerCombatImpact('normal', 1).recoil);
   });
 
   it('timestamps and expires presentation events on simulation time only', () => {

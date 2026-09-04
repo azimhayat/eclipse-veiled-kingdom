@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GameEngine, PHYSICS } from './engine.js';
-import { TILE } from './levels/constants.js';
+import { TILE, Tile } from './levels/constants.js';
+import { advanceCombatTimeline, createPlayerCombatTimeline } from './combat-presentation.js';
 import { cloneLevel } from './levels/cloneLevel.js';
 import { createHollowBarracks } from './levels/prototypes/hollowBarracks.js';
 
@@ -37,6 +38,7 @@ function combatHarness(overrides = {}) {
     input: {
       left: false, right: false, climb: false, down: false,
       jump: false, attack: false, dig: false,
+      attackIntent: null,
       pressed: new Set(), released: new Set(),
     },
     audio: { play: vi.fn() },
@@ -44,6 +46,9 @@ function combatHarness(overrides = {}) {
     setHint: vi.fn(),
     pushHud: vi.fn(),
     burst: vi.fn(),
+    checkHazards: vi.fn(),
+    armCrumble: vi.fn(),
+    armBellTowerCollapseLedge: vi.fn(),
   });
   engine.player = GameEngine.prototype.makePlayer.call(engine, {
     x: (level.arenaStart + 1) * TILE,
@@ -51,6 +56,18 @@ function combatHarness(overrides = {}) {
   });
   engine.player.grounded = true;
   return engine;
+}
+
+function openStrikeContact(engine, kind = 'normal', comboStep = 1) {
+  const p = engine.player;
+  p.attackKind = kind;
+  p.attackSequenceStep = comboStep;
+  p.attackDamage = kind === 'normal' && comboStep < 3 ? 1 : 2;
+  p.attackFacing = p.facing;
+  p.attackHits.clear();
+  p.combatAction = createPlayerCombatTimeline({ id: `test-${kind}-${comboStep}`, kind, comboStep });
+  p.attackTimer = p.combatAction.totalSeconds;
+  advanceCombatTimeline(p.combatAction, p.combatAction.startupSeconds);
 }
 
 function standardSoldier(engine, kind = 'spear') {
@@ -81,53 +98,121 @@ function standardSoldier(engine, kind = 'spear') {
   };
 }
 
+function activeGuardian(engine, overrides = {}) {
+  return {
+    id: 'veiled-guardian',
+    kind: 'guardian',
+    active: true,
+    x: engine.player.x + 44,
+    y: engine.player.y - 48,
+    w: 64,
+    h: 92,
+    vx: 0,
+    hp: 10,
+    maxHp: 10,
+    minX: engine.player.x - 4 * TILE,
+    maxX: engine.player.x + 5 * TILE,
+    facing: -1,
+    attackPhase: 'pursue',
+    attackClock: 0,
+    attackConsumed: true,
+    telegraphSeconds: .72,
+    activeSeconds: .18,
+    recoverySeconds: .68,
+    ...overrides,
+  };
+}
+
 describe('shared V4 combat language', () => {
-  it('buffers the same normal chain, heavy, and aerial intentions outside the Warden duel', () => {
+  it('captures normal, heavy, and aerial intentions without rewarding whiffs', () => {
     const engine = combatHarness();
     const p = engine.player;
 
-    for (const expected of [1, 2, 0]) {
-      p.attackTimer = 0;
-      p.grounded = true;
-      p.y = 26 * TILE - p.h;
-      p.vy = 0;
-      engine.input.pressed.clear();
-      engine.input.pressed.add('attack');
-      GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
-      expect(p.attackKind).toBe('normal');
-      expect(p.comboStep).toBe(expected);
-    }
-    expect(p.attackDamage).toBe(2);
+    GameEngine.prototype.setInput.call(engine, 'attack', true);
+    GameEngine.prototype.setInput.call(engine, 'attack', false);
+    GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+    expect(p).toMatchObject({ attackKind: 'normal', comboStep: 0, attackSequenceStep: 1 });
 
     p.attackTimer = 0;
+    p.combatAction = null;
     p.grounded = true;
-    engine.input.down = true;
-    engine.input.pressed.clear();
-    engine.input.pressed.add('attack');
+    engine.input.pressed.clear(); engine.input.released.clear();
+    GameEngine.prototype.setInput.call(engine, 'down', true);
+    GameEngine.prototype.setInput.call(engine, 'attack', true);
+    GameEngine.prototype.setInput.call(engine, 'attack', false);
+    GameEngine.prototype.setInput.call(engine, 'down', false);
     GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
     expect(p).toMatchObject({ attackKind: 'heavy', attackDamage: 2, comboStep: 0 });
 
     p.attackTimer = 0;
-    p.grounded = false;
-    engine.input.down = false;
-    engine.input.pressed.clear();
-    engine.input.pressed.add('attack');
+    p.combatAction = null;
+    p.grounded = true;
+    engine.input.pressed.clear(); engine.input.released.clear();
+    GameEngine.prototype.setInput.call(engine, 'jump', true);
+    GameEngine.prototype.setInput.call(engine, 'attack', true);
     GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
     expect(p).toMatchObject({ attackKind: 'aerial', attackDamage: 2, comboStep: 0 });
+  });
+
+  it.each([
+    ['down', 'heavy'],
+    ['jump', 'aerial'],
+  ])('recognises either touch order for %s plus Strike', (modifier, expectedKind) => {
+    for (const order of [[modifier, 'attack'], ['attack', modifier]]) {
+      const engine = combatHarness();
+      for (const action of order) GameEngine.prototype.setInput.call(engine, action, true);
+      GameEngine.prototype.setInput.call(engine, 'attack', false);
+      GameEngine.prototype.setInput.call(engine, modifier, false);
+      GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+      expect(engine.player.attackKind).toBe(expectedKind);
+    }
+  });
+
+  it.each([
+    ['down', 'heavy'],
+    ['jump', 'aerial'],
+  ])('upgrades Strike when %s arrives on the following frame', (modifier, expectedKind) => {
+    const engine = combatHarness();
+    GameEngine.prototype.setInput.call(engine, 'attack', true);
+    GameEngine.prototype.setInput.call(engine, 'attack', false);
+    GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+    expect(engine.player).toMatchObject({ attackKind: 'normal' });
+    expect(engine.player.combatAction.phase).toBe('startup');
+
+    engine.input.pressed.clear();
+    engine.input.released.clear();
+    GameEngine.prototype.setInput.call(engine, modifier, true);
+    expect(engine.player).toMatchObject({ attackKind: expectedKind, attackDamage: 2, attackSequenceStep: 1 });
+    expect(engine.player.combatAction).toMatchObject({ kind: expectedKind, phase: 'startup' });
+  });
+
+  it('advances a three-hit chain only once per connected action, including multi-target contact', () => {
+    const engine = combatHarness();
+    const first = standardSoldier(engine, 'spear');
+    const second = { ...standardSoldier(engine, 'spear'), id: 'spear-second', x: first.x + 3 };
+    first.hp = first.maxHp = second.hp = second.maxHp = 12;
+    engine.soldiers = [first, second];
+    for (const expected of [1, 2, 0]) {
+      const step = engine.player.comboClock > 0 ? engine.player.comboStep + 1 : 1;
+      openStrikeContact(engine, 'normal', step);
+      GameEngine.prototype.resolveAttackHits.call(engine);
+      expect(engine.player.comboStep).toBe(expected);
+    }
+    expect(first.hp).toBe(8);
+    expect(second.hp).toBe(8);
   });
 
   it('makes shields reject normal pressure and open to DOWN plus STRIKE', () => {
     const engine = combatHarness();
     const shield = standardSoldier(engine, 'shield');
     engine.soldiers = [shield];
-    Object.assign(engine.player, { attackTimer: .2, attackKind: 'normal', attackDamage: 1 });
+    openStrikeContact(engine, 'normal', 1);
 
     GameEngine.prototype.resolveAttackHits.call(engine);
     expect(shield).toMatchObject({ hp: 4, attackPhase: 'guard' });
     expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('DOWN + STRIKE'), 2.4);
 
-    engine.player.attackHits.clear();
-    Object.assign(engine.player, { attackTimer: .2, attackKind: 'heavy', attackDamage: 2 });
+    openStrikeContact(engine, 'heavy', 1);
     GameEngine.prototype.resolveAttackHits.call(engine);
     expect(shield).toMatchObject({ hp: 2, attackPhase: 'stun' });
     expect(engine.audio.play).toHaveBeenLastCalledWith('heavy');
@@ -150,6 +235,60 @@ describe('shared V4 combat language', () => {
     Object.assign(spear, { attackPhase: 'active', attackClock: .1, attackConsumed: false });
     GameEngine.prototype.updateRaidSoldier.call(engine, spear, .01);
     expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 1);
+  });
+
+  it('shares finite guard, late parry, guard break, and wrong-facing rules across melee and arrows', () => {
+    const engine = combatHarness();
+    const spear = standardSoldier(engine, 'spear');
+    engine.soldiers = [spear];
+    Object.assign(engine.player, { grounded: true, facing: 1, attackTimer: 0, guardMeter: 1, parryClock: .1 });
+    engine.input.down = true;
+    expect(GameEngine.prototype.resolveSoldierAttack.call(engine, spear)).toBe('parried');
+    expect(engine.player).toMatchObject({ hp: PHYSICS.MAX_HP, guardMeter: 1, parryClock: 0 });
+
+    Object.assign(spear, { attackPhase: 'active', attackClock: .1, attackConsumed: false });
+    expect(GameEngine.prototype.resolveSoldierAttack.call(engine, spear)).toBe('guard-broken');
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 1);
+    expect(engine.player.guardBrokenClock).toBeGreaterThan(0);
+
+    Object.assign(engine.player, { invuln: 0, facing: -1, guardBrokenClock: 0, guardMeter: 3 });
+    expect(GameEngine.prototype.resolveProjectileAttack.call(engine, { vx: -285 }, engine.player.x + TILE)).toBe('hit');
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 2);
+  });
+
+  it('uses DOWN to guard and DOWN plus JUMP as an explicit combat drop gesture', () => {
+    const engine = combatHarness();
+    engine.input.down = true;
+    engine.input.pressed.add('down');
+    GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+    expect(engine.player).toMatchObject({ guarding: true, dropTimer: 0 });
+
+    engine.player.grounded = true;
+    engine.input.pressed.clear();
+    engine.input.pressed.add('jump');
+    engine.input.jump = true;
+    GameEngine.prototype.updatePlayer.call(engine, 1 / 60);
+    expect(engine.player.dropTimer).toBeGreaterThan(0);
+  });
+
+  it('cancels an attack and its buffered follow-up when Aren takes damage', () => {
+    const engine = combatHarness();
+    openStrikeContact(engine, 'normal', 1);
+    Object.assign(engine.player, { attackBuffer: .2, attackBufferKind: 'normal' });
+    GameEngine.prototype.damagePlayer.call(engine, 1, -200, -120);
+    expect(engine.player).toMatchObject({ attackTimer: 0, attackBuffer: 0, attackBufferKind: null, combatAction: null });
+  });
+
+  it('releases stale attack ownership and refuses to walk readable soldiers into walls or pits', () => {
+    const engine = combatHarness();
+    const spear = standardSoldier(engine, 'spear');
+    engine.soldiers = [spear];
+    engine.meleeAttackToken = 'missing-soldier';
+    expect(GameEngine.prototype.releaseStaleMeleeAttackToken.call(engine)).toBe(true);
+    const leadingTx = Math.floor((spear.x + spear.w + 3) / TILE);
+    const floorTy = Math.floor((spear.y + spear.h + 4) / TILE);
+    engine.level.map[floorTy][leadingTx] = Tile.AIR;
+    expect(GameEngine.prototype.readableSoldierCanAdvance.call(engine, spear, 1)).toBe(false);
   });
 
   it('caps ordinary reinforcements by both total roster and simultaneous attackers', () => {
@@ -195,7 +334,75 @@ describe('shared V4 combat language', () => {
     engine.input.down = true;
     GameEngine.prototype.updateStandardUnifiedCombat.call(engine, .01);
     expect(engine.player.hp).toBe(PHYSICS.MAX_HP);
+    expect(engine.player.guardMeter).toBe(2);
     expect(engine.projectiles).toHaveLength(0);
     expect(engine.audio.play).toHaveBeenLastCalledWith('block');
+  });
+
+  it('gives the Veiled Guardian one readable contact window instead of body-overlap damage', () => {
+    const engine = combatHarness();
+    const boss = activeGuardian(engine);
+    engine.level.boss = boss;
+
+    GameEngine.prototype.updateBoss.call(engine, .01);
+    expect(boss).toMatchObject({ attackPhase: 'windup', attackConsumed: true, facing: -1 });
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP);
+
+    for (let step = 0; step < 7; step += 1) GameEngine.prototype.updateBoss.call(engine, .11);
+    expect(boss).toMatchObject({ attackPhase: 'active', attackConsumed: false, facing: -1 });
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP);
+
+    GameEngine.prototype.updateBoss.call(engine, .01);
+    expect(boss.attackConsumed).toBe(true);
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 1);
+    GameEngine.prototype.updateBoss.call(engine, .01);
+    expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 1);
+  });
+
+  it('lets a late, correctly faced guard parry the Veiled Guardian into longer recovery', () => {
+    const engine = combatHarness();
+    const boss = activeGuardian(engine, {
+      attackPhase: 'active',
+      attackClock: .1,
+      attackConsumed: false,
+    });
+    engine.level.boss = boss;
+    engine.input.down = true;
+    Object.assign(engine.player, {
+      facing: 1,
+      grounded: true,
+      attackTimer: 0,
+      guardMeter: 3,
+      parryClock: .1,
+    });
+
+    GameEngine.prototype.updateBoss.call(engine, .01);
+    expect(engine.player).toMatchObject({ hp: PHYSICS.MAX_HP, guardMeter: 3, parryClock: 0 });
+    expect(boss.attackPhase).toBe('recovery');
+    expect(boss.attackClock).toBeGreaterThan(boss.recoverySeconds);
+    expect(engine.audio.play).toHaveBeenLastCalledWith('parry');
+  });
+
+  it('applies the connected three-hit chain and authored damage to the Veiled Guardian', () => {
+    const engine = combatHarness();
+    const boss = activeGuardian(engine, { x: engine.player.x + 45, y: engine.player.y });
+    engine.level.boss = boss;
+
+    openStrikeContact(engine, 'normal', 1);
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(boss).toMatchObject({ hp: 9, attackPhase: 'stun' });
+    expect(engine.player.comboStep).toBe(1);
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(boss.hp).toBe(9);
+
+    openStrikeContact(engine, 'normal', 2);
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(boss.hp).toBe(8);
+    expect(engine.player.comboStep).toBe(2);
+
+    openStrikeContact(engine, 'normal', 3);
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(boss.hp).toBe(6);
+    expect(engine.player.comboStep).toBe(0);
   });
 });
