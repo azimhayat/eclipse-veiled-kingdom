@@ -1,0 +1,16 @@
+{
+  "appId": "com.azimhayat.eclipseveiledkingdom",
+  "appName": "Eclipse of the Veiled Kingdom",
+  "webDir": "dist",
+  "backgroundColor": "#03060e",
+  "loggingBehavior": "debug",
+  "zoomEnabled": false,
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#03060e",
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
