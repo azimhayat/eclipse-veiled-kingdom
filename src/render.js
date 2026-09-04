@@ -5,6 +5,7 @@ import { getHeroPoseFrame } from './combat-presentation.js';
 import {
   drawSpriteFrame,
   getVeilRaiderFrame,
+  getVeilSoldierSheet,
   getWardenFrame,
   VEIL_RAIDER_SHEET,
   WARDEN_SHEET,
@@ -2100,7 +2101,7 @@ export function drawShip(ctx, ship, time) {
   ctx.restore();
 }
 
-export function drawSoldier(ctx, soldier, time, veilRaiderSheet = null) {
+export function drawSoldier(ctx, soldier, time, combatAssets = null) {
   ctx.save();
   ctx.translate(soldier.x + soldier.w / 2, soldier.y + soldier.h);
   const facing = soldier.facing || 1;
@@ -2169,11 +2170,32 @@ export function drawSoldier(ctx, soldier, time, veilRaiderSheet = null) {
       ctx.restore();
     }
   }
-  if (veilRaiderSheet && soldier.raidMember) {
+  const assets = combatAssets?.veilRaider || combatAssets?.veilKeeper || combatAssets?.veilSpearman
+    ? combatAssets
+    : combatAssets ? { veilRaider: combatAssets } : {};
+  const productionCombatant = soldier.raidMember || soldier.gateMember
+    || soldier.standardCombatMember || soldier.readableMelee;
+  const soldierSheet = productionCombatant ? getVeilSoldierSheet(soldier, assets) : null;
+  if (soldierSheet) {
     ctx.shadowColor = presentationState === 'hit' ? '#8eeeff' : 'rgba(239,184,90,.38)';
     ctx.shadowBlur = presentationState === 'hit' ? 22 : 9;
-    drawSpriteFrame(ctx, veilRaiderSheet, VEIL_RAIDER_SHEET, getVeilRaiderFrame(soldier));
+    drawSpriteFrame(ctx, soldierSheet.image, soldierSheet.sheet, getVeilRaiderFrame(soldier));
     ctx.shadowBlur = 0;
+    if (soldier.kind === 'archer') {
+      ctx.save();
+      ctx.strokeStyle = '#d6ad55';
+      ctx.shadowColor = '#e8c56a';
+      ctx.shadowBlur = 8;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(28, -45, 19, -1.18, 1.18);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(35, -63);
+      ctx.lineTo(35, -27);
+      ctx.stroke();
+      ctx.restore();
+    }
     if (soldier.maxHp > 1) {
       ctx.fillStyle = 'rgba(4,7,15,.78)';
       ctx.fillRect(-18, -79, 36, 5);

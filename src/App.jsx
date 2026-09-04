@@ -59,6 +59,12 @@ import {
 import { getCinematicSequence } from './cinematics/catalog.js';
 import { CinematicPlayer } from './cinematics/CinematicPlayer.jsx';
 import { isolateGameForCinematic } from './cinematics/runtime.js';
+import {
+  DEFAULT_GUIDANCE_SETTINGS,
+  isEssentialGuidance,
+  loadGuidanceSettings,
+  persistGuidanceSettings,
+} from './guidance-settings.js';
 
 const ASSET_URLS = {
   title: `${import.meta.env.BASE_URL}assets/title-still.png`,
@@ -70,10 +76,20 @@ const ASSET_URLS = {
 const OPTIONAL_COMBAT_ASSET_URLS = Object.freeze({
   'outer-veil-08-parachute-choir': Object.freeze({
     veilRaider: `${import.meta.env.BASE_URL}assets/veil-raider-combat-v1.png`,
+    veilKeeper: `${import.meta.env.BASE_URL}assets/veil-keeper-combat-v1.png`,
+    veilSpearman: `${import.meta.env.BASE_URL}assets/veil-spearman-combat-v1.png`,
+  }),
+  'outer-veil-09-gate-of-the-veil': Object.freeze({
+    veilKeeper: `${import.meta.env.BASE_URL}assets/veil-keeper-combat-v1.png`,
   }),
   'outer-veil-10-warden-of-dust': Object.freeze({
     warden: `${import.meta.env.BASE_URL}assets/warden-of-dust-combat-v1.png`,
   }),
+});
+const INNER_KINGDOM_COMBAT_ASSET_URLS = Object.freeze({
+  veilRaider: `${import.meta.env.BASE_URL}assets/veil-raider-combat-v1.png`,
+  veilKeeper: `${import.meta.env.BASE_URL}assets/veil-keeper-combat-v1.png`,
+  veilSpearman: `${import.meta.env.BASE_URL}assets/veil-spearman-combat-v1.png`,
 });
 const optionalAssetLoads = new Map();
 
@@ -88,7 +104,10 @@ function loadImage(src) {
 }
 
 async function ensureCombatVisualAssets(assets, levelKey) {
-  const entries = Object.entries(OPTIONAL_COMBAT_ASSET_URLS[levelKey] || {});
+  const urls = levelKey?.startsWith('inner-kingdom-')
+    ? INNER_KINGDOM_COMBAT_ASSET_URLS
+    : OPTIONAL_COMBAT_ASSET_URLS[levelKey] || {};
+  const entries = Object.entries(urls);
   await Promise.all(entries.map(async ([assetKey, url]) => {
     if (assets[assetKey]) return assets[assetKey];
     if (!optionalAssetLoads.has(url)) {
@@ -239,6 +258,10 @@ export default function App() {
   const [bootLabel, setBootLabel] = useState('Loading the veil');
   const [progress, setProgress] = useState(0);
   const [hint, setHint] = useState('');
+  const [hintVisible, setHintVisible] = useState(false);
+  const [guidanceSettings, setGuidanceSettings] = useState(() => (
+    loadGuidanceSettings({ storage: getBrowserStorage() }).settings || DEFAULT_GUIDANCE_SETTINGS
+  ));
   const [audioSettings, setAudioSettings] = useState(DEFAULT_AUDIO_SETTINGS);
   const [bestTime, setBestTime] = useState(null);
   const [saveWarning, setSaveWarning] = useState('');
@@ -258,6 +281,7 @@ export default function App() {
   const [presentationCard, setPresentationCard] = useState(null);
   const presentationTimerRef = useRef(null);
   const presentationGenerationRef = useRef(0);
+  const hintVisibilityTimerRef = useRef(null);
   const cinematicSessionRef = useRef(null);
   const cinematicGenerationRef = useRef(0);
   const [cinematicSession, setCinematicSession] = useState(null);
@@ -266,7 +290,24 @@ export default function App() {
   useEffect(() => () => {
     cinematicSessionRef.current?.isolation.restore();
     cinematicSessionRef.current = null;
+    window.clearTimeout(hintVisibilityTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    window.clearTimeout(hintVisibilityTimerRef.current);
+    const essential = isEssentialGuidance(hint);
+    if (!hint || (guidanceSettings.mode === 'off' && !essential)) {
+      setHintVisible(false);
+      return undefined;
+    }
+    setHintVisible(true);
+    if (guidanceSettings.mode === 'on') return undefined;
+    hintVisibilityTimerRef.current = window.setTimeout(
+      () => setHintVisible(false),
+      essential ? 2800 : 4200,
+    );
+    return () => window.clearTimeout(hintVisibilityTimerRef.current);
+  }, [hint, guidanceSettings.mode]);
 
   useEffect(() => {
     if (screen === 'win') chronicleHeadingRef.current?.focus({ preventScroll: true });
@@ -661,6 +702,23 @@ export default function App() {
     setScreen('play');
   };
 
+  const setGuidanceMode = (mode) => {
+    const result = persistGuidanceSettings({
+      storage: getBrowserStorage(),
+      settings: { ...guidanceSettings, mode },
+    });
+    setGuidanceSettings(result.settings);
+  };
+
+  const showCurrentHint = () => {
+    if (!hint) return;
+    window.clearTimeout(hintVisibilityTimerRef.current);
+    setHintVisible(true);
+    if (guidanceSettings.mode !== 'on') {
+      hintVisibilityTimerRef.current = window.setTimeout(() => setHintVisible(false), 5000);
+    }
+  };
+
   const startOuterVeilAt = async (index, { restartCompletedV4 = true } = {}) => {
     setSaveWarning('');
     if (restartCompletedV4 && v4Campaign && index === 0
@@ -991,7 +1049,7 @@ export default function App() {
 
       {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win' || screen === 'loading' || screen === 'load-error') && (
         <>
-          <header className="hud" aria-hidden={screen !== 'play'}>
+          <header className={`hud${presentationCard?.kind === 'chapter' ? ' hud-title-suspended' : ''}`} aria-hidden={screen !== 'play'}>
             <div className="hud-left">
               <div>
               <div className="hud-kicker">{sessionKind === 'production-preview'
@@ -1016,6 +1074,13 @@ export default function App() {
               <span className="timer">{formatTime(hud.time)}</span>
             </div>
             <div className="hud-right">
+              <button
+                className={`icon-button hint-button${hintVisible ? ' active' : ''}`}
+                disabled={screen !== 'play' || !hint}
+                aria-label={`Show current hint. Guidance ${guidanceSettings.mode}`}
+                title={`Hints: ${guidanceSettings.mode}`}
+                onClick={showCurrentHint}
+              >?</button>
               <button className="icon-button" disabled={screen !== 'play'} aria-label="Mute all audio" aria-pressed={audioSettings.muted} onClick={toggleMute}>{audioSettings.muted ? '◇' : '◆'}</button>
               <button
                 className="icon-button"
@@ -1025,7 +1090,7 @@ export default function App() {
               >Ⅱ</button>
             </div>
           </header>
-          {screen === 'play' && !presentationCard && <div className="context-hint" role="status" aria-live="polite" aria-atomic="true">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
+          {screen === 'play' && !presentationCard && hintVisible && <div className="context-hint" role="status" aria-live="polite" aria-atomic="true">{hud.demo ? 'DEMO PILGRIM · ' : ''}{hint}</div>}
           {screen === 'play' && (
             <div className="sr-only" id="game-status">
               Level {hud.level}: {hud.levelName}. Hero health {hud.hp} of {hud.maxHp}. Objective: {hud.objectiveProgressText || `${hud.objectiveLabel} ${hud.objectiveCurrent} of ${hud.objectiveTarget}`}.
@@ -1050,6 +1115,7 @@ export default function App() {
               <div className="chapter-rule" />
               <div className="chapter-kicker">{presentationCard.kicker}</div>
               <div className="chapter-title">{presentationCard.title}</div>
+              {presentationCard.subtitle && <div className="chapter-subtitle">{presentationCard.subtitle}</div>}
               {presentationCard.detail && <div className="chapter-story">{presentationCard.detail}</div>}
               {presentationCard.input && (
                 <div className="presentation-input">
@@ -1128,6 +1194,23 @@ export default function App() {
               onMusicVolume={setMusicVolume}
               onEffectsVolume={setEffectsVolume}
             />
+            <section className="guidance-controls" aria-label="Hint settings">
+              <div>
+                <strong>Guidance</strong>
+                <span>Auto appears briefly when the situation changes. Press ? anytime to recall it.</span>
+              </div>
+              <div className="guidance-options" role="group" aria-label="Guidance mode">
+                {['auto', 'on', 'off'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={guidanceSettings.mode === mode ? 'active' : ''}
+                    aria-pressed={guidanceSettings.mode === mode}
+                    onClick={() => setGuidanceMode(mode)}
+                  >{mode}</button>
+                ))}
+              </div>
+            </section>
             <div className="overlay-actions">
               <button className="primary" onClick={resume}>Continue</button>
               <button className="secondary" onClick={sessionKind === 'production-preview' ? () => { window.location.href = window.location.pathname; } : returnToTitle}>{sessionKind === 'production-preview' ? 'Return to live prototype' : 'Title screen'}</button>

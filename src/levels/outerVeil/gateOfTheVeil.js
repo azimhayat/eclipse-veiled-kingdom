@@ -1,5 +1,6 @@
 import { TILE, Tile } from '../constants.js';
 import { baseKingdom, fill, put } from '../prototypes/shared.js';
+import { UNIFIED_COMBAT_GUIDANCE } from '../../combat-presentation.js';
 
 const stage = (id, label, rosterIds) => ({
   id,
@@ -180,7 +181,7 @@ export function createGateOfTheVeil() {
         carve: 'MEMORY CARVE · free the cyan maker’s seal buried beside the gate road',
         counterweight: 'OATHBIND · seat the rune block in the inward counterweight and bind it fast',
         ascent: "PILGRIM'S GRIP · climb the western gate face and take the high latch",
-        relay: 'CROWN WATCH · answer the lone keeper’s amber tell during blue recovery',
+        relay: 'CROWN WATCH · DOWN guards; DOWN + STRIKE breaks the Keeper’s shield; answer during blue recovery',
         keystone: 'DAWNSTROKE · strike the exposed sunstone and turn the lock toward Orun',
         complete: 'THE FIRST SEAL OPENS · cross beneath the restored cartographer’s light',
       },
@@ -193,6 +194,7 @@ export function createGateOfTheVeil() {
       openingHint: 'THE LOCK WAS BUILT INWARD · begin with the buried cyan seal',
       assumedAbilities: ['memory-carve', 'oathbind', 'pilgrims-grip', 'dawnstroke'],
       enemyRoster: ['shield'],
+      combat: { controls: UNIFIED_COMBAT_GUIDANCE },
       cameraHorizontalLead: 0,
       tutorialCues: [
         { minX: 17, maxX: 24, text: 'MEMORY CARVE · face the buried maker’s seal and press DIG' },

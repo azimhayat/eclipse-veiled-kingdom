@@ -57,8 +57,9 @@ export function buildLevelPresentation(entry, {
     durationMs: PRESENTATION_DURATIONS.chapter,
     level: entry.level,
     name: entry.name,
-    kicker: `${realmLabel ? `${realmLabel} · ` : ''}${unitLabel} ${String(entry.level).padStart(2, '0')}${Number.isInteger(campaignTotal) ? ` of ${campaignTotal}` : ''} · ${entry.name}`,
-    title: entry.subtitle || entry.name,
+    kicker: `${realmLabel ? `${realmLabel} · ` : ''}${unitLabel} ${String(entry.level).padStart(2, '0')}${Number.isInteger(campaignTotal) ? ` of ${campaignTotal}` : ''}`,
+    title: entry.name,
+    subtitle: entry.subtitle && entry.subtitle !== entry.name ? entry.subtitle : '',
     detail: entry.storyLine || '',
   }];
 

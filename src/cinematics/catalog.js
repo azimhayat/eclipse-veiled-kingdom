@@ -1,15 +1,15 @@
-export const CINEMATIC_CATALOG_VERSION = 'v5-launch-cinematics-v2';
+export const CINEMATIC_CATALOG_VERSION = 'v5-launch-cinematics-v3';
 
 const CINEMATICS = Object.freeze({
   'opening-prologue': Object.freeze({
     id: 'opening-prologue',
-    version: 1,
+    version: 2,
     eyebrow: 'Story One · Prologue',
     title: 'The Eclipse of Orun',
-    videoPath: 'assets/cinematics/opening-prologue-v1.mp4',
+    videoPath: 'assets/cinematics/opening-prologue-v2.mp4',
     captions: Object.freeze([Object.freeze({
       id: 'opening-prologue-en',
-      path: 'assets/cinematics/opening-prologue-v1.en.vtt',
+      path: 'assets/cinematics/opening-prologue-v2.en.vtt',
       kind: 'captions',
       srcLang: 'en',
       label: 'English',
@@ -19,13 +19,13 @@ const CINEMATICS = Object.freeze({
   }),
   'chapter-one-introduction': Object.freeze({
     id: 'chapter-one-introduction',
-    version: 1,
+    version: 2,
     eyebrow: 'Chapter I · The Outer Veil',
     title: 'The First Buried Path',
-    videoPath: 'assets/cinematics/chapter-one-introduction-v1.mp4',
+    videoPath: 'assets/cinematics/chapter-one-introduction-v2.mp4',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-one-introduction-en',
-      path: 'assets/cinematics/chapter-one-introduction-v1.en.vtt',
+      path: 'assets/cinematics/chapter-one-introduction-v2.en.vtt',
       kind: 'captions',
       srcLang: 'en',
       label: 'English',
@@ -35,13 +35,13 @@ const CINEMATICS = Object.freeze({
   }),
   'chapter-one-to-two-bridge': Object.freeze({
     id: 'chapter-one-to-two-bridge',
-    version: 1,
+    version: 2,
     eyebrow: 'Chapter I Complete · First Crown Path',
     title: 'The Kingdom Without Names',
-    videoPath: 'assets/cinematics/chapter-one-to-two-bridge-v1.mp4',
+    videoPath: 'assets/cinematics/chapter-one-to-two-bridge-v2.mp4',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-one-to-two-bridge-en',
-      path: 'assets/cinematics/chapter-one-to-two-bridge-v1.en.vtt',
+      path: 'assets/cinematics/chapter-one-to-two-bridge-v2.en.vtt',
       kind: 'captions',
       srcLang: 'en',
       label: 'English',
@@ -51,13 +51,13 @@ const CINEMATICS = Object.freeze({
   }),
   'chapter-two-to-three-bridge': Object.freeze({
     id: 'chapter-two-to-three-bridge',
-    version: 1,
+    version: 2,
     eyebrow: 'Chapter II Complete · Second Crown Path',
     title: 'The Sundered Aqueduct',
-    videoPath: 'assets/cinematics/chapter-two-to-three-bridge-v1.mp4',
+    videoPath: 'assets/cinematics/chapter-two-to-three-bridge-v2.mp4',
     captions: Object.freeze([Object.freeze({
       id: 'chapter-two-to-three-bridge-en',
-      path: 'assets/cinematics/chapter-two-to-three-bridge-v1.en.vtt',
+      path: 'assets/cinematics/chapter-two-to-three-bridge-v2.en.vtt',
       kind: 'captions',
       srcLang: 'en',
       label: 'English',

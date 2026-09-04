@@ -1,5 +1,6 @@
 import { TILE, Tile } from '../constants.js';
 import { baseKingdom, fill, put } from '../prototypes/shared.js';
+import { UNIFIED_COMBAT_GUIDANCE } from '../../combat-presentation.js';
 
 export function createWardenOfDust() {
   const map = baseKingdom();
@@ -178,7 +179,7 @@ export function createWardenOfDust() {
         fighter: {
           arenaName: 'THE SEVERED COURT',
           style: 'real-time-arcade-duel',
-          controls: 'Move to control distance. STRIKE chains three blows. DOWN guards. DOWN + STRIKE breaks guard. JUMP + STRIKE attacks from the air.',
+          controls: `Move to control distance. ${UNIFIED_COMBAT_GUIDANCE}.`,
           mercyRule: 'The final Dawnstroke breaks the Crown command and restores the Warden.',
         },
         attempt: {

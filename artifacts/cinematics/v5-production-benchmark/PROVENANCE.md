@@ -75,3 +75,13 @@ post-normalization trim verified after AAC encoding.
 - Container: MP4 with `moov` before `mdat` for browser progressive playback.
 - Working renders and source stems remain in this artifact tree. Runtime copies
   are placed only in `public/assets/cinematics/` under the fixed media contract.
+
+## Version 2 pace cut
+
+`scripts/recut_cinematics.py` creates the shorter release cut from the reviewed
+version 1 masters. It introduces no new visual or audio source. Picture, the
+locally synthesized mix and WebVTT timestamps are retimed by one exact ratio per
+film, preserving all authored scenes and subtitle words. A light high/low-pass,
+two restrained equalizer lifts and EBU loudness normalization provide a more
+immediate mix without replacing the original music. Exact durations, loudness,
+peaks and hashes are recorded in `PACE_CUT_VALIDATION.md`.

@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   drawSpriteFrame,
   getVeilRaiderFrame,
+  getVeilSoldierSheet,
   getWardenFrame,
+  VEIL_KEEPER_SHEET,
   VEIL_RAIDER_SHEET,
+  VEIL_SPEARMAN_SHEET,
   WARDEN_SHEET,
 } from './combat-sprites.js';
 
@@ -44,5 +47,18 @@ describe('production combat sprite contracts', () => {
 
   it('fails safely when the optional artwork is unavailable', () => {
     expect(drawSpriteFrame({ drawImage: vi.fn() }, null, VEIL_RAIDER_SHEET, VEIL_RAIDER_SHEET.frames.idle)).toBe(false);
+  });
+
+  it('selects consistent production sheets by equipment without changing actor state', () => {
+    const assets = { veilRaider: {}, veilKeeper: {}, veilSpearman: {} };
+    expect(getVeilSoldierSheet({ kind: 'shield' }, assets)).toEqual({
+      image: assets.veilKeeper, sheet: VEIL_KEEPER_SHEET, actorKind: 'veil-keeper',
+    });
+    expect(getVeilSoldierSheet({ kind: 'spear' }, assets)).toEqual({
+      image: assets.veilSpearman, sheet: VEIL_SPEARMAN_SHEET, actorKind: 'veil-spearman',
+    });
+    expect(getVeilSoldierSheet({ kind: 'archer' }, assets)).toEqual({
+      image: assets.veilRaider, sheet: VEIL_RAIDER_SHEET, actorKind: 'veil-raider',
+    });
   });
 });

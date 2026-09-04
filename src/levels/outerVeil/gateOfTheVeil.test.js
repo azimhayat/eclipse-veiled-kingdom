@@ -90,16 +90,16 @@ function engineHarness(level) {
   };
 }
 
-function strikeKeeper(engine) {
+function strikeKeeper(engine, kind = 'normal') {
   const soldier = engine.soldiers[0];
   engine.player.x = soldier.x - engine.player.w + 8;
   engine.player.y = soldier.y;
   engine.player.facing = 1;
-  engine.player.attackKind = 'normal';
+  engine.player.attackKind = kind;
   engine.player.attackSequenceStep = 1;
-  engine.player.attackDamage = 1;
+  engine.player.attackDamage = kind === 'heavy' ? 2 : 1;
   engine.player.attackFacing = 1;
-  engine.player.combatAction = createPlayerCombatTimeline({ id: 'keeper-test', kind: 'normal', comboStep: 1 });
+  engine.player.combatAction = createPlayerCombatTimeline({ id: 'keeper-test', kind, comboStep: 1 });
   engine.player.attackTimer = engine.player.combatAction.totalSeconds;
   advanceCombatTimeline(engine.player.combatAction, engine.player.combatAction.startupSeconds);
   engine.player.attackHits.clear();
@@ -193,8 +193,11 @@ describe('Outer Veil Level 9 production preview', () => {
     keeper.attackPhase = 'windup';
     strikeKeeper(engine);
     expect(keeper.hp).toBe(3);
-    expect(keeper).toMatchObject({ attackPhase: 'recovery', attackConsumed: true, vx: 0 });
-    expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('GUARD BROKEN'), 2.8);
+    expect(keeper).toMatchObject({ attackPhase: 'guard', attackConsumed: true, vx: 0 });
+    expect(engine.setHint).toHaveBeenLastCalledWith(expect.stringContaining('DOWN + STRIKE'), 2.4);
+    strikeKeeper(engine, 'heavy');
+    expect(keeper.hp).toBe(1);
+    expect(keeper).toMatchObject({ attackPhase: 'stun', attackConsumed: true });
     while (keeper.hp > 0) strikeKeeper(engine);
     expect(level.objective).toMatchObject({
       phase: 'keystone',

@@ -1,5 +1,6 @@
 import { TILE, Tile } from '../constants.js';
 import { baseKingdom, fill } from '../prototypes/shared.js';
+import { UNIFIED_COMBAT_GUIDANCE } from '../../combat-presentation.js';
 
 const stage = (id, label, triggerTx, rosterIds) => ({
   id,
@@ -229,6 +230,7 @@ export function createParachuteChoir() {
       openingHint: 'DAWNSTROKE · the amber tell is danger; the blue recovery is your answer',
       assumedAbilities: ['memory-carve', 'oathbind', 'pilgrims-grip', 'sanctum-recall'],
       enemyRoster: ['grunt', 'spear', 'shield'],
+      combat: { controls: UNIFIED_COMBAT_GUIDANCE },
       cameraHorizontalLead: 70,
       tutorialCues: [
         { minX: 10, maxX: 27, text: 'OPENING DUET · two finite paratroopers, clear amber tells, safe blue recoveries' },

@@ -136,6 +136,30 @@ describe('deterministic combat rendering', () => {
     ]);
     expect(fallback.calls.some((call) => call[0] === 'drawImage')).toBe(false);
   });
+
+  it('uses the equipment-specific production art for shared combat soldiers', () => {
+    const base = {
+      id: 'soldier', x: 100, y: 200, w: 24, h: 44, facing: 1,
+      hp: 3, maxHp: 3, mode: 'walk', attackPhase: 'guard',
+      presentation: { state: 'guard', clock: .08 }, readableMelee: true,
+    };
+    const raider = { width: 1536, height: 1024, id: 'raider' };
+    const keeper = { width: 1536, height: 1024, id: 'keeper' };
+    const spearman = { width: 1536, height: 1024, id: 'spearman' };
+    const assets = { veilRaider: raider, veilKeeper: keeper, veilSpearman: spearman };
+    const shieldContext = recordingContext();
+    const spearContext = recordingContext();
+    const archerContext = recordingContext();
+
+    drawSoldier(shieldContext, { ...base, kind: 'shield', gateMember: true }, 8, assets);
+    drawSoldier(spearContext, { ...base, kind: 'spear', standardCombatMember: true }, 8, assets);
+    drawSoldier(archerContext, { ...base, kind: 'archer', standardCombatMember: true }, 8, assets);
+
+    expect(shieldContext.calls.some((call) => call[0] === 'drawImage' && call[1] === keeper)).toBe(true);
+    expect(spearContext.calls.some((call) => call[0] === 'drawImage' && call[1] === spearman)).toBe(true);
+    expect(archerContext.calls.some((call) => call[0] === 'drawImage' && call[1] === raider)).toBe(true);
+    expect(archerContext.calls.some((call) => call[0] === 'arc')).toBe(true);
+  });
 });
 
 describe('Civic Promise restoration rendering', () => {

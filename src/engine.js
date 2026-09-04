@@ -1,6 +1,7 @@
 import { AudioManager } from './audio.js';
 import {
   PLAYER_ATTACK_BUFFER_SECONDS,
+  UNIFIED_COMBAT_GUIDANCE,
   advanceCombatTimeline,
   consumeCombatTimelineContact,
   createPlayerCombatTimeline,
@@ -2339,7 +2340,7 @@ export class GameEngine {
     for (const soldier of this.soldiers) {
       if (p.attackHits.has(soldier.id) || !overlaps(hitbox, soldier)) continue;
       const unifiedMember = Boolean(soldier.standardCombatMember);
-      const heavy = unifiedMember && p.attackKind === 'heavy';
+      const heavy = p.attackKind === 'heavy';
       const vulnerableShield = ['recovery', 'stun'].includes(soldier.attackPhase);
       if (soldier.raidMember && !vulnerableShield) {
         p.attackHits.add(soldier.id);
@@ -2356,7 +2357,8 @@ export class GameEngine {
         this.setHint('TOO EARLY · survive the amber attack, then answer during blue recovery.', 1.7);
         continue;
       }
-      if (unifiedMember && soldier.kind === 'shield' && !heavy && !vulnerableShield) {
+      if ((unifiedMember || soldier.gateMember)
+        && soldier.kind === 'shield' && !heavy && !vulnerableShield) {
         p.attackHits.add(soldier.id);
         GameEngine.prototype.registerPlayerCombatImpact.call(this, { blocked: true });
         soldier.attackPhase = 'guard';
@@ -2374,27 +2376,6 @@ export class GameEngine {
         this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#8ce8ff', 8, 90);
         this.audio.play('block');
         this.setHint('SHIELD HOLDS · press DOWN + STRIKE to break it.', 2.4);
-        continue;
-      }
-      if (soldier.gateMember && soldier.kind === 'shield'
-        && !['recovery', 'stun'].includes(soldier.attackPhase)) {
-        p.attackHits.add(soldier.id);
-        GameEngine.prototype.registerPlayerCombatImpact.call(this);
-        soldier.attackPhase = 'recovery';
-        soldier.attackClock = Math.max(.75, soldier.recoverySeconds * .8);
-        soldier.attackConsumed = true;
-        soldier.vx = 0;
-        GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
-        GameEngine.prototype.emitCombatEvent.call(this, 'guard-break', {
-          actorId: soldier.id,
-          sourceId: 'player',
-          x: soldier.x + soldier.w / 2,
-          y: soldier.y + 22,
-          facing: soldier.facing,
-        });
-        this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#718499', 7, 90);
-        this.audio.play('dig');
-        this.setHint('GUARD BROKEN · the Keeper is blue and exposed. STRIKE again.', 2.8);
         continue;
       }
       p.attackHits.add(soldier.id);
@@ -3090,7 +3071,7 @@ export class GameEngine {
     this.combatHitstop = 0;
     this.meleeAttackToken = null;
     this.audio.play('gate');
-    this.setHint('THE SEVERED COURT · move to control distance. STRIKE chains three blows; DOWN guards; DOWN + STRIKE breaks guard; JUMP + STRIKE attacks from above.', 6.2);
+    this.setHint(`THE SEVERED COURT · ${UNIFIED_COMBAT_GUIDANCE}.`, 6.2);
     this.pushHud(true);
     return true;
   }
@@ -4955,7 +4936,7 @@ export class GameEngine {
         ? 'Hold RIGHT against the small rune block · push it onto the gold plate'
         : 'Move to the left side of the rune block, then hold RIGHT toward the gold plate');
     }
-    else if (tx > 69 && this.soldiers.length) this.setHint('J / X strikes · soldiers take two hits');
+    else if (tx > 69 && this.soldiers.length) this.setHint(UNIFIED_COMBAT_GUIDANCE);
   }
 
   setHint(text, holdSeconds = 0) {
@@ -5084,10 +5065,7 @@ export class GameEngine {
     }
     for (const relic of this.level.relics) drawRelic(ctx, relic, time);
     for (const ship of this.level.ships) drawShip(ctx, ship, time);
-    const veilRaiderSheet = this.level.objective?.type === 'parachute-choir-restoration'
-      ? this.assets.veilRaider
-      : null;
-    for (const soldier of this.soldiers) drawSoldier(ctx, soldier, combatActorTime, veilRaiderSheet);
+    for (const soldier of this.soldiers) drawSoldier(ctx, soldier, combatActorTime, this.assets);
     for (const projectile of this.projectiles) drawProjectile(ctx, projectile);
     drawBoss(ctx, this.level.boss, time);
     drawDoor(ctx, this.level.door, this.isExitReady(), time);

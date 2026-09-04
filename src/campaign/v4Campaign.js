@@ -7,6 +7,7 @@ import {
 } from './outerVeilCampaign.js';
 import { Tile } from '../levels/constants.js';
 import { cloneObjective } from '../levels/cloneObjective.js';
+import { UNIFIED_COMBAT_GUIDANCE } from '../combat-presentation.js';
 
 export const V4_CAMPAIGN_ID = 'veiled-kingdom-v4-20';
 export const V4_SESSION_KIND = 'v4-campaign';
@@ -376,7 +377,7 @@ export async function loadV4Level(levelKey) {
         style: 'unified',
         maxActive: Math.min(3, finiteRosterSize),
         maxSpawns: finiteRosterSize,
-        controls: 'STRIKE chains three blows · DOWN guards · DOWN + STRIKE breaks shields · JUMP + STRIKE attacks from above',
+        controls: UNIFIED_COMBAT_GUIDANCE,
       },
     },
   }, entry);

@@ -13,6 +13,25 @@ export const VEIL_RAIDER_SHEET = Object.freeze({
   }),
 });
 
+// Soldier variants share one authored 4x2 state contract. Equipment remains
+// distinct while descent, anticipation, contact, recovery, hurt and defeat
+// read consistently across every combat-bearing realm.
+export const VEIL_KEEPER_SHEET = VEIL_RAIDER_SHEET;
+export const VEIL_SPEARMAN_SHEET = VEIL_RAIDER_SHEET;
+
+export function getVeilSoldierSheet(soldier = {}, assets = {}) {
+  if (soldier.kind === 'shield' && assets.veilKeeper) {
+    return { image: assets.veilKeeper, sheet: VEIL_KEEPER_SHEET, actorKind: 'veil-keeper' };
+  }
+  if (soldier.kind === 'spear' && assets.veilSpearman) {
+    return { image: assets.veilSpearman, sheet: VEIL_SPEARMAN_SHEET, actorKind: 'veil-spearman' };
+  }
+  if (assets.veilRaider) {
+    return { image: assets.veilRaider, sheet: VEIL_RAIDER_SHEET, actorKind: 'veil-raider' };
+  }
+  return null;
+}
+
 export const WARDEN_SHEET = Object.freeze({
   columns: 4,
   rows: 2,

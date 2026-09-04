@@ -23,6 +23,8 @@ export const PLAYER_COMBAT_CLIPS = Object.freeze({
 
 export const PLAYER_ATTACK_BUFFER_SECONDS = .28;
 
+export const UNIFIED_COMBAT_GUIDANCE = 'STRIKE chains three blows · DOWN guards or parries late · DOWN + STRIKE breaks guards · JUMP + STRIKE attacks from above';
+
 export const HERO_POSE_FRAMES = Object.freeze({
   idle: Object.freeze({ col: 0, row: 0, size: 116, anchorX: .54, anchorY: .94 }),
   run: Object.freeze({ col: 1, row: 0, size: 120, anchorX: .55, anchorY: .87 }),

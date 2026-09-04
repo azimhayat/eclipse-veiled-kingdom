@@ -23,7 +23,9 @@ describe('level presentation sequence', () => {
   it('keeps the prototype presentation to one preserved chapter card', () => {
     expect(buildLevelPresentation(level)).toEqual([expect.objectContaining({
       kind: 'chapter',
-      kicker: 'Chapter 04 · The Weight of Oaths',
+      kicker: 'Chapter 04',
+      title: 'The Weight of Oaths',
+      subtitle: 'A Promise Given Shape',
       durationMs: PRESENTATION_DURATIONS.chapter,
     })]);
   });
@@ -58,13 +60,22 @@ describe('level presentation sequence', () => {
   });
 
   it('labels the second V4 realm against the full twenty-level campaign', () => {
-    const cards = buildLevelPresentation({ ...level, level: 11, name: 'Road of Missing Names' }, {
+    const cards = buildLevelPresentation({
+      ...level,
+      level: 11,
+      name: 'Road of Missing Names',
+      subtitle: 'The First Empty Register',
+    }, {
       productionCampaign: true,
       campaignTotal: 20,
       realmLabel: 'Chapter II · Inner Kingdom',
       unitLabel: 'Level',
     });
-    expect(cards[0].kicker).toBe('Chapter II · Inner Kingdom · Level 11 of 20 · Road of Missing Names');
+    expect(cards[0]).toMatchObject({
+      kicker: 'Chapter II · Inner Kingdom · Level 11 of 20',
+      title: 'Road of Missing Names',
+      subtitle: 'The First Empty Register',
+    });
   });
 
   it('places a three-to-eight-second Liora memory echo before mastery and objective cards', () => {
