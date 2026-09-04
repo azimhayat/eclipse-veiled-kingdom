@@ -359,6 +359,28 @@ describe('shared V4 combat language', () => {
     expect(engine.player.hp).toBe(PHYSICS.MAX_HP - 1);
   });
 
+  it('uses the authored Nameless Magistrate identity without changing the guardian fight language', () => {
+    const engine = combatHarness();
+    const boss = activeGuardian(engine, {
+      active: false,
+      displayName: 'The Nameless Magistrate',
+      hudLabel: 'NAMELESS MAGISTRATE',
+      visualStyle: 'nameless-magistrate',
+      x: 67 * TILE,
+    });
+    engine.level.boss = boss;
+    engine.player.x = 69 * TILE;
+    engine.callbacks.hud = vi.fn();
+
+    GameEngine.prototype.updateBoss.call(engine, .01);
+    expect(boss).toMatchObject({ active: true, kind: 'guardian' });
+    expect(engine.setHint).toHaveBeenCalledWith(expect.stringContaining('NAMELESS MAGISTRATE'));
+    GameEngine.prototype.pushHud.call(engine, true);
+    expect(engine.callbacks.hud).toHaveBeenCalledWith(expect.objectContaining({
+      bossLabel: 'NAMELESS MAGISTRATE',
+    }));
+  });
+
   it('lets a late, correctly faced guard parry the Veiled Guardian into longer recovery', () => {
     const engine = combatHarness();
     const boss = activeGuardian(engine, {

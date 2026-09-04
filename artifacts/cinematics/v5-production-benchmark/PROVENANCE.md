@@ -5,7 +5,8 @@ Generated on 2026-09-04 for the `v5-production-benchmark` branch.
 ## Story and character authority
 
 - Narrative authority: `docs/STORY_ONE_LOCK.md`, especially the locked opening
-  prologue and Chapter I introduction.
+  prologue, Chapter I introduction, post-Level 10 reveal, and post-Level 20
+  Chapter III bridge.
 - Character references: the approved sheets in
   `artifacts/character-design/v5-core-cast-concepts/sheets/`.
 - The second woman in the prologue remains an unnamed, unreadable silhouette.
@@ -27,6 +28,13 @@ Generated on 2026-09-04 for the `v5-production-benchmark` branch.
 - Four checker-backed character sources were converted to alpha by
   `scripts/prepare_layers.py`; the original source files are retained beside the
   processed layers.
+- The restored Warden layer is a native 384x512 crop of accepted cell 8 from
+  `public/assets/warden-of-dust-combat-v1.png`; it is never enlarged.
+- The Liora living-light layer is a native 512x890 crop of the accepted figure
+  in `artifacts/character-design/v5-core-cast-concepts/sheets/02-liora-concept.png`.
+  A soft luminance/chroma matte isolates the existing figure without repainting
+  it. The optimized, byte-identical gameplay copy is
+  `public/assets/liora-memory-fragment-v1.png`.
 
 ## Motion provenance
 
@@ -37,6 +45,12 @@ rotation, travelling route/memory light, cloud/fog drift, dust, sparks, falling
 debris, moving dawn shafts, map-path ignition, lamp flame, eclipse assembly and
 shot transitions at native 1920x1080 and 30 fps.
 
+The bridge pass adds independently moving fragment strips, memory-orbit shards,
+Warden restoration light, paired path seals, an opening Inner Kingdom aperture,
+judgement scales, a ten-route Crown Path map, Serath's inharmonic Engine aperture,
+and moving water/aqueduct strata. The Liora and unnamed-heir assembly shots were
+separately rendered as motion proofs before full-film delivery.
+
 The compositor does not use whole-frame zoompan as a substantive shot. Each
 non-title shot has a semantic subject action plus at least two independently
 timed environmental actions, as locked in `scripts/PRODUCTION_LOCK.md`.
@@ -45,7 +59,9 @@ timed environmental actions, as locked in `scripts/PRODUCTION_LOCK.md`.
 
 `scripts/generate_audio.py` creates every sample locally at 48 kHz stereo using
 deterministic oscillators, filtered procedural noise and synthesized impact or
-shimmer events. Seeds are `2026090401` (opening) and `2026090402` (Chapter I).
+shimmer events. Seeds are `2026090401` (opening), `2026090402` (Chapter I),
+`2026090403` (Chapter I-to-II bridge), and `2026090404` (Chapter II-to-III
+bridge).
 
 Each film retains separate `music`, `ambience`, `effects` and `master` WAV files.
 No samples, songs, licensed recordings, voice models, or downloaded sound effects

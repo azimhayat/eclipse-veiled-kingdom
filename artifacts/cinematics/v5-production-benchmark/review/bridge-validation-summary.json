@@ -1,0 +1,46 @@
+{
+  "subtitles": {
+    "chapter-one-bridge": {
+      "file": "chapter-one-to-two-bridge-v1.en.vtt",
+      "cues": 7,
+      "last_cue_end_seconds": 51.5,
+      "max_words_per_second": 1.67,
+      "max_lines": 1,
+      "status": "PASS"
+    },
+    "chapter-two-bridge": {
+      "file": "chapter-two-to-three-bridge-v1.en.vtt",
+      "cues": 8,
+      "last_cue_end_seconds": 63.5,
+      "max_words_per_second": 2.0,
+      "max_lines": 2,
+      "status": "PASS"
+    }
+  },
+  "files": {
+    "chapter-one-to-two-bridge-contact-sheet.png": {
+      "bytes": 1286136,
+      "sha256": "cf8500cc6b23ff38a6eeef168747d61dea07ccc3a1f4a94b117c0808561768e3"
+    },
+    "chapter-one-to-two-bridge-v1.en.vtt": {
+      "bytes": 572,
+      "sha256": "296342f75644cf2c3fe903ec00f155b971ccfe6936f42edac7163cfe114a2f1d"
+    },
+    "chapter-one-to-two-bridge-v1.mp4": {
+      "bytes": 14130139,
+      "sha256": "2baa149ef129d35e76fe72a873772dc85c2316404d8b32c3546c1004dae81bc6"
+    },
+    "chapter-two-to-three-bridge-contact-sheet.png": {
+      "bytes": 1522528,
+      "sha256": "9be130afc5b89dbb38fd5cd1094c19b346c316e3c3ec64be6416df7b119f23c6"
+    },
+    "chapter-two-to-three-bridge-v1.en.vtt": {
+      "bytes": 752,
+      "sha256": "d62e35571a566625ac9231bf18801e31f3724dc4d83852108583c7980e930179"
+    },
+    "chapter-two-to-three-bridge-v1.mp4": {
+      "bytes": 20543144,
+      "sha256": "bc687cf936b65142817ed8756c36a26fe80bbb2eefde42ff2f0cfd9174bd5b14"
+    }
+  }
+}

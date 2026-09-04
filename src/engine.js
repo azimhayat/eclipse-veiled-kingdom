@@ -177,6 +177,8 @@ export class GameEngine {
     this.transitioning = false;
     this.transitionTargetIndex = null;
     this.transitionRetryBlocked = false;
+    this.transitionBoundaryPending = false;
+    this.transitionBoundaryGeneration = 0;
 
     this.audioUnlock = () => { void this.audio.unlock(); };
 
@@ -516,6 +518,8 @@ export class GameEngine {
   }
 
   cancelLevelTransition({ clearTarget = true } = {}) {
+    this.transitionBoundaryGeneration = (this.transitionBoundaryGeneration || 0) + 1;
+    this.transitionBoundaryPending = false;
     this.transitionGeneration += 1;
     this.transitionController?.abort();
     this.transitionController = null;
@@ -636,6 +640,7 @@ export class GameEngine {
       name: this.level.name,
       subtitle: this.level.subtitle,
       storyLine: this.level.storyLine,
+      storyMoment: this.level.storyMoment ? { ...this.level.storyMoment } : null,
       mechanic: this.level.mechanic,
       objectiveTitle: objective.title,
       abilityUnlock: this.level.abilityUnlock ? { ...this.level.abilityUnlock } : null,
@@ -841,6 +846,50 @@ export class GameEngine {
     } finally {
       if (this.transitionController === controller) this.transitionController = null;
     }
+  }
+
+  requestLevelTransition(index = this.levelIndex + 1) {
+    if (this.transitionBoundaryPending || this.transitioning
+      || index < 0 || index >= this.repository.length) return false;
+
+    const currentEntry = this.repository.entryAt?.(this.levelIndex) || null;
+    const nextEntry = this.repository.entryAt?.(index) || null;
+    const boundaryGeneration = (this.transitionBoundaryGeneration || 0) + 1;
+    this.transitionBoundaryGeneration = boundaryGeneration;
+    let proceeded = false;
+    this.transitionBoundaryPending = true;
+
+    const proceed = () => {
+      if (proceeded || boundaryGeneration !== this.transitionBoundaryGeneration || this.running === false) {
+        return Promise.resolve(false);
+      }
+      proceeded = true;
+      this.transitionBoundaryPending = false;
+      return this.transitionToLevel(index);
+    };
+
+    let handled = false;
+    try {
+      handled = this.callbacks.beforeLevelTransition?.({
+        campaignId: this.repository.campaignId,
+        sessionKind: this.repository.sessionKind,
+        levelKey: this.level.levelKey || null,
+        campaignOrder: this.level.campaignOrder || this.level.id,
+        realmKey: currentEntry?.realmKey || null,
+        nextLevelKey: this.repository.keyAt?.(index) || null,
+        nextCampaignOrder: nextEntry?.campaignOrder || index + 1,
+        nextRealmKey: nextEntry?.realmKey || null,
+        proceed,
+      }) === true;
+    } catch (error) {
+      console.error('Could not open the chapter bridge', error);
+    }
+
+    if (handled) {
+      this.clearInputs();
+      return true;
+    }
+    return proceed();
   }
 
   returnToTitle() {
@@ -2425,7 +2474,7 @@ export class GameEngine {
       if (boss.hp <= 0) {
         this.burst(boss.x + boss.w / 2, boss.y + boss.h / 2, '#e8c56a', 50, 280);
         this.audio.play('gate');
-        this.setHint('The Veiled Guardian falls. The final door is awake.');
+        this.setHint(`${boss.displayName || 'The Veiled Guardian'} falls. The final door is awake.`);
       }
       this.pushHud(true);
     }
@@ -4013,7 +4062,7 @@ export class GameEngine {
       boss.activeSeconds = .18;
       boss.recoverySeconds = .68;
       boss.facing = this.player.x >= boss.x ? 1 : -1;
-      this.setHint('VEILED GUARDIAN · read the amber wind-up, guard or parry, then answer during blue recovery');
+      this.setHint(`${boss.hudLabel || 'VEILED GUARDIAN'} · read the amber wind-up, guard or parry, then answer during blue recovery`);
     }
     if (!boss.active) return;
     boss.id = boss.id || 'veiled-guardian';
@@ -4712,9 +4761,9 @@ export class GameEngine {
           } else {
             this.setHint(`SEALED · need ${status.target - status.current} relic${status.current === 2 ? '' : 's'}`);
           }
-        } else if (bossAlive) this.setHint('SEALED · the Veiled Guardian still stands');
+        } else if (bossAlive) this.setHint(`SEALED · ${this.level.boss?.displayName || 'the Veiled Guardian'} still stands`);
       } else if (this.levelIndex < this.repository.length - 1) {
-        if (this.transitionRetryBlocked || this.transitioning) return;
+        if (this.transitionRetryBlocked || this.transitioning || this.transitionBoundaryPending) return;
         const nextIndex = this.levelIndex + 1;
         const duel = this.level.objective?.type === 'warden-restoration'
           ? this.level.objective.duel
@@ -4746,7 +4795,7 @@ export class GameEngine {
           });
         }
         this.audio.play('gate');
-        void this.transitionToLevel(nextIndex);
+        void GameEngine.prototype.requestLevelTransition.call(this, nextIndex);
       } else {
         if (!this.levelCompletionEmitted) {
           this.levelCompletionEmitted = true;
@@ -4938,7 +4987,7 @@ export class GameEngine {
       demo: this.demo,
       bossHp: wardenDuel?.active ? wardenDuel.boss.hp : this.level.boss?.active ? this.level.boss.hp : null,
       bossMaxHp: wardenDuel?.active ? wardenDuel.boss.maxHp : this.level.boss?.maxHp || null,
-      bossLabel: wardenDuel?.active ? 'WARDEN OF DUST' : 'VEILED GUARDIAN',
+      bossLabel: wardenDuel?.active ? 'WARDEN OF DUST' : this.level.boss?.hudLabel || 'VEILED GUARDIAN',
       wardenFightActive: Boolean(wardenDuel?.active && !wardenDuel.complete),
       bossPhase: wardenDuel?.active ? getWardenFighterPhase(wardenDuel.boss.phase).label : null,
       bossAction: wardenDuel?.active ? wardenDuel.boss.action : null,

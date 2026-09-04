@@ -1,4 +1,4 @@
-export const CINEMATIC_CATALOG_VERSION = 'v5-launch-cinematics-v1';
+export const CINEMATIC_CATALOG_VERSION = 'v5-launch-cinematics-v2';
 
 const CINEMATICS = Object.freeze({
   'opening-prologue': Object.freeze({
@@ -33,12 +33,52 @@ const CINEMATICS = Object.freeze({
     })]),
     synopsis: 'Mira’s Last Lamp calls Aren toward an impossible sunrise. Carrying a broken oath-blade and a memory he cannot explain, he finds the first Crown Path beneath the Outer Veil.',
   }),
+  'chapter-one-to-two-bridge': Object.freeze({
+    id: 'chapter-one-to-two-bridge',
+    version: 1,
+    eyebrow: 'Chapter I Complete · First Crown Path',
+    title: 'The Kingdom Without Names',
+    videoPath: 'assets/cinematics/chapter-one-to-two-bridge-v1.mp4',
+    captions: Object.freeze([Object.freeze({
+      id: 'chapter-one-to-two-bridge-en',
+      path: 'assets/cinematics/chapter-one-to-two-bridge-v1.en.vtt',
+      kind: 'captions',
+      srcLang: 'en',
+      label: 'English',
+      default: true,
+    })]),
+    synopsis: 'The restored Warden reveals that the erased heir survives across the Crown Paths. With the first route repaired, Aren enters the Inner Kingdom, where even names have been taken.',
+  }),
+  'chapter-two-to-three-bridge': Object.freeze({
+    id: 'chapter-two-to-three-bridge',
+    version: 1,
+    eyebrow: 'Chapter II Complete · Second Crown Path',
+    title: 'The Sundered Aqueduct',
+    videoPath: 'assets/cinematics/chapter-two-to-three-bridge-v1.mp4',
+    captions: Object.freeze([Object.freeze({
+      id: 'chapter-two-to-three-bridge-en',
+      path: 'assets/cinematics/chapter-two-to-three-bridge-v1.en.vtt',
+      kind: 'captions',
+      srcLang: 'en',
+      label: 'English',
+      default: true,
+    })]),
+    synopsis: 'Liora coheres and confirms the plan she chose with Aren, while refusing to erase its cost. Serath names Aren the Cartographer and the second restored path reveals the Sundered Aqueduct.',
+  }),
 });
 
 export const CINEMATIC_SEQUENCES = Object.freeze({
   'chapter-one-opening': Object.freeze(['opening-prologue', 'chapter-one-introduction']),
   'opening-prologue': Object.freeze(['opening-prologue']),
   'chapter-one-introduction': Object.freeze(['chapter-one-introduction']),
+  'chapter-one-to-two-bridge': Object.freeze(['chapter-one-to-two-bridge']),
+  'chapter-two-to-three-bridge': Object.freeze(['chapter-two-to-three-bridge']),
+  'story-one-films': Object.freeze([
+    'opening-prologue',
+    'chapter-one-introduction',
+    'chapter-one-to-two-bridge',
+    'chapter-two-to-three-bridge',
+  ]),
 });
 
 function joinBaseUrl(baseUrl, path) {

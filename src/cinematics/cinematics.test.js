@@ -15,7 +15,7 @@ import {
 
 describe('V5 cinematic catalog', () => {
   it('uses stable versioned media paths and one default WebVTT caption per film', () => {
-    expect(CINEMATIC_CATALOG_VERSION).toBe('v5-launch-cinematics-v1');
+    expect(CINEMATIC_CATALOG_VERSION).toBe('v5-launch-cinematics-v2');
     expect(validateCinematicCatalog()).toBe(true);
     const sequence = getCinematicSequence('chapter-one-opening', { baseUrl: '/eclipse-veiled-kingdom/' });
     expect(sequence.map((item) => item.src)).toEqual([
@@ -27,6 +27,11 @@ describe('V5 cinematic catalog', () => {
       expect(item.captions[0]).toMatchObject({ kind: 'captions', srcLang: 'en', default: true });
       expect(item.captions[0].src).toMatch(/\.en\.vtt$/);
     }
+    expect(getCinematicSequence('chapter-one-to-two-bridge', { baseUrl: '/eclipse-veiled-kingdom/' })[0].src)
+      .toBe('/eclipse-veiled-kingdom/assets/cinematics/chapter-one-to-two-bridge-v1.mp4');
+    expect(getCinematicSequence('chapter-two-to-three-bridge', { baseUrl: '/eclipse-veiled-kingdom/' })[0].src)
+      .toBe('/eclipse-veiled-kingdom/assets/cinematics/chapter-two-to-three-bridge-v1.mp4');
+    expect(getCinematicSequence('story-one-films')).toHaveLength(4);
     expect(getCinematic('missing')).toBeNull();
     expect(getCinematicSequence('missing')).toBeNull();
   });

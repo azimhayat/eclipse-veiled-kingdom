@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawCombatEvents, drawHero, drawLevelMechanics, drawSoldier, drawVisibleChunks } from './render.js';
+import { drawBoss, drawCombatEvents, drawHero, drawLevelMechanics, drawSoldier, drawVisibleChunks } from './render.js';
 import { TILE } from './levels/constants.js';
 import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
 import { createParachuteChoir } from './levels/outerVeil/parachuteChoir.js';
@@ -53,6 +53,22 @@ describe('bounded level-chunk rendering', () => {
 });
 
 describe('deterministic combat rendering', () => {
+  it('gives the Nameless Magistrate a distinct paint treatment without changing its authored bounds', () => {
+    const geometry = { x: 100, y: 200, w: 58, h: 96, hp: 10, maxHp: 10 };
+    const legacyBoss = { ...geometry };
+    const magistrateBoss = { ...geometry, visualStyle: 'nameless-magistrate' };
+    const legacy = recordingContext();
+    const magistrate = recordingContext();
+    drawBoss(legacy, legacyBoss, 8);
+    drawBoss(magistrate, magistrateBoss, 8);
+    expect(magistrate.calls).toContainEqual(['set:shadowColor', '#8ce9f1']);
+    expect(magistrate.calls).toContainEqual(['set:fillStyle', '#72dfe8']);
+    expect(legacy.calls).toContainEqual(['set:shadowColor', '#d8a746']);
+    expect(legacy.calls).toContainEqual(['set:fillStyle', '#e8c56a']);
+    expect(magistrateBoss).toEqual({ ...geometry, visualStyle: 'nameless-magistrate' });
+    expect(legacyBoss).toEqual(geometry);
+  });
+
   it('uses the authored attack-pose anchor and does not advance a paused presentation from wall time', () => {
     const player = {
       x: 100, y: 200, w: 28, h: 44, vx: 0, facing: 1,

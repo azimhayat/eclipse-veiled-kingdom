@@ -1905,17 +1905,18 @@ export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
 
 export function drawBoss(ctx, boss, time) {
   if (!boss || boss.hp <= 0) return;
+  const magistrate = boss.visualStyle === 'nameless-magistrate';
   ctx.save();
   ctx.translate(boss.x + boss.w / 2, boss.y + boss.h);
   const pulse = .7 + Math.sin(time * 3) * .25;
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath(); ctx.ellipse(0, 3, 48, 12, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowColor = '#d8a746';
+  ctx.shadowColor = magistrate ? '#8ce9f1' : '#d8a746';
   ctx.shadowBlur = 20 * pulse;
   const cloak = ctx.createLinearGradient(-40, -100, 35, -10);
-  cloak.addColorStop(0, '#d0a044');
-  cloak.addColorStop(.35, '#40314a');
-  cloak.addColorStop(1, '#130f20');
+  cloak.addColorStop(0, magistrate ? '#d9e3d8' : '#d0a044');
+  cloak.addColorStop(.35, magistrate ? '#28505a' : '#40314a');
+  cloak.addColorStop(1, magistrate ? '#07151e' : '#130f20');
   ctx.fillStyle = cloak;
   ctx.beginPath();
   ctx.moveTo(-27, -82);
@@ -1924,20 +1925,29 @@ export function drawBoss(ctx, boss, time) {
   ctx.quadraticCurveTo(52, -47, 27, -82);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#111522';
+  ctx.fillStyle = magistrate ? '#d8ded5' : '#111522';
   ctx.beginPath(); ctx.arc(0, -79, 26, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#f0c75d'; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.arc(0, -79, 21, -.2, Math.PI * 1.15); ctx.stroke();
-  ctx.fillStyle = '#ffda74';
-  ctx.fillRect(7, -84, 9, 3);
-  ctx.strokeStyle = '#c9d6e2'; ctx.lineWidth = 7;
+  ctx.strokeStyle = magistrate ? '#72dfe8' : '#f0c75d'; ctx.lineWidth = 5;
+  if (magistrate) {
+    ctx.beginPath(); ctx.moveTo(-16, -93); ctx.lineTo(16, -93); ctx.lineTo(20, -70); ctx.lineTo(0, -61); ctx.lineTo(-20, -70); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#142932';
+    ctx.fillRect(-14, -84, 28, 5);
+    ctx.strokeStyle = '#e8c56a';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-25, -48); ctx.lineTo(25, -48); ctx.moveTo(0, -55); ctx.lineTo(0, -30); ctx.moveTo(-22, -48); ctx.lineTo(-31, -34); ctx.lineTo(-14, -34); ctx.closePath(); ctx.moveTo(22, -48); ctx.lineTo(31, -34); ctx.lineTo(14, -34); ctx.closePath(); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(0, -79, 21, -.2, Math.PI * 1.15); ctx.stroke();
+    ctx.fillStyle = '#ffda74';
+    ctx.fillRect(7, -84, 9, 3);
+  }
+  ctx.strokeStyle = magistrate ? '#a8e3e7' : '#c9d6e2'; ctx.lineWidth = 7;
   ctx.beginPath(); ctx.moveTo(23, -58); ctx.lineTo(70, -28); ctx.stroke();
   ctx.restore();
 
   const barW = 150;
   ctx.fillStyle = 'rgba(3,5,12,.8)';
   ctx.fillRect(boss.x + boss.w / 2 - barW / 2, boss.y - 24, barW, 8);
-  ctx.fillStyle = '#e8c56a';
+  ctx.fillStyle = magistrate ? '#72dfe8' : '#e8c56a';
   ctx.fillRect(boss.x + boss.w / 2 - barW / 2, boss.y - 24, barW * (boss.hp / boss.maxHp), 8);
 }
 

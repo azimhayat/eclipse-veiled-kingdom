@@ -256,6 +256,50 @@ describe('lazy runtime transitions', () => {
     expect(order.slice(0, 2)).toEqual(['complete', 'transition']);
   });
 
+  it('holds a chapter boundary until its one-shot continuation is released', async () => {
+    let continueTransition;
+    const callbacks = {
+      beforeLevelTransition: vi.fn(({ proceed }) => {
+        continueTransition = proceed;
+        return true;
+      }),
+    };
+    const engine = {
+      running: true,
+      levelIndex: 9,
+      level: { id: 10, levelKey: 'outer-veil-10-warden-of-dust', campaignOrder: 10 },
+      repository: {
+        length: 20,
+        campaignId: 'veiled-kingdom-v4-20',
+        sessionKind: 'v4-campaign',
+        keyAt: (index) => index === 10 ? 'inner-kingdom-01-outer-veil-restored' : 'other',
+        entryAt: (index) => ({ campaignOrder: index + 1, realmKey: index < 10 ? 'outer-veil' : 'inner-kingdom' }),
+      },
+      callbacks,
+      clearInputs: vi.fn(),
+      transitionToLevel: vi.fn().mockResolvedValue(true),
+      transitionBoundaryGeneration: 0,
+      transitionBoundaryPending: false,
+      transitioning: false,
+    };
+
+    expect(GameEngine.prototype.requestLevelTransition.call(engine, 10)).toBe(true);
+    expect(engine.transitionBoundaryPending).toBe(true);
+    expect(engine.transitionToLevel).not.toHaveBeenCalled();
+    expect(callbacks.beforeLevelTransition).toHaveBeenCalledWith(expect.objectContaining({
+      campaignOrder: 10,
+      nextCampaignOrder: 11,
+      realmKey: 'outer-veil',
+      nextRealmKey: 'inner-kingdom',
+    }));
+
+    await expect(continueTransition()).resolves.toBe(true);
+    expect(engine.transitionBoundaryPending).toBe(false);
+    expect(engine.transitionToLevel).toHaveBeenCalledWith(10);
+    await expect(continueTransition()).resolves.toBe(false);
+    expect(engine.transitionToLevel).toHaveBeenCalledTimes(1);
+  });
+
   it('resumes a non-adjacent level without starting or announcing Level 1', async () => {
     const engine = {
       repository: { length: 10 },

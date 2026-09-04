@@ -14,6 +14,14 @@ master resolution by the local compositor.
 - `serath-command.png`: transparent Serath in a restrained command gesture.
 - `mira-lamp.png`: transparent Mira holding the Last Lamp.
 - `unnamed-heir.png`: transparent backlit adult woman, face fully unreadable.
+- `warden-restored.png`: the accepted restoration cell cropped without resizing
+  from `public/assets/warden-of-dust-combat-v1.png`.
+- `liora-living-light.png`: the accepted living-light Liora pose isolated from
+  `02-liora-concept.png` at native crop resolution. This layer is used only
+  after Level 20, where her face and name are canonically revealed.
+- `public/assets/liora-memory-fragment-v1.png`: byte-identical optimized runtime
+  copy of `liora-living-light.png`, provided for the Level 13 fragmented-face
+  beat. Presentation code remains outside this cinematic lane.
 
 ## Procedural independent layers
 
@@ -24,6 +32,10 @@ master resolution by the local compositor.
 - cloth and shadow masks with limited secondary motion;
 - map-table routes and split-circle Cartographer geometry;
 - title typography and eclipse-ring assembly.
+- Warden bridle fragments, restored heart rings, paired Crown Path seals and
+  opening gate geometry;
+- civic name seals, judgement scales, ten-path map geometry, reflected water,
+  sluice flow, aqueduct arches and mist.
 
 ## Motion rule
 

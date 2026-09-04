@@ -28,6 +28,7 @@ const MASTERY_PRESENTATION = Object.freeze({
 
 export const PRESENTATION_DURATIONS = Object.freeze({
   chapter: 2600,
+  memory: 5200,
   mastery: 3000,
   objective: 2400,
 });
@@ -47,6 +48,7 @@ export function buildLevelPresentation(entry, {
   inputMode = 'keyboard',
   campaignTotal = productionCampaign ? 10 : null,
   realmLabel = productionCampaign ? 'Realm I' : null,
+  unitLabel = 'Chapter',
 } = {}) {
   if (!entry || !Number.isInteger(entry.level) || typeof entry.name !== 'string') return [];
 
@@ -55,12 +57,28 @@ export function buildLevelPresentation(entry, {
     durationMs: PRESENTATION_DURATIONS.chapter,
     level: entry.level,
     name: entry.name,
-    kicker: `${realmLabel ? `${realmLabel} · ` : ''}Chapter ${String(entry.level).padStart(2, '0')}${Number.isInteger(campaignTotal) ? ` of ${campaignTotal}` : ''} · ${entry.name}`,
+    kicker: `${realmLabel ? `${realmLabel} · ` : ''}${unitLabel} ${String(entry.level).padStart(2, '0')}${Number.isInteger(campaignTotal) ? ` of ${campaignTotal}` : ''} · ${entry.name}`,
     title: entry.subtitle || entry.name,
     detail: entry.storyLine || '',
   }];
 
   if (!productionCampaign) return cards;
+
+  if (entry.storyMoment?.delivery === 'presentation'
+    && entry.storyMoment?.id && entry.storyMoment?.title) {
+    cards.push({
+      kind: 'memory',
+      durationMs: PRESENTATION_DURATIONS.memory,
+      level: entry.level,
+      name: entry.name,
+      storyMomentId: entry.storyMoment.id,
+      kicker: entry.storyMoment.kicker || 'Memory echo',
+      title: entry.storyMoment.title,
+      detail: entry.storyMoment.detail || '',
+      portraitPath: entry.storyMoment.portraitPath || null,
+      portraitAlt: entry.storyMoment.portraitAlt || '',
+    });
+  }
 
   const unlock = entry.abilityUnlock;
   const mastery = unlock?.key ? MASTERY_PRESENTATION[unlock.key] : null;

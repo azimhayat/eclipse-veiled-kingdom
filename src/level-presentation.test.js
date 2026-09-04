@@ -58,12 +58,47 @@ describe('level presentation sequence', () => {
   });
 
   it('labels the second V4 realm against the full twenty-level campaign', () => {
-    const cards = buildLevelPresentation({ ...level, level: 11, name: 'Outer Veil Restored' }, {
+    const cards = buildLevelPresentation({ ...level, level: 11, name: 'Road of Missing Names' }, {
       productionCampaign: true,
       campaignTotal: 20,
-      realmLabel: 'Realm II',
+      realmLabel: 'Chapter II · Inner Kingdom',
+      unitLabel: 'Level',
     });
-    expect(cards[0].kicker).toBe('Realm II · Chapter 11 of 20 · Outer Veil Restored');
+    expect(cards[0].kicker).toBe('Chapter II · Inner Kingdom · Level 11 of 20 · Road of Missing Names');
+  });
+
+  it('places a three-to-eight-second Liora memory echo before mastery and objective cards', () => {
+    const storyMoment = {
+      id: 'liora-03-law-before-crown',
+      delivery: 'presentation',
+      kicker: 'Recovered law · the first promise',
+      title: 'The protective law bears the heir’s seal.',
+      detail: 'The oath placed every citizen’s memory beyond royal possession.',
+    };
+    const cards = buildLevelPresentation({ ...level, storyMoment }, { productionCampaign: true });
+    expect(cards.map(({ kind }) => kind)).toEqual(['chapter', 'memory', 'mastery', 'objective']);
+    expect(cards[1]).toMatchObject({
+      storyMomentId: storyMoment.id,
+      durationMs: PRESENTATION_DURATIONS.memory,
+      title: storyMoment.title,
+      detail: storyMoment.detail,
+    });
+    expect(cards[1].durationMs).toBeGreaterThanOrEqual(3000);
+    expect(cards[1].durationMs).toBeLessThanOrEqual(8000);
+  });
+
+  it('keeps chapter-ending revelations in their bridge films instead of spoiling them at level start', () => {
+    const cards = buildLevelPresentation({
+      ...level,
+      level: 10,
+      storyMoment: {
+        id: 'liora-06-carried-into-the-paths',
+        delivery: 'cinematic',
+        title: 'This reveal belongs after the Warden is restored.',
+      },
+    }, { productionCampaign: true });
+    expect(cards.map(({ kind }) => kind)).toEqual(['chapter', 'mastery', 'objective']);
+    expect(cards.some(({ kind }) => kind === 'memory')).toBe(false);
   });
 
   it.each([

@@ -22,11 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 LAYERS = ROOT / "layers"
 AUDIO = ROOT / "audio"
 RENDERS = ROOT / "renders"
-WINDOWS_FFMPEG = Path(r"C:\Users\azimh\AppData\Local\CodexMediaTools\ffmpeg-static-5.2.0\node_modules\ffmpeg-static\ffmpeg.exe")
+BUNDLED_FFMPEG = Path.home() / "AppData" / "Local" / "CodexMediaTools" / "ffmpeg-static-5.2.0" / "node_modules" / "ffmpeg-static" / "ffmpeg.exe"
 
 OPENING_SHOTS = (("OP-01", 7), ("OP-02", 8), ("OP-03", 8), ("OP-04", 8),
                  ("OP-05", 9), ("OP-06", 9), ("OP-07", 8), ("OP-08", 9), ("OP-09", 6))
 INTRO_SHOTS = (("C1-01", 6), ("C1-02", 7), ("C1-03", 7), ("C1-04", 7), ("C1-05", 7), ("C1-06", 6))
+BRIDGE_10_SHOTS = (("B10-01", 7), ("B10-02", 8), ("B10-03", 8), ("B10-04", 8),
+                   ("B10-05", 8), ("B10-06", 7), ("B10-07", 6))
+BRIDGE_20_SHOTS = (("B20-01", 7), ("B20-02", 8), ("B20-03", 9), ("B20-04", 9),
+                   ("B20-05", 8), ("B20-06", 8), ("B20-07", 8), ("B20-08", 7))
 
 COLORS = {
     "navy": (4, 8, 18), "gold": (232, 197, 106), "bright": (255, 231, 155),
@@ -35,12 +39,12 @@ COLORS = {
 
 
 def ffmpeg_path() -> str:
-    if WINDOWS_FFMPEG.exists():
-        return str(WINDOWS_FFMPEG)
     found = shutil.which("ffmpeg")
-    if not found:
-        raise FileNotFoundError("FFmpeg is required for cinematic rendering")
-    return found
+    if found:
+        return found
+    if BUNDLED_FFMPEG.exists():
+        return str(BUNDLED_FFMPEG)
+    raise FileNotFoundError("FFmpeg is required for cinematic rendering")
 
 
 def ease(value: float) -> float:
@@ -54,7 +58,8 @@ def load_assets() -> dict[str, Image.Image]:
         "veil": "outer-veil-master.png", "aren-kneel": "aren-awakening.png",
         "aren-stand": "aren-standing.png", "serath-open": "serath-command.png",
         "serath-fist": "serath-fist.png", "mira": "mira-lamp.png",
-        "heir": "unnamed-heir.png",
+        "heir": "unnamed-heir.png", "warden-restored": "warden-restored.png",
+        "liora-light": "liora-living-light.png",
     }
     assets = {}
     for key, name in files.items():
@@ -81,6 +86,9 @@ CHARACTERS = {
     "serath-fist": fit_native(ASSETS["serath-fist"], 590, 840),
     "mira": fit_native(ASSETS["mira"], 600, 870),
     "heir": fit_native(ASSETS["heir"], 520, 820),
+    "warden-restored": fit_native(ASSETS["warden-restored"], 384, 512),
+    "liora-light": fit_native(ASSETS["liora-light"], 490, 850),
+    "aren-small": fit_native(ASSETS["aren-stand"], 245, 360),
 }
 
 
@@ -449,6 +457,344 @@ def intro_frame(t: float) -> tuple[Image.Image, str]:
     return frame.convert("RGB"), shot
 
 
+@lru_cache(maxsize=16)
+def font(size: int, serif: bool = False, bold: bool = False) -> ImageFont.FreeTypeFont:
+    if serif:
+        name = "palab.ttf" if bold else "pala.ttf"
+    else:
+        name = "seguisb.ttf" if bold else "segoeui.ttf"
+    return ImageFont.truetype(str(Path(r"C:\Windows\Fonts") / name), size)
+
+
+def centered_text(frame: Image.Image, text: str, y: int, size: int, color: tuple[int, int, int],
+                  opacity: float = 1, *, serif: bool = False, bold: bool = False,
+                  tracking: int = 0) -> None:
+    draw = ImageDraw.Draw(frame, "RGBA")
+    face = font(size, serif=serif, bold=bold)
+    if tracking <= 0:
+        box = draw.textbbox((0, 0), text, font=face)
+        x = (W - (box[2] - box[0])) / 2
+        draw.text((x, y), text, font=face, fill=(*color, round(255 * opacity)))
+        return
+    widths = [draw.textlength(character, font=face) for character in text]
+    total = sum(widths) + tracking * max(0, len(text) - 1)
+    x = (W - total) / 2
+    for character, width in zip(text, widths):
+        draw.text((x, y), character, font=face, fill=(*color, round(255 * opacity)))
+        x += width + tracking
+
+
+def shot_time(t: float, shots: tuple[tuple[str, int], ...]) -> tuple[str, float, float]:
+    cursor = 0.0
+    for shot, duration in shots:
+        if t < cursor + duration:
+            return shot, t - cursor, duration
+        cursor += duration
+    shot, duration = shots[-1]
+    return shot, float(duration), float(duration)
+
+
+def composite_fragmented_actor(frame: Image.Image, name: str, x: float, y: float, t: float,
+                               coherence: float, *, strips: int = 10, opacity: float = 1) -> None:
+    """Assemble a native-resolution actor from independently moving vertical shards."""
+    actor = actor_motion(CHARACTERS[name], t, sway=4, breathe=2)
+    coherence = ease(coherence)
+    strip_width = math.ceil(actor.width / strips)
+    for index in range(strips):
+        left = index * strip_width
+        right = min(actor.width, left + strip_width + 1)
+        if left >= actor.width:
+            continue
+        shard = actor.crop((left, 0, right, actor.height))
+        shard_alpha = shard.getchannel("A").point(lambda a: round(a * opacity * (.54 + .46 * coherence)))
+        shard.putalpha(shard_alpha)
+        spread = (1 - coherence) * (92 + 13 * (index % 4))
+        offset_x = spread * math.sin(index * 2.1 + t * (1.1 + index * .025))
+        offset_y = spread * .58 * math.cos(index * 1.37 - t * .83)
+        frame.alpha_composite(shard, (round(x + left + offset_x), round(y + offset_y)))
+
+
+def draw_crown_seal(frame: Image.Image, center: tuple[int, int], t: float, progress: float,
+                    color: tuple[int, int, int] = COLORS["gold"]) -> None:
+    draw = ImageDraw.Draw(frame, "RGBA")
+    cx, cy = center
+    progress = ease(progress)
+    for index, radius in enumerate((46, 72, 101)):
+        extent = max(4, 305 * progress - index * 16)
+        start = t * (24 + index * 7) * (-1 if index % 2 else 1)
+        draw.arc((cx-radius, cy-radius, cx+radius, cy+radius), start, start + extent,
+                 fill=(*color, 195 - index * 26), width=4)
+    for index in range(5):
+        angle = -math.pi / 2 + index * math.tau / 5 + t * .035
+        radius = 64
+        px, py = cx + math.cos(angle) * radius, cy + math.sin(angle) * radius
+        draw.line((cx, cy, px, py), fill=(*color, round(150 * progress)), width=2)
+    add_glow(frame, cx, cy, 38, color, .45 * progress)
+
+
+def draw_inner_gate(frame: Image.Image, t: float, openness: float) -> None:
+    openness = ease(openness)
+    cx, top, bottom = 960, 92, 1005
+    half = 310 + 250 * openness
+    light_half = 8 + 270 * openness
+    aperture = Image.new("RGBA", (W, H))
+    aperture_draw = ImageDraw.Draw(aperture, "RGBA")
+    aperture_draw.polygon(((cx-light_half, top+34), (cx+light_half, top+34),
+                           (cx+light_half*.68, bottom-25), (cx-light_half*.68, bottom-25)),
+                          fill=(21, 102, 132, round(18 + 47 * openness)))
+    for index in range(12):
+        y = top + 88 + index * 69
+        inset = index * 7
+        shift = 12 * math.sin(t * .55 + index * .7)
+        aperture_draw.line((cx-light_half+inset+shift, y, cx+light_half-inset+shift, y-14),
+                           fill=(*COLORS["cyan"], round(10 + 34 * openness)), width=3)
+    frame.alpha_composite(aperture.filter(ImageFilter.GaussianBlur(4)))
+
+    draw = ImageDraw.Draw(frame, "RGBA")
+    draw.rounded_rectangle((cx-half, top, cx+half, bottom), radius=220,
+                           outline=(*COLORS["gold"], 170), width=8)
+    # Distant nameless towers create depth beyond the moving aperture.
+    for index in range(7):
+        tower_x = cx-light_half*.52 + index * light_half*.17
+        tower_w = 16 + (index % 3) * 8
+        tower_top = 430 + (index*79 % 230)
+        draw.polygon(((tower_x-tower_w, bottom-42), (tower_x-tower_w*.7, tower_top),
+                      (tower_x, tower_top-45-(index%2)*38), (tower_x+tower_w*.7, tower_top),
+                      (tower_x+tower_w, bottom-42)), fill=(2, 8, 16, 218))
+        for light in range(3):
+            window_y = tower_top + 38 + light*66
+            draw.rectangle((tower_x-3, window_y, tower_x+3, window_y+11), fill=(*COLORS["gold"], 115))
+    for side in (-1, 1):
+        slab_x = cx + side * (25 + 245 * openness)
+        draw.line((slab_x, top+55, slab_x-side*45, bottom-20), fill=(6, 9, 18, 245), width=90)
+        draw.line((slab_x-side*46, top+55, slab_x-side*90, bottom-20),
+                  fill=(*COLORS["gold"], 105), width=5)
+    for index in range(9):
+        y = 160 + index * 91 + 9 * math.sin(t * .7 + index)
+        draw.line((cx-light_half*.7, y, cx+light_half*.7, y-18),
+                  fill=(*COLORS["cyan"], round(30 + 100 * openness)), width=2)
+    add_glow(frame, cx, 545, 135, COLORS["cyan"], .22 + .35 * openness)
+
+
+def draw_ten_path_map(frame: Image.Image, t: float, progress: float) -> None:
+    draw = ImageDraw.Draw(frame, "RGBA")
+    cx, cy = 960, 545
+    draw.ellipse((cx-390, cy-390, cx+390, cy+390), fill=(3, 7, 14, 218),
+                 outline=(*COLORS["gold"], 110), width=4)
+    for index in range(10):
+        angle = -math.pi/2 + index * math.tau/10 + .025 * math.sin(t*.25)
+        inner = 112
+        outer = 315
+        reveal = ease((progress * 1.5 - index * .045) / .7)
+        x1, y1 = cx + math.cos(angle)*inner, cy + math.sin(angle)*inner
+        x2, y2 = cx + math.cos(angle)*(inner+(outer-inner)*reveal), cy + math.sin(angle)*(inner+(outer-inner)*reveal)
+        route_color = COLORS["gold"] if index < 2 else COLORS["cyan"]
+        route_alpha = 225 if index < 2 else 72
+        draw.line((x1, y1, x2, y2), fill=(*route_color, round(route_alpha * reveal)), width=6 if index < 2 else 3)
+        draw_crown_seal(frame, (round(x2), round(y2)), t + index*.19, reveal, route_color)
+    draw_crown_seal(frame, (cx, cy), t, progress, COLORS["gold"])
+
+
+def draw_scales(frame: Image.Image, t: float, progress: float) -> None:
+    draw = ImageDraw.Draw(frame, "RGBA")
+    cx, cy = 960, 334
+    tilt = (1-progress) * 12 * math.sin(t * 1.5)
+    draw.line((cx, cy-155, cx, cy+215), fill=(*COLORS["gold"], 210), width=8)
+    draw.line((cx-285, cy+tilt, cx+285, cy-tilt), fill=(*COLORS["gold"], 210), width=7)
+    for side in (-1, 1):
+        pan_x = cx + side * 275
+        pan_y = cy - side * tilt + 165
+        draw.line((pan_x, cy-side*tilt, pan_x-side*52, pan_y-5), fill=(*COLORS["gold"], 145), width=3)
+        draw.line((pan_x, cy-side*tilt, pan_x+side*52, pan_y-5), fill=(*COLORS["gold"], 145), width=3)
+        draw.arc((pan_x-100, pan_y-25, pan_x+100, pan_y+65), 0, 180, fill=(*COLORS["gold"], 210), width=5)
+    add_glow(frame, cx, cy+215, 58, COLORS["gold"], .35 + .25 * progress)
+
+
+def draw_aqueduct(frame: Image.Image, t: float, progress: float) -> None:
+    draw = ImageDraw.Draw(frame, "RGBA")
+    horizon = 405
+    draw.rectangle((0, horizon, W, H), fill=(3, 12, 21, 105))
+    for tier in range(3):
+        y = horizon + tier * 172
+        scale = 1 + tier * .18
+        spacing = round(265 * scale)
+        offset = round((t * (5 + tier * 2)) % spacing)
+        for x in range(-spacing, W+spacing, spacing):
+            left = x - offset
+            width = round(165 * scale)
+            height = round(235 * scale)
+            draw.rectangle((left-27, y, left+width+27, min(H, y+height)), fill=(7, 13, 20, 238))
+            draw.ellipse((left, y+45, left+width, y+45+height), fill=(16, 36, 48, 225),
+                         outline=(*COLORS["cyan"], 52), width=3)
+    water_y = 812 - 35 * ease(progress)
+    for index in range(17):
+        y = water_y + index * 12
+        shift = 33 * math.sin(t * (1.35 + index*.025) + index*.67)
+        draw.line((-40+shift, y, W+40+shift, y), fill=(55, 173, 207, 26 + index*3), width=4)
+    add_glow(frame, 960, water_y, 145, COLORS["cyan"], .25 + .3*progress)
+
+
+def bridge10_frame(t: float) -> tuple[Image.Image, str]:
+    shot, local, duration = shot_time(t, BRIDGE_10_SHOTS)
+    p = local / duration
+
+    if shot == "B10-01":
+        frame = plate("engine", round(8*math.sin(local*.24)), 18, .42+.13*ease(p))
+        draw_engine(frame, local*.55, inverse=.12*(1-ease(p)), center=(1220, 410))
+        composite_actor(frame, "aren-small", 535+18*ease(p), 648, local, sway=4)
+        composite_actor(frame, "warden-restored", 1035, 466-13*ease(p), local, opacity=.58+.42*ease(p), sway=2, breathe=1)
+        add_glow(frame, 1215, 674, 72, COLORS["gold"], .2+.55*ease(p))
+        draw_particles(frame, local, 710, 130, (173,132,82), (130,170,1780,1040), (-12,-46), (1,5), 175)
+    elif shot == "B10-02":
+        frame = plate("engine", round(-8+16*ease(p)), 5, .37)
+        composite_actor(frame, "warden-restored", 775+10*math.sin(local*.28), 266, local, sway=2, breathe=1)
+        composite_actor(frame, "aren-small", 420, 655, local+.3, opacity=.78, sway=3)
+        draw_crown_seal(frame, (954, 506), local, .75+.25*math.sin(local*.7)**2)
+        for index in range(8):
+            y = 315+index*59
+            reach = ease((p-index*.035)/.55)
+            ImageDraw.Draw(frame,"RGBA").line((1170,y,1170+reach*410,y-55), fill=(*COLORS["gold"], round(105*reach)), width=2)
+        draw_particles(frame, local, 711, 86, COLORS["gold"], (320,130,1590,980), (5,-22), (1,3), 145)
+    elif shot == "B10-03":
+        frame = plate("veil", round(10*math.sin(local*.18)), 0, .29+.08*ease(p))
+        coherence = min(1, p*1.23)
+        composite_fragmented_actor(frame, "heir", 710, 132, local, coherence, strips=10, opacity=.82)
+        draw = ImageDraw.Draw(frame, "RGBA")
+        veil_y = 273 + 7*math.sin(local*.9)
+        draw.rectangle((690, veil_y, 1260, veil_y+92), fill=(1,5,13,218))
+        draw.line((690,veil_y+45,1260,veil_y+45), fill=(*COLORS["cyan"], 110), width=3)
+        orbit_points = []
+        for index in range(10):
+            angle = index*math.tau/10 + local*.08
+            radius = 300-125*coherence
+            x, y = 960+math.cos(angle)*radius, 520+math.sin(angle)*radius
+            orbit_points.append((x, y))
+            shard_color = COLORS["cyan"] if index > 1 else COLORS["gold"]
+            draw.ellipse((x-7, y-7, x+7, y+7), fill=(*shard_color, 220), outline=(*COLORS["bright"], 130), width=2)
+            add_glow(frame, x, y, 24, shard_color, .3+.3*coherence)
+        draw.line(orbit_points + [orbit_points[0]], fill=(*COLORS["cyan"], 58), width=2)
+        draw_particles(frame, local, 712, 150, COLORS["cyan"], (260,70,1660,1000), (13,-34), (1,4), 175)
+    elif shot == "B10-04":
+        frame = plate("engine", round(5*math.sin(local*.18)), 35, .36)
+        draw_map_table(frame, local*.9)
+        draw_crown_seal(frame, (735, 725), local, min(1,p*1.7), COLORS["gold"])
+        draw_crown_seal(frame, (1178, 725), -local, min(1,max(0,p-.18)*1.7), COLORS["cyan"])
+        draw = ImageDraw.Draw(frame,"RGBA")
+        pulse = .55+.45*math.sin(local*1.6)**2
+        draw.line((805,725,1108,725), fill=(*COLORS["bright"], round(190*pulse)), width=5)
+        draw.line((956,725,956,855), fill=(*COLORS["gold"], round(145*ease(p))), width=3)
+        draw_particles(frame, local, 713, 75, COLORS["gold"], (400,470,1510,980), (1,-24), (1,3), 150)
+    elif shot == "B10-05":
+        frame = plate("veil", round(-5+10*ease(p)), 0, .28+.19*ease(p))
+        draw_inner_gate(frame, local, p)
+        draw_particles(frame, local, 714, 150, COLORS["cyan"], (320,70,1600,1030), (7,-52), (1,4), 165)
+        draw_fog(frame, local)
+    elif shot == "B10-06":
+        frame = plate("veil", round(-16*ease(p)), 0, .24+.12*ease(p))
+        draw_inner_gate(frame, local, 1)
+        composite_actor(frame, "aren-small", 675+105*ease(p), 654-22*ease(p), local, sway=4)
+        composite_actor(frame, "warden-restored", 1060+18*ease(p), 470, local+.4, opacity=.82, sway=2, breathe=1)
+        draw_particles(frame, local, 715, 115, COLORS["cyan"], (300,100,1650,1040), (10,-36), (1,4), 150)
+    else:
+        frame = Image.new("RGBA", (W,H), COLORS["black"]+(255,))
+        draw_crown_seal(frame, (960,370), local, 1, COLORS["cyan"])
+        opacity = ease(min(1,p*2)) * ease(min(1,(1-p)*4))
+        centered_text(frame, "THE FIRST CROWN PATH IS RESTORED", 620, 32, COLORS["gold"], opacity, bold=True, tracking=3)
+        centered_text(frame, "CHAPTER II", 706, 82, COLORS["bright"], opacity, serif=True, bold=True)
+        centered_text(frame, "THE INNER KINGDOM", 818, 41, COLORS["cyan"], opacity, bold=True, tracking=5)
+        draw_particles(frame, local, 716, 100, COLORS["cyan"], (400,100,1520,960), (5,-20), (1,3), 155)
+
+    draw_film_finish(frame, t, 710)
+    add_vignette(frame, 122)
+    fade = min(1, t/.65, (52-t)/.85)
+    if fade < 1:
+        frame.alpha_composite(Image.new("RGBA", (W,H), (0,0,0,round(255*(1-fade)))))
+    return frame.convert("RGB"), shot
+
+
+def bridge20_frame(t: float) -> tuple[Image.Image, str]:
+    shot, local, duration = shot_time(t, BRIDGE_20_SHOTS)
+    p = local / duration
+
+    if shot == "B20-01":
+        frame = plate("engine", round(6*math.sin(local*.2)), 45, .31+.09*ease(p))
+        draw_scales(frame, local, p)
+        draw = ImageDraw.Draw(frame, "RGBA")
+        for index in range(18):
+            x = 250 + (index*197) % 1420
+            y = 830 + 38*math.sin(local*.7+index)
+            glyph = chr(ord("A") + index%13)
+            draw.text((x,y), glyph, font=font(32, serif=True), fill=(*COLORS["cyan"], 38+index%4*18))
+        draw_particles(frame, local, 820, 88, COLORS["gold"], (210,110,1710,1000), (-3,-23), (1,3), 135)
+    elif shot == "B20-02":
+        frame = plate("veil", round(7*math.sin(local*.17)), 0, .27+.16*ease(p))
+        coherence = min(1, p*1.18)
+        composite_fragmented_actor(frame, "liora-light", 720, 95, local, coherence, strips=12)
+        for index in range(10):
+            angle = index*math.tau/10-local*.07
+            radius = 345-185*ease(coherence)
+            x, y = 960+math.cos(angle)*radius, 515+math.sin(angle)*radius
+            add_glow(frame, x, y, 27, COLORS["cyan"] if index>1 else COLORS["gold"], .35+.35*coherence)
+        draw_particles(frame, local, 821, 175, COLORS["cyan"], (220,40,1690,1030), (16,-42), (1,5), 185)
+    elif shot == "B20-03":
+        frame = plate("veil", round(-7+14*ease(p)), 0, .39+.08*ease(p))
+        composite_actor(frame, "liora-light", 835+8*math.sin(local*.25), 92, local, sway=4, breathe=2)
+        composite_actor(frame, "aren-small", 470+32*ease(p), 651, local+.4, sway=4)
+        draw_crown_seal(frame, (1080, 405), local, .7+.3*math.sin(local*.75)**2, COLORS["cyan"])
+        draw_particles(frame, local, 822, 118, COLORS["gold"], (250,80,1660,1030), (5,-31), (1,4), 155)
+        draw_fog(frame, local, warm=True)
+    elif shot == "B20-04":
+        frame = plate("engine", round(5*math.sin(local*.18)), 35, .28)
+        draw_ten_path_map(frame, local, p)
+        draw_particles(frame, local, 823, 90, COLORS["cyan"], (330,90,1600,1030), (3,-27), (1,3), 140)
+    elif shot == "B20-05":
+        frame = plate("veil", round(6*math.sin(local*.22)), 0, .33)
+        composite_actor(frame, "liora-light", 870, 104, local, sway=3, breathe=2)
+        composite_actor(frame, "aren-small", 488+17*ease(p), 646, local+.2, sway=4)
+        shadow = Image.new("RGBA", (W,H))
+        d = ImageDraw.Draw(shadow,"RGBA")
+        width = 110+210*ease(p)
+        d.polygon(((575,945),(1190,930),(960-width,1080),(960+width,1080)), fill=(0,0,4,155))
+        frame.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(20)))
+        draw = ImageDraw.Draw(frame,"RGBA")
+        for index in range(10):
+            x = 685+index*55
+            progress = ease((p-index*.035)/.7)
+            draw.line((x,870,x+(960-x)*progress,1030), fill=(*COLORS["gold"],round(95*progress)),width=3)
+        draw_particles(frame, local, 824, 105, COLORS["cyan"], (250,80,1680,1030), (-2,-28), (1,4), 145)
+    elif shot == "B20-06":
+        frame = plate("engine", round(-10+20*ease(p)), 0, .31)
+        draw_engine(frame, local*.72, inverse=.55+.2*math.sin(local*.55)**2, center=(1240,365))
+        composite_actor(frame, "serath-open", 500-28*ease(p), 190, local, sway=4, breathe=1)
+        draw = ImageDraw.Draw(frame,"RGBA")
+        for index in range(12):
+            angle = index*math.tau/12-local*.15
+            x, y = 1240+math.cos(angle)*240, 365+math.sin(angle)*240
+            draw.line((1240,365,x,y), fill=(*COLORS["vermilion"],55+index%3*18),width=2)
+        draw_particles(frame, local, 825, 115, COLORS["vermilion"], (260,60,1720,1020), (12,32), (1,4), 170)
+    elif shot == "B20-07":
+        frame = plate("orun", round(-13*ease(p)), round(7*math.sin(local*.18)), .24+.12*ease(p))
+        draw_aqueduct(frame, local, p)
+        draw_particles(frame, local, 826, 135, COLORS["cyan"], (0,170,W,H), (22,-18), (1,4), 160)
+        draw_fog(frame, local)
+    else:
+        frame = Image.new("RGBA", (W,H), COLORS["black"]+(255,))
+        opacity = ease(min(1,p*2.4)) * ease(min(1,(1-p)*5))
+        draw_crown_seal(frame, (960,275), local, 1, COLORS["gold"])
+        centered_text(frame, "CHAPTER II COMPLETE", 470, 31, COLORS["gold"], opacity, bold=True, tracking=3)
+        centered_text(frame, "THE SECOND CROWN PATH IS OPEN", 550, 31, COLORS["bright"], opacity, bold=True, tracking=2)
+        centered_text(frame, "CHAPTER III — THE SUNDERED AQUEDUCT", 665, 52, COLORS["cyan"], opacity, serif=True, bold=True)
+        centered_text(frame, "COMING SOON", 765, 30, COLORS["gold"], opacity, bold=True, tracking=7)
+        draw_particles(frame, local, 827, 110, COLORS["cyan"], (350,70,1570,990), (6,-22), (1,3), 150)
+
+    draw_film_finish(frame, t, 820)
+    add_vignette(frame, 125)
+    fade = min(1, t/.65, (64-t)/.9)
+    if fade < 1:
+        frame.alpha_composite(Image.new("RGBA", (W,H), (0,0,0,round(255*(1-fade)))))
+    return frame.convert("RGB"), shot
+
+
 def render_raw(frame_function, duration: float, silent_output: Path, *, shot_only: str | None = None) -> None:
     command = [ffmpeg_path(), "-hide_banner", "-loglevel", "warning", "-y",
                "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
@@ -459,7 +805,16 @@ def render_raw(frame_function, duration: float, silent_output: Path, *, shot_onl
     assert process.stdin is not None
     try:
         if shot_only:
-            shots = OPENING_SHOTS if shot_only.startswith("OP-") else INTRO_SHOTS
+            if shot_only.startswith("OP-"):
+                shots = OPENING_SHOTS
+            elif shot_only.startswith("C1-"):
+                shots = INTRO_SHOTS
+            elif shot_only.startswith("B10-"):
+                shots = BRIDGE_10_SHOTS
+            elif shot_only.startswith("B20-"):
+                shots = BRIDGE_20_SHOTS
+            else:
+                raise ValueError(f"Unknown shot family {shot_only}")
             offset = 0.0
             length = 0.0
             for shot, shot_length in shots:
@@ -496,12 +851,21 @@ def mux(silent_video: Path, audio: Path, output: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--movie", choices=("opening", "intro", "both"), default="both")
+    parser.add_argument("--movie", choices=("opening", "intro", "bridge10", "bridge20", "bridges", "both", "all"), default="both")
     parser.add_argument("--preview-shot")
     args = parser.parse_args()
     RENDERS.mkdir(parents=True, exist_ok=True)
     if args.preview_shot:
-        fn = opening_frame if args.preview_shot.startswith("OP-") else intro_frame
+        if args.preview_shot.startswith("OP-"):
+            fn = opening_frame
+        elif args.preview_shot.startswith("C1-"):
+            fn = intro_frame
+        elif args.preview_shot.startswith("B10-"):
+            fn = bridge10_frame
+        elif args.preview_shot.startswith("B20-"):
+            fn = bridge20_frame
+        else:
+            raise ValueError(f"Unknown shot family {args.preview_shot}")
         target = ROOT / "review" / f"{args.preview_shot.lower()}-motion-proof.mp4"
         target.parent.mkdir(parents=True, exist_ok=True)
         render_raw(fn, 0, target, shot_only=args.preview_shot)
@@ -509,10 +873,14 @@ def main() -> None:
         return
 
     jobs = []
-    if args.movie in {"opening", "both"}:
+    if args.movie in {"opening", "both", "all"}:
         jobs.append(("opening-prologue-v1", opening_frame, 72.0, AUDIO / "opening-prologue-master.wav"))
-    if args.movie in {"intro", "both"}:
+    if args.movie in {"intro", "both", "all"}:
         jobs.append(("chapter-one-introduction-v1", intro_frame, 40.0, AUDIO / "chapter-one-introduction-master.wav"))
+    if args.movie in {"bridge10", "bridges", "all"}:
+        jobs.append(("chapter-one-to-two-bridge-v1", bridge10_frame, 52.0, AUDIO / "chapter-one-to-two-bridge-master.wav"))
+    if args.movie in {"bridge20", "bridges", "all"}:
+        jobs.append(("chapter-two-to-three-bridge-v1", bridge20_frame, 64.0, AUDIO / "chapter-two-to-three-bridge-master.wav"))
     for stem, fn, duration, audio in jobs:
         silent = RENDERS / f"{stem}-silent.mp4"
         output = RENDERS / f"{stem}.mp4"

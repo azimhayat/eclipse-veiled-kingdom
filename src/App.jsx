@@ -27,7 +27,11 @@ import {
   createOuterVeilCampaignRepository,
   OUTER_VEIL_COMPLETION,
 } from './campaign/outerVeilCampaign.js';
-import { createV4CampaignRepository, V4_LEVEL_KEYS } from './campaign/v4Campaign.js';
+import {
+  createV4CampaignRepository,
+  V4_LEVEL_KEYS,
+  V5_LAUNCH_PRESENTATION,
+} from './campaign/v4Campaign.js';
 import {
   beginNewV4Run,
   getV4ChapterTarget,
@@ -384,8 +388,9 @@ export default function App() {
         inputMode: detectPresentationInput(window),
         campaignTotal: activeSessionKind === 'v4-campaign' ? 20 : 10,
         realmLabel: activeSessionKind === 'v4-campaign'
-          ? entry.level <= 10 ? 'Realm I' : 'Realm II'
+          ? entry.level <= 10 ? 'Chapter I · Outer Veil' : 'Chapter II · Inner Kingdom'
           : activeSessionKind === 'production-campaign' ? 'Realm I' : null,
+        unitLabel: activeSessionKind === 'v4-campaign' ? 'Level' : 'Chapter',
       });
       if (cards.length === 0) return;
       const generation = presentationGenerationRef.current;
@@ -494,6 +499,24 @@ export default function App() {
         }
         setSaveWarning(result.persisted ? '' : 'Progress is held for this session only · browser storage is unavailable.');
       },
+      beforeLevelTransition: ({
+        sessionKind: transitioningSessionKind,
+        campaignOrder,
+        nextCampaignOrder,
+        proceed,
+      }) => {
+        if (transitioningSessionKind !== 'v4-campaign'
+          || campaignOrder !== 10
+          || nextCampaignOrder !== 11
+          || (localV4LevelDemo && !manualLevelDemo)) return false;
+        return openCinematicSequence('chapter-one-to-two-bridge', {
+          returnScreen: 'play',
+          after: () => {
+            setScreen('play');
+            return proceed();
+          },
+        });
+      },
       win: ({ time, deaths, campaignId, sessionKind: completedSessionKind, completedLevels, targetTime }) => {
         setResults({ time, deaths, targetTime });
         if (shouldPersistCampaignCompletion({
@@ -520,6 +543,11 @@ export default function App() {
           setChronicleName(saveRef.current?.playerName || '');
           setChronicleNameError('');
           setChronicleView('name');
+          if ((!localV4LevelDemo || manualLevelDemo)
+            && openCinematicSequence('chapter-two-to-three-bridge', {
+              returnScreen: 'win',
+              after: () => setScreen('win'),
+            })) return;
         }
         setScreen('win');
       },
@@ -872,11 +900,13 @@ export default function App() {
         <section className="title-screen">
           <div className="title-layout">
             <div className="title-content">
-              {!v4Campaign && <div className="eyebrow">{productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>}
+              <div className="eyebrow">{v4Campaign
+                ? V5_LAUNCH_PRESENTATION.releaseLabel
+                : productionCampaign ? 'REALM I · THE OUTER VEIL' : 'A kingdom buried · an eclipse awake'}</div>
               <h1>Eclipse <span>of the Veiled Kingdom</span></h1>
               <p className="title-subtitle">{authoredCampaign
                 ? v4Campaign
-                  ? 'Twenty playable levels across two chapters. Restore the Outer Veil, follow the road of missing names into the Inner Kingdom, and break the second eclipse.'
+                  ? 'Twenty playable levels across two chapters. Restore the Outer Veil, follow the road of missing names into the Inner Kingdom, and open the second Crown Path.'
                   : 'Ten chapters beneath the first Crown Path. Recover Aren’s buried memory, restore the Veil, and free the guardian without opening the deeper archive.'
                 : 'Cross ten buried realms. Carve living sand, bend ancient mechanisms, break the occupation, and face the Guardian beneath the final eclipse.'}</p>
               <div className="title-actions">
@@ -899,8 +929,11 @@ export default function App() {
                     >
                       Chapter II
                     </button>
-                    <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Top 10</button>
-                    <button className="secondary" onClick={() => openCinematicSequence('chapter-one-opening', { returnScreen: 'title' })}>Replay story films</button>
+                    <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Founders’ Chronicle</button>
+                    <button className="secondary" onClick={() => openCinematicSequence(
+                      (v4Progress?.completedLevelKeys?.length || 0) >= 20 ? 'story-one-films' : 'chapter-one-opening',
+                      { returnScreen: 'title' },
+                    )}>Replay story films</button>
                     <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
                   </>
                 ) : authoredCampaign ? (
@@ -937,6 +970,7 @@ export default function App() {
                 onMusicVolume={setMusicVolume}
                 onEffectsVolume={setEffectsVolume}
               />
+              {v4Campaign && <div className="best-time">{v4Progress?.completedLevelKeys?.length || 0}/20 levels restored</div>}
               {!v4Campaign && <div className="best-time">{authoredCampaign
                 ? `${outerProgress?.completedLevelKeys?.length || 0}/10 chapters restored${outerContinueTarget?.kind === 'realm-slot' ? ' · Chronicle available' : ''}`
                 : bestTime === null ? 'No journey recorded' : `Best eclipse · ${formatTime(bestTime)}`}</div>}
@@ -1006,6 +1040,13 @@ export default function App() {
               role="status"
               style={{ '--presentation-duration': `${presentationCard.durationMs}ms` }}
             >
+              {presentationCard.portraitPath && (
+                <img
+                  className="chapter-portrait"
+                  src={`${import.meta.env.BASE_URL}${presentationCard.portraitPath}`}
+                  alt={presentationCard.portraitAlt}
+                />
+              )}
               <div className="chapter-rule" />
               <div className="chapter-kicker">{presentationCard.kicker}</div>
               <div className="chapter-title">{presentationCard.title}</div>
@@ -1020,7 +1061,7 @@ export default function App() {
           {screen === 'play' && hud.bossHp !== null && hud.bossHp > 0 && (
             <div className="boss-hud">
               <span className="boss-hud-title">{hud.bossLabel}<small>{hud.bossPhase}</small></span>
-              <div role="progressbar" aria-label="Warden command strength" aria-valuemin="0" aria-valuemax={hud.bossMaxHp} aria-valuenow={hud.bossHp}><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
+              <div role="progressbar" aria-label={`${hud.bossLabel || 'Guardian'} strength`} aria-valuemin="0" aria-valuemax={hud.bossMaxHp} aria-valuenow={hud.bossHp}><i style={{ width: `${(hud.bossHp / hud.bossMaxHp) * 100}%` }} /></div>
               {hud.wardenFightActive && (
                 <div className="fighter-readout" aria-live="polite">
                   <span>{`AREN GUARD ${hud.playerGuard}/${hud.playerGuardMax}`}</span>
@@ -1154,18 +1195,24 @@ export default function App() {
                       : `LEVELS ${requestedPlaytestLevel}–${V4_LEVEL_KEYS.length} PLAYTEST COMPLETE`}
                   </div>
                   <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">Combat trial complete</h2>
-                  <p id="completion-story">This direct test was kept separate from your twenty-level journey. It did not replace your campaign save or submit a Top 10 result.</p>
+                  <p id="completion-story">This direct test was kept separate from your twenty-level journey. It did not replace your campaign save or enter the Founders’ Chronicle.</p>
                   <div className="overlay-actions">
                     <button className="primary" onClick={() => { void startOuterVeilAt(requestedPlaytestLevel - 1); }}>Replay the playtest</button>
-                    <button className="secondary" onClick={returnToTitle}>V4 title screen</button>
+                    <button className="secondary" onClick={returnToTitle}>V5 title screen</button>
                   </div>
                 </>
               ) : chronicleView === 'name' ? (
                 <>
-                  <div className="eyebrow">KINGDOM PATH CLEAR · 20 / 20</div>
-                  <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">What name shall the kingdom remember?</h2>
-                  <p id="completion-story">The Outer Veil and Inner Kingdom now carry one continuous record. Your name stays on this device and enters the Global Hall only when it is connected.</p>
+                  <div className="eyebrow">{V5_LAUNCH_PRESENTATION.completionEyebrow}</div>
+                  <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">{V5_LAUNCH_PRESENTATION.completionHeading}</h2>
+                  <p id="completion-story">The Outer Veil and Inner Kingdom stand restored across 20 / 20 levels.</p>
+                  <div className="chronicle-next">
+                    <span>NEXT</span>
+                    <strong>{V5_LAUNCH_PRESENTATION.nextChapter}</strong>
+                    <small>{V5_LAUNCH_PRESENTATION.nextStatus}</small>
+                  </div>
                   <form className="chronicle-name-form" onSubmit={rememberChronicleName} noValidate>
+                    <h3>What name shall the kingdom remember?</h3>
                     <label htmlFor="chronicle-player-name">Name or nickname · 1–24 characters</label>
                     <input
                       id="chronicle-player-name"
@@ -1189,9 +1236,9 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <div className="eyebrow">V4 COMPLETE · TWO REALMS RESTORED</div>
+                  <div className="eyebrow">{V5_LAUNCH_PRESENTATION.chronicleLabel} · CHAPTERS I–II</div>
                   <h2 ref={chronicleHeadingRef} tabIndex="-1" id="completion-heading">The kingdom remembers <span dir="auto">{chronicleName}</span></h2>
-                  <p id="completion-story">Twenty roads now form one Crown Path. The third veil is visible, but it is not yet open.</p>
+                  <p id="completion-story">The Outer Veil is restored, the Inner Kingdom has recovered Liora’s testimony, and the second Crown Path now carries the names Serath tried to erase.</p>
                   {v4LatestScore ? (
                     <>
                       <div className="chronicle-rank" aria-label={`Performance rank ${v4LatestScore.rank.key}`}>
@@ -1210,17 +1257,19 @@ export default function App() {
                         <div><dt>Completion date</dt><dd>{formatCompletionDate(v4LatestScore.completedAt)}</dd></div>
                       </dl>
                     </>
-                  ) : <div className="chronicle-history-note">This journey was migrated from an earlier version, so incomplete timing evidence was not placed in the Top 10.</div>}
+                  ) : <div className="chronicle-history-note">This journey was migrated from an earlier version, so incomplete timing evidence was not placed in the Founders’ Chronicle.</div>}
                   {saveWarning && <div className="save-warning" role="status">{saveWarning}</div>}
                   <div className="chronicle-next">
-                    <span>NEXT · THE THIRD VEIL</span>
-                    <strong>Names Beneath the Crown</strong>
-                    <small>Coming next · no placeholder levels have been added</small>
+                    <span>{V5_LAUNCH_PRESENTATION.completionHeading}</span>
+                    <strong>{V5_LAUNCH_PRESENTATION.nextChapter}</strong>
+                    <small>{V5_LAUNCH_PRESENTATION.nextStatus} · no placeholder levels have been added</small>
                   </div>
                   <div className="overlay-actions">
-                    <button className="primary" onClick={() => { void openV4Leaderboard(); }}>View Top 10</button>
+                    <button className="primary" onClick={() => { void openV4Leaderboard(); }}>View Founders’ Chronicle</button>
                     <button className="secondary" onClick={() => openCinematicSequence('opening-prologue', { returnScreen: 'win' })}>Replay prologue</button>
                     <button className="secondary" onClick={() => openCinematicSequence('chapter-one-introduction', { returnScreen: 'win' })}>Replay Chapter I introduction</button>
+                    <button className="secondary" onClick={() => openCinematicSequence('chapter-one-to-two-bridge', { returnScreen: 'win' })}>Replay Chapter I bridge</button>
+                    <button className="secondary" onClick={() => openCinematicSequence('chapter-two-to-three-bridge', { returnScreen: 'win' })}>Replay Chapter II bridge</button>
                     <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>New journey</button>
                     <button className="secondary" onClick={returnToTitle}>Title screen</button>
                   </div>
@@ -1320,9 +1369,9 @@ export default function App() {
       {screen === 'leaderboard' && v4Campaign && (
         <section className="overlay chronicle-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-heading">
           <div className="overlay-card chronicle-card leaderboard-card">
-            <div className="eyebrow">V4 · HALL OF THE RESTORED</div>
-            <h2 ref={overlayHeadingRef} tabIndex="-1" id="leaderboard-heading">Top 10 players</h2>
-            <p>Your personal records work offline. The Global Hall appears only after its separately protected Supabase service is connected.</p>
+            <div className="eyebrow">V5 · {V5_LAUNCH_PRESENTATION.chronicleLabel}</div>
+            <h2 ref={overlayHeadingRef} tabIndex="-1" id="leaderboard-heading">Founders’ Top 10</h2>
+            <p>The first twenty-level records remain permanently recognized here. This is not the complete 100-level Story One leaderboard. Personal records work offline; the Global Hall appears only after its separately protected Supabase service is connected.</p>
             <div className="leaderboard-columns">
               <section aria-labelledby="personal-top-ten">
                 <h3 id="personal-top-ten">On this device</h3>
@@ -1359,6 +1408,8 @@ export default function App() {
               <button className="primary" onClick={outerContinueTarget?.kind === 'complete' ? () => { void startOuterVeilAt(0); } : continueOuterVeil}>{outerContinueTarget?.kind === 'complete' ? 'Replay completed journey' : `Continue · Level ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')}`}</button>
               <button className="secondary" onClick={() => openCinematicSequence('opening-prologue', { returnScreen: 'leaderboard' })}>Replay prologue</button>
               <button className="secondary" onClick={() => openCinematicSequence('chapter-one-introduction', { returnScreen: 'leaderboard' })}>Replay Chapter I introduction</button>
+              <button className="secondary" onClick={() => openCinematicSequence('chapter-one-to-two-bridge', { returnScreen: 'leaderboard' })}>Replay Chapter I bridge</button>
+              <button className="secondary" onClick={() => openCinematicSequence('chapter-two-to-three-bridge', { returnScreen: 'leaderboard' })}>Replay Chapter II bridge</button>
               <button className="secondary" onClick={returnToTitle}>Title screen</button>
             </div>
           </div>

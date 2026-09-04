@@ -1,7 +1,8 @@
-"""Generate original deterministic music, ambience and effects for both films."""
+"""Generate original deterministic music, ambience and effects for V5 films."""
 
 from __future__ import annotations
 
+import argparse
 import math
 import wave
 from pathlib import Path
@@ -154,6 +155,119 @@ def compose_intro() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return music, ambience, effects
 
 
+def compose_bridge10() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    duration = 52.0
+    count = round(duration * RATE)
+    t = np.arange(count, dtype=np.float64) / RATE
+    rng = np.random.default_rng(2026090403)
+    music = np.zeros((count, 2), dtype=np.float64)
+    ambience = np.zeros_like(music)
+    effects = np.zeros_like(music)
+
+    # Dust settling after the Warden fight: one continuous, non-verbal chamber bed.
+    chamber = filtered_noise(rng, count, 1200)
+    chamber /= max(np.max(np.abs(chamber)), 1e-9)
+    chamber *= .058 + .018 * np.sin(2 * math.pi * .093 * t)
+    ambience[:, 0] += chamber
+    ambience[:, 1] += np.roll(chamber, 4700) * .88
+    oath = (0.36 * osc(t, 55, wobble=.34) + 0.2 * osc(t, 82.41, .5)
+            + 0.12 * osc(t, 110, 1.2) + 0.06 * osc(t, 220, 2.1))
+    music += pan(oath * env(t, 0, 18, 1.2, 2.4) * .38, -.1)
+    for when, pitch, position in ((1.1, 329.63, -.25), (3.2, 440, .25), (7.3, 493.88, -.15),
+                                  (10.6, 587.33, .28), (14.5, 659.25, 0)):
+        effects += pan(shimmer(t, when, pitch, 1.9) * .065, position)
+    effects += pan(impact(t, 6.7, .44, rng), 0)
+
+    # Ten memory shards orbit and cohere without identifying the heir by name.
+    memory = (0.29 * osc(t, 73.42, wobble=.5) + 0.19 * osc(t, 98, .4)
+              + 0.13 * osc(t, 146.83, 1.1) + 0.07 * osc(t, 293.66, 2.0))
+    music += pan(memory * env(t, 14, 33, 2.0, 2.6) * .46, .12)
+    for index in range(10):
+        when = 15.0 + index * 1.37
+        effects += pan(shimmer(t, when, 369.99 + index * 23.5, 1.15) * .045,
+                       -0.72 + index * .16)
+    effects += pan(impact(t, 23.0, .38, rng), -.05)
+    effects += pan(impact(t, 31.0, .52, rng), .08)
+
+    # The Inner Kingdom gate opens: low mechanism, widening fifth, restrained resolve.
+    gate = (0.34 * osc(t, 49, wobble=.22) + 0.22 * osc(t, 73.42, .7)
+            + 0.17 * osc(t, 98, 1.25) + 0.08 * osc(t, 196, 2.0))
+    music += pan(gate * env(t, 30, 52, 2.1, 1.4) * .55, 0)
+    rumble = filtered_noise(rng, count, 90)
+    rumble /= max(np.max(np.abs(rumble)), 1e-9)
+    ambience += pan(rumble * env(t, 31.5, 45.5, 1.4, 2.2) * .055, 0)
+    effects += pan(impact(t, 32.1, .72, rng), 0)
+    for when, pitch, position in ((34.0, 440, -.5), (36.2, 554.37, -.2),
+                                  (38.4, 659.25, .2), (40.6, 880, .5), (46.2, 739.99, 0)):
+        effects += pan(shimmer(t, when, pitch, 2.5) * .072, position)
+    effects += pan(impact(t, 46.0, .62, rng), 0)
+
+    return music, ambience, effects
+
+
+def compose_bridge20() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    duration = 64.0
+    count = round(duration * RATE)
+    t = np.arange(count, dtype=np.float64) / RATE
+    rng = np.random.default_rng(2026090404)
+    music = np.zeros((count, 2), dtype=np.float64)
+    ambience = np.zeros_like(music)
+    effects = np.zeros_like(music)
+
+    court = filtered_noise(rng, count, 1050)
+    court /= max(np.max(np.abs(court)), 1e-9)
+    ambience[:, 0] += court * (.052 + .012*np.sin(2*math.pi*.11*t))
+    ambience[:, 1] += np.roll(court, 3900) * .047
+
+    # Court scales and Liora's self-possession use related, but distinct intervals.
+    scales = (0.32 * osc(t, 61.74, wobble=.28) + 0.19 * osc(t, 92.5, .6)
+              + 0.11 * osc(t, 123.47, 1.5))
+    music += pan(scales * env(t, 0, 15.5, 1.2, 2.4) * .42, -.16)
+    effects += pan(impact(t, 1.2, .38, rng), -.45)
+    effects += pan(impact(t, 5.9, .38, rng), .45)
+    liora = (0.3 * osc(t, 82.41, wobble=.22) + 0.22 * osc(t, 123.47, .45)
+             + 0.15 * osc(t, 164.81, 1.1) + 0.08 * osc(t, 329.63, 1.9))
+    music += pan(liora * env(t, 6.5, 35.5, 1.8, 2.8) * .5, .1)
+    for index in range(10):
+        when = 8.0 + index * 1.18
+        effects += pan(shimmer(t, when, 415.3 + index * 27.4, 1.35) * .05,
+                       -0.75 + index * .165)
+    effects += pan(shimmer(t, 18.0, 659.25, 2.7) * .085, 0)
+
+    # Ten Crown Paths: two bright, eight unresolved, with no victory fanfare.
+    path = (0.31 * osc(t, 73.42, wobble=.18) + 0.2 * osc(t, 110, .55)
+            + 0.15 * osc(t, 146.83, 1.25) + 0.07 * osc(t, 220, 2.2))
+    music += pan(path * env(t, 23, 44, 2.0, 2.6) * .54, 0)
+    for index in range(10):
+        when = 24.8 + index * 1.24
+        effects += pan(shimmer(t, when, 349.23 + index * 18.5, 1.0) * (.062 if index < 2 else .035),
+                       -.78 + index * .17)
+    effects += pan(impact(t, 31.8, .5, rng), 0)
+
+    # Serath's address introduces an inharmonic threat; still purely musical/SFX.
+    serath = (0.3 * osc(t, 46.25, wobble=1.1) + 0.25 * osc(t, 49, 1.0, .9)
+              + 0.1 * np.sign(osc(t, 23.12)))
+    music += pan(serath * env(t, 39, 49, 1.2, 2.1) * .35, -.05)
+    effects += pan(impact(t, 40.5, .72, rng), 0)
+    effects += pan(impact(t, 47.0, .6, rng), .1)
+
+    # Chapter III reveal: real moving water bed and a sober unresolved cadence.
+    water = filtered_noise(rng, count, 240)
+    water /= max(np.max(np.abs(water)), 1e-9)
+    water *= env(t, 46, 58.5, 1.4, 2.1) * (.08 + .02*np.sin(2*math.pi*.36*t))
+    ambience[:, 0] += water
+    ambience[:, 1] += np.roll(water, 2200) * .92
+    resolve = (0.36 * osc(t, 55, wobble=.17) + 0.24 * osc(t, 82.41, .5)
+               + 0.17 * osc(t, 110, 1.2) + 0.09 * osc(t, 164.81, 2.0))
+    music += pan(resolve * env(t, 47, 64, 2.2, 1.5) * .55, 0)
+    effects += pan(shimmer(t, 48.5, 493.88, 2.2) * .065, -.25)
+    effects += pan(shimmer(t, 52.5, 659.25, 2.6) * .08, .25)
+    effects += pan(impact(t, 56.9, .68, rng), 0)
+    effects += pan(shimmer(t, 57.2, 739.99, 3.4) * .09, 0)
+
+    return music, ambience, effects
+
+
 def write_wav(path: Path, signal: np.ndarray) -> None:
     peak = max(float(np.max(np.abs(signal))), 1e-9)
     limited = np.tanh(signal * (1.08 / peak))
@@ -178,8 +292,17 @@ def render_set(prefix: str, composer) -> None:
 
 
 def main() -> None:
-    render_set("opening-prologue", compose_opening)
-    render_set("chapter-one-introduction", compose_intro)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--movie", choices=("opening", "intro", "bridge10", "bridge20", "bridges", "both", "all"), default="both")
+    args = parser.parse_args()
+    if args.movie in {"opening", "both", "all"}:
+        render_set("opening-prologue", compose_opening)
+    if args.movie in {"intro", "both", "all"}:
+        render_set("chapter-one-introduction", compose_intro)
+    if args.movie in {"bridge10", "bridges", "all"}:
+        render_set("chapter-one-to-two-bridge", compose_bridge10)
+    if args.movie in {"bridge20", "bridges", "all"}:
+        render_set("chapter-two-to-three-bridge", compose_bridge20)
 
 
 if __name__ == "__main__":

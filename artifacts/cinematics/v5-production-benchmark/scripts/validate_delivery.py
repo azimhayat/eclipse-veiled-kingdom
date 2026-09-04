@@ -1,10 +1,13 @@
-"""Build review contact sheets and validate the locked WebVTT tracks."""
+"""Extract review frames, build contact sheets, and validate WebVTT tracks."""
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -12,6 +15,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 REVIEW = ROOT / "review"
+RENDERS = ROOT / "renders"
+BUNDLED_FFMPEG = Path.home() / "AppData" / "Local" / "CodexMediaTools" / "ffmpeg-static-5.2.0" / "node_modules" / "ffmpeg-static" / "ffmpeg.exe"
 
 MOVIES = {
     "opening": {
@@ -20,6 +25,7 @@ MOVIES = {
         "vtt": ROOT / "opening-prologue-v1.en.vtt",
         "expected_cues": 8,
         "contact": REVIEW / "opening-prologue-contact-sheet.png",
+        "prefix": "opening",
     },
     "chapter-one": {
         "duration": 40.0,
@@ -27,8 +33,38 @@ MOVIES = {
         "vtt": ROOT / "chapter-one-introduction-v1.en.vtt",
         "expected_cues": 6,
         "contact": REVIEW / "chapter-one-introduction-contact-sheet.png",
+        "prefix": "chapter-one",
+    },
+    "chapter-one-bridge": {
+        "duration": 52.0,
+        "frames": 7,
+        "times": (3.5, 11.0, 19.0, 27.0, 35.0, 42.5, 49.0),
+        "video": RENDERS / "chapter-one-to-two-bridge-v1.mp4",
+        "vtt": ROOT / "chapter-one-to-two-bridge-v1.en.vtt",
+        "expected_cues": 7,
+        "contact": REVIEW / "chapter-one-to-two-bridge-contact-sheet.png",
+        "prefix": "chapter-one-to-two-bridge",
+    },
+    "chapter-two-bridge": {
+        "duration": 64.0,
+        "frames": 8,
+        "times": (3.5, 11.0, 19.5, 28.5, 37.0, 45.0, 53.0, 60.5),
+        "video": RENDERS / "chapter-two-to-three-bridge-v1.mp4",
+        "vtt": ROOT / "chapter-two-to-three-bridge-v1.en.vtt",
+        "expected_cues": 8,
+        "contact": REVIEW / "chapter-two-to-three-bridge-contact-sheet.png",
+        "prefix": "chapter-two-to-three-bridge",
     },
 }
+
+
+def ffmpeg_path() -> str:
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    if BUNDLED_FFMPEG.exists():
+        return str(BUNDLED_FFMPEG)
+    raise FileNotFoundError("FFmpeg is required to extract review frames")
 
 
 def timestamp_seconds(value: str) -> float:
@@ -101,6 +137,17 @@ def contact_sheet(prefix: str, frame_count: int, target: Path) -> None:
     sheet.save(target, optimize=True)
 
 
+def extract_frames(video: Path, prefix: str, times: tuple[float, ...]) -> None:
+    REVIEW.mkdir(parents=True, exist_ok=True)
+    for index, second in enumerate(times, 1):
+        output = REVIEW / f"{prefix}-shot-{index:02d}.png"
+        subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-y",
+             "-ss", str(second), "-i", str(video), "-frames:v", "1", str(output)],
+            check=True,
+        )
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -110,17 +157,31 @@ def sha256(path: Path) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--movie", choices=("existing", "bridges", "all"), default="all")
+    args = parser.parse_args()
+    selected = {
+        "existing": ("opening", "chapter-one"),
+        "bridges": ("chapter-one-bridge", "chapter-two-bridge"),
+        "all": tuple(MOVIES),
+    }[args.movie]
     results = {"subtitles": {}, "files": {}}
-    for prefix, spec in MOVIES.items():
+    for movie_id in selected:
+        spec = MOVIES[movie_id]
+        prefix = spec["prefix"]
+        if "video" in spec:
+            extract_frames(spec["video"], prefix, spec["times"])
         contact_sheet(prefix, spec["frames"], spec["contact"])
-        results["subtitles"][prefix] = validate_vtt(
+        results["subtitles"][movie_id] = validate_vtt(
             spec["vtt"], spec["duration"], spec["expected_cues"]
         )
-        results["files"][spec["contact"].name] = {
-            "bytes": spec["contact"].stat().st_size,
-            "sha256": sha256(spec["contact"]),
-        }
-    output = REVIEW / "validation-summary.json"
+        for path in (spec["contact"], spec["vtt"], spec.get("video")):
+            if path is not None:
+                results["files"][path.name] = {
+                    "bytes": path.stat().st_size,
+                    "sha256": sha256(path),
+                }
+    output = REVIEW / ("bridge-validation-summary.json" if args.movie == "bridges" else "validation-summary.json")
     output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(results, indent=2))
 

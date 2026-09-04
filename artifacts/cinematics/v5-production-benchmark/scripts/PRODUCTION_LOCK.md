@@ -8,6 +8,8 @@ shows a narrative contradiction or a hard reject condition.
 
 - Opening prologue: 72 seconds.
 - Chapter I introduction: 40 seconds.
+- Chapter I to II bridge: 52 seconds.
+- Chapter II to III bridge: 64 seconds.
 - Master canvas: native 1920x1080, constant 30 fps.
 - Final video: H.264 High, yuv420p, AAC-LC stereo at 48 kHz, fast-start.
 - Dialogue treatment: subtitle-led; no generated or unapproved voice acting.
@@ -54,6 +56,39 @@ shows a narrative contradiction or a hard reject condition.
 | C1-04 | 00:20–00:27 | An impossible sunrise memory crosses the dark cavern. Arches reveal sequentially, dust turns gold, and Aren shields his eyes as the light moves past him. | You saw the sun rise over a kingdom history denies. |
 | C1-05 | 00:27–00:34 | The first buried Crown Path uncovers. Sand pours between route stones, separate gold lines ignite in sequence, and the Last Lamp projects a split-circle Cartographer mark. | Follow the first buried Crown Path. |
 | C1-06 | 00:34–00:40 | Aren rises and takes the first deliberate step toward the path. Mira recedes into the Lamp, the compass aligns, and the final composition matches the Level 1 opening direction. | Remember before the Eclipse remembers you. |
+
+## After Level 10 — Chapter I to II bridge — 52 seconds
+
+This bridge reveals that the heir was erased and distributed into the Crown
+Paths without naming her, showing her face, or pre-empting her Level 20 account
+of consent. The Warden survives and becomes a restored protector.
+
+| Shot | Time | Picture and required independent motion | Subtitle |
+|---|---:|---|---|
+| B10-01 | 00:00–00:07 | The Warden kneels in the sealed court. Its vermilion bridle breaks into separate fragments, dust falls from its shoulders, and its cyan-gold heart opens while Aren remains human-scale in the foreground. | The command breaks. The Warden remembers its first oath. |
+| B10-02 | 00:07–00:15 | The restored Warden turns its opened palm toward Aren. Shoulder plates settle, heart rings counter-rotate, the camera tracks between their unequal scale, and sand streams away from the Crown seal. | Cartographer. You did not kill the heir. |
+| B10-03 | 00:15–00:23 | An adult unnamed heir forms as a face-obscured silhouette from ten independently travelling memory fragments. She reaches toward the map rather than waiting to be rescued. | You carried her living memory into the Crown Paths. |
+| B10-04 | 00:23–00:31 | Aren's split-circle mark and the heir's concealed seal answer across a fractured civic map. Routes ignite separately and the marks orbit without merging into a single identity. | Serath erased her name. The paths preserved what remained. |
+| B10-05 | 00:31–00:39 | The Warden plants one hand into the court. Stone gates separate, nested route rings unlock, falling debris clears outward, and warm light advances toward the interior road. | The first path is restored. The road now turns inward. |
+| B10-06 | 00:39–00:46 | The Inner Kingdom appears beyond the opened gate as layered civic towers, dark courts, and thousands of missing-name lights. Aren takes one measured step as the Warden stands guard behind him. | Beyond the Veil, a kingdom without names is waiting. |
+| B10-07 | 00:46–00:52 | Two restored path rings continue turning around a clean compositor title while light travels inward through the lower frame. | Chapter II: The Inner Kingdom. |
+
+## After Level 20 — Chapter II to III bridge — 64 seconds
+
+This bridge names and fully reveals Liora as a coherent living-light person,
+confirms her informed consent without absolving Aren, lets Serath address Aren
+directly, and closes V5 on the exact locked Chapter III destination.
+
+| Shot | Time | Picture and required independent motion | Subtitle |
+|---|---:|---|---|
+| B20-01 | 00:00–00:07 | The Nameless Magistrate's empty scales descend and settle. Broken name seals rise from the court as individual gold lights while the blank civic mask opens along cyan fractures. | The Magistrate's blank law breaks. Stolen names return. |
+| B20-02 | 00:07–00:15 | Ten memory fragments arrive from different depths and assemble around the same adult silhouette seen earlier. Her posture, coat, face, and split-circle seal become coherent without morphing. | Every recovered voice gathers around one surviving will. |
+| B20-03 | 00:15–00:24 | Liora steps from scattered cyan light into a stable living-light form and looks directly at Aren. Cloth edges, hair, light fractures, and reflected water move independently. | Liora: Aren. Look at me. I chose the division. |
+| B20-04 | 00:24–00:33 | Liora raises both hands over a map of ten Crown Paths. Two restored paths burn gold while eight remain cyan-dark; route particles travel from her palms to the map. | Liora: You mapped ten paths because I asked you to keep my testimony from Serath. |
+| B20-05 | 00:33–00:41 | Aren faces Liora across the living map. His compass and her concealed seal align but remain separate; the map casts their shared shadow over the court. | Liora: The choice was mine. The design—and its cost—were ours. |
+| B20-06 | 00:41–00:49 | Vermilion command lines cut through the court. Serath resolves inside the Engine aperture, keeps a controlled human silhouette, and addresses Aren rather than Liora. | Serath: Cartographer. Two paths do not make a kingdom. |
+| B20-07 | 00:49–00:57 | Serath's image collapses into a red route. Water pushes through buried channels, reflected citizen lights move against the current, and Liora turns toward the newly exposed aqueduct. | Serath: Bring her closer, and the Engine will finish your map. |
+| B20-08 | 00:57–01:04 | A monumental aqueduct resolves behind four clean lines of locked launch copy. Water, reflection, mist, and two Crown Path rings continue moving under the title. | Chapter II complete. Chapter III: The Sundered Aqueduct. Coming soon. |
 
 ## Hard reject gate
 

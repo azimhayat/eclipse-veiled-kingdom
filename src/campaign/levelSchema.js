@@ -61,6 +61,9 @@ function normalizeLevel(level, identity = {}) {
   if (source.abilityUnlock && typeof source.abilityUnlock === 'object') {
     normalized.abilityUnlock = { ...source.abilityUnlock };
   }
+  if (source.storyMoment && typeof source.storyMoment === 'object') {
+    normalized.storyMoment = { ...source.storyMoment };
+  }
   if (source.objective && typeof source.objective === 'object') normalized.objective = cloneObjective(source.objective);
   if (source.gameplay && typeof source.gameplay === 'object') {
     normalized.gameplay = {

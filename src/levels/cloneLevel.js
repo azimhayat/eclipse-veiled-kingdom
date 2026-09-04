@@ -23,6 +23,7 @@ export function cloneLevel(level) {
     veilPlatforms: (level.veilPlatforms || []).map((item) => ({ ...item, active: item.phase === 0 })),
     boss: level.boss ? { ...level.boss } : null,
     abilityUnlock: level.abilityUnlock ? { ...level.abilityUnlock } : null,
+    storyMoment: level.storyMoment ? { ...level.storyMoment } : null,
     objective: cloneObjective(level.objective),
   };
 }

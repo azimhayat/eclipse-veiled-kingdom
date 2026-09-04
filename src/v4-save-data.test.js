@@ -134,4 +134,36 @@ describe('V4 save and personal Top 10', () => {
     expect(recorded.score).toBeNull();
     expect(recorded.save.localTopTen).toEqual([]);
   });
+
+  it('loads a completed pre-V5 V4 record without renaming its stable save identity', () => {
+    let legacyV4 = createV4Save({ now: clock });
+    for (const levelKey of V4_LEVEL_KEYS) {
+      legacyV4 = recordV4LevelCompletion(legacyV4, {
+        levelKey,
+        levelTime: 90,
+        levelDeaths: 1,
+        completionStats: levelKey === V4_LEVEL_KEYS[9]
+          ? { attempts: 3, damageTaken: 4, combatTimeSeconds: 115 }
+          : undefined,
+        completedAt: clock().toISOString(),
+        now: clock,
+      });
+    }
+    const recorded = recordV4PlayerNameAndScore(legacyV4, { name: 'Founder', now: clock });
+    const storage = new MemoryStorage({ [V4_SAVE_KEY]: JSON.stringify(recorded.save) });
+    const loaded = loadV4Save({ storage, now: clock });
+    expect(loaded.source).toBe('v4');
+    expect(loaded.save).toMatchObject({
+      schemaVersion: 1,
+      campaignId: 'veiled-kingdom-v4-20',
+      playerName: 'Founder',
+      progress: { completedLevelKeys: V4_LEVEL_KEYS },
+    });
+    expect(loaded.save.localTopTen).toHaveLength(1);
+    expect(loaded.save.localTopTen[0]).toMatchObject({
+      playerName: 'Founder',
+      wardenAttempts: 3,
+      damageTaken: 4,
+    });
+  });
 });
