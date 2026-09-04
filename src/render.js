@@ -1,6 +1,15 @@
 import { CHUNK_COLS, CHUNK_COUNT, CHUNK_W, TILE, Tile, VIEW_H, VIEW_W, WORLD_COLS, WORLD_H, WORLD_W } from './levels/constants.js';
 import { releaseRenderedLevel } from './rendered-level-cache.js';
 import { getTimedTeethState } from './teeth-timing.js';
+import { getHeroPoseFrame } from './combat-presentation.js';
+import {
+  drawSpriteFrame,
+  getVeilRaiderFrame,
+  getWardenFrame,
+  VEIL_RAIDER_SHEET,
+  WARDEN_SHEET,
+} from './combat-sprites.js';
+import { getWardenFighterAttack } from './warden-fighter.js';
 
 const roundRect = (ctx, x, y, w, h, r) => {
   ctx.beginPath();
@@ -12,7 +21,91 @@ function seeded(n) {
   return x - Math.floor(x);
 }
 
-function drawWardenFighter(ctx, duel, time) {
+function drawWardenSpriteFighter(ctx, duel, time, wardenSheet) {
+  const boss = duel.boss;
+  const target = boss.target;
+  const feetY = duel.arena.feetTy * TILE;
+  const frame = getWardenFrame(duel);
+  const hit = boss.hitFlash > 0 || boss.action === 'hitstun';
+  const guarding = boss.action === 'guard' || boss.guarding;
+  const windup = boss.action === 'windup';
+  const active = boss.action === 'active';
+  const phaseColor = boss.phase === 'eclipse' ? '#e96663'
+    : boss.phase === 'command' ? '#e9b74f'
+      : '#72dce8';
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.58)';
+  ctx.beginPath();
+  ctx.ellipse(target.x, feetY - 3, 80, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.translate(target.x, feetY);
+  ctx.scale(boss.facing || -1, 1);
+  ctx.globalAlpha = duel.phase === 'finale' ? .9 : 1;
+  ctx.shadowColor = hit ? '#c9fbff' : phaseColor;
+  ctx.shadowBlur = hit ? 35 : boss.phase === 'eclipse' ? 25 : 15;
+  drawSpriteFrame(ctx, wardenSheet, WARDEN_SHEET, frame);
+  ctx.shadowBlur = 0;
+
+  if (guarding) {
+    const guardRatio = Math.max(0, Math.min(1, (boss.guardMeter || 0) / (boss.guardMax || 6)));
+    ctx.strokeStyle = guardRatio > .34 ? '#f3c969' : '#ef7764';
+    ctx.lineWidth = 6;
+    ctx.setLineDash([18, 7]);
+    ctx.beginPath();
+    ctx.arc(13, -92, 67, -1.22, 1.18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (windup) {
+    ctx.globalAlpha = .72 + Math.sin(time * 24) * .2;
+    ctx.strokeStyle = boss.attackKind === 'crown-breaker' ? '#ef6e5e' : '#f1c461';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(12, -88, 76, -1.4, 1.35);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  if (['dust-sweep', 'sand-wave'].includes(boss.attackKind) && (windup || active)) {
+    const attackRange = boss.attackKind === 'sand-wave' ? 5.1 * TILE : 2.75 * TILE;
+    const startX = boss.attackKind === 'sand-wave' ? target.x - attackRange : target.x - attackRange * .55;
+    const width = boss.attackKind === 'sand-wave' ? attackRange * 2 : attackRange * 1.1;
+    ctx.save();
+    ctx.strokeStyle = active ? '#ef715b' : '#dfb653';
+    ctx.fillStyle = active ? 'rgba(231,92,68,.2)' : 'rgba(224,174,70,.08)';
+    ctx.shadowColor = active ? '#ee684f' : '#e4af4f';
+    ctx.shadowBlur = active ? 22 : 12;
+    ctx.lineWidth = active ? 9 : 4;
+    ctx.beginPath();
+    ctx.moveTo(startX, feetY - 8);
+    for (let x = startX; x <= startX + width; x += 28) {
+      ctx.lineTo(x, feetY - 11 - Math.sin(x * .035 + time * 9) * (active ? 14 : 7));
+    }
+    ctx.lineTo(startX + width, feetY + 8);
+    ctx.lineTo(startX, feetY + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.save();
+  for (let phaseIndex = 0; phaseIndex < 3; phaseIndex += 1) {
+    const threshold = phaseIndex === 0 ? duel.thresholds.commandHp : phaseIndex === 1 ? duel.thresholds.eclipseHp : 0;
+    ctx.fillStyle = boss.hp <= threshold ? '#79e5ef' : 'rgba(229,186,86,.45)';
+    ctx.beginPath();
+    ctx.arc(target.x - 34 + phaseIndex * 34, target.y - 103, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawWardenFighter(ctx, duel, time, wardenSheet = null) {
+  if (wardenSheet) {
+    drawWardenSpriteFighter(ctx, duel, time, wardenSheet);
+    return;
+  }
   const boss = duel.boss;
   const target = boss.target;
   const facing = boss.facing || -1;
@@ -23,7 +116,16 @@ function drawWardenFighter(ctx, duel, time) {
   const guarding = boss.action === 'guard' || boss.guarding;
   const finale = duel.phase === 'finale';
   const feetY = duel.arena.feetTy * TILE;
-  const lean = active ? 12 : windup ? -7 : hit ? -10 : 0;
+  const attack = getWardenFighterAttack(boss.attackKind);
+  const actionDuration = windup ? attack.windup
+    : active ? attack.active
+      : boss.action === 'recovery' ? attack.recovery
+        : 1;
+  const actionProgress = Math.max(0, Math.min(1, 1 - (boss.actionClock || 0) / Math.max(.001, actionDuration)));
+  const lean = active ? 5 + Math.sin(actionProgress * Math.PI) * 11
+    : windup ? -7 * actionProgress
+      : boss.action === 'recovery' ? 7 * (1 - actionProgress)
+        : hit ? -10 : 0;
   const bob = ['neutral', 'idle'].includes(boss.action) ? Math.sin(time * 5.2) * 2.5 : 0;
 
   ctx.save();
@@ -129,10 +231,10 @@ function drawWardenFighter(ctx, duel, time) {
   ctx.stroke();
 
   const attackAngle = boss.attackKind === 'dust-sweep' || boss.attackKind === 'sand-wave'
-    ? active ? .08 : -.42
+    ? active ? -.32 + actionProgress * .58 : -.42 + actionProgress * .16
     : boss.attackKind === 'crown-breaker'
-      ? active ? 1.03 : -.95
-      : active ? -.1 : -1.02;
+      ? active ? -.95 + actionProgress * 1.98 : -.95 + actionProgress * .2
+      : active ? -1.02 + actionProgress * 1.08 : -1.02 + actionProgress * .18;
   ctx.save();
   ctx.translate(active ? 68 : 29, active ? -71 : -59);
   ctx.rotate(attackAngle);
@@ -610,7 +712,7 @@ export function drawBackdrop(ctx, image, camera, time, level) {
   ctx.restore();
 }
 
-export function drawLevelMechanics(ctx, level, time, gateOpen) {
+export function drawLevelMechanics(ctx, level, time, gateOpen, assets = {}) {
   if (level.objective?.type === 'memory-carve') {
     const marks = level.objective.marks || [];
     const complete = Boolean(level.objective.complete);
@@ -1669,7 +1771,7 @@ export function drawLevelMechanics(ctx, level, time, gateOpen) {
 
     const duel = objective.duel;
     if (duel?.active) {
-      drawWardenFighter(ctx, duel, time);
+      drawWardenFighter(ctx, duel, time, assets.warden);
     }
 
     if (restored) {
@@ -1988,12 +2090,23 @@ export function drawShip(ctx, ship, time) {
   ctx.restore();
 }
 
-export function drawSoldier(ctx, soldier, time) {
+export function drawSoldier(ctx, soldier, time, veilRaiderSheet = null) {
   ctx.save();
   ctx.translate(soldier.x + soldier.w / 2, soldier.y + soldier.h);
   const facing = soldier.facing || 1;
   ctx.scale(facing, 1);
   if (soldier.kind === 'shield') ctx.scale(1.12, 1.12);
+  const presentationState = soldier.presentation?.state;
+  if (presentationState === 'landing') {
+    ctx.translate(0, 4);
+    ctx.scale(1.06, .9);
+  } else if (presentationState === 'anticipation') ctx.rotate(-.075);
+  else if (presentationState === 'contact') ctx.translate(8, -1);
+  else if (presentationState === 'recovery') ctx.rotate(.045);
+  else if (presentationState === 'hit') {
+    ctx.translate(-7, 0);
+    ctx.rotate(.09);
+  }
   if ((soldier.raidMember || soldier.readableMelee) && soldier.mode !== 'para') {
     const phase = soldier.attackPhase;
     if (phase === 'windup') {
@@ -2044,6 +2157,20 @@ export function drawSoldier(ctx, soldier, time) {
       ctx.restore();
     }
   }
+  if (veilRaiderSheet && soldier.raidMember) {
+    ctx.shadowColor = presentationState === 'hit' ? '#8eeeff' : 'rgba(239,184,90,.38)';
+    ctx.shadowBlur = presentationState === 'hit' ? 22 : 9;
+    drawSpriteFrame(ctx, veilRaiderSheet, VEIL_RAIDER_SHEET, getVeilRaiderFrame(soldier));
+    ctx.shadowBlur = 0;
+    if (soldier.maxHp > 1) {
+      ctx.fillStyle = 'rgba(4,7,15,.78)';
+      ctx.fillRect(-18, -79, 36, 5);
+      ctx.fillStyle = '#f0c767';
+      ctx.fillRect(-18, -79, 36 * Math.max(0, soldier.hp / soldier.maxHp), 5);
+    }
+    ctx.restore();
+    return;
+  }
   if (soldier.mode === 'para') {
     ctx.strokeStyle = 'rgba(210,220,235,.7)';
     ctx.lineWidth = 1;
@@ -2059,7 +2186,11 @@ export function drawSoldier(ctx, soldier, time) {
     ctx.strokeStyle = '#a78342';
     ctx.stroke();
   }
-  const stride = soldier.mode === 'walk' ? Math.sin(time * 10 + soldier.x * .04) * 5 : 0;
+  const strideClock = soldier.presentation?.clock ?? time;
+  const moving = soldier.mode === 'walk' && (!presentationState
+    || presentationState === 'advance' || presentationState === 'backpedal');
+  const strideDirection = presentationState === 'backpedal' ? -1 : 1;
+  const stride = moving ? Math.sin(strideClock * 10 + soldier.x * .04) * 5 * strideDirection : 0;
   ctx.strokeStyle = '#1a2237';
   ctx.lineWidth = 7;
   ctx.beginPath();
@@ -2126,45 +2257,43 @@ export function drawProjectile(ctx, projectile) {
 export function drawHero(ctx, player, time, heroSheet) {
   if (heroSheet) {
     const running = player.grounded && Math.abs(player.vx) > 25;
-    let col = 0;
-    let row = 0;
-    let drawSize = 116;
-    let offsetX = 0;
-    let offsetY = 7;
-
-    if (player.attackTimer > 0) {
-      col = 0;
-      row = 1;
-      drawSize = 126;
-      offsetX = -2;
-    } else if (player.digTimer > 0) {
-      col = 1;
-      row = 1;
-      drawSize = 122;
-      offsetY = 4;
-    } else if (player.climbing || (!player.grounded && player.wallSide)) {
-      col = 2;
-      row = 1;
-      drawSize = 120;
-      offsetY = 2;
-    } else if (!player.grounded) {
-      col = 2;
-      row = 0;
-      drawSize = 122;
-      offsetY = 1;
-    } else if (running) {
-      col = 1;
-      row = 0;
-      drawSize = 120;
-      offsetX = -2;
-      offsetY = 4 - Math.abs(Math.sin(time * 15)) * 2;
-    }
+    const state = player.presentation?.state || '';
+    const pose = player.attackTimer > 0 || state.startsWith('attack-') ? 'attack'
+      : player.digTimer > 0 ? 'dig'
+        : player.climbing || state === 'climb' || (!player.grounded && player.wallSide) ? 'climb'
+          : !player.grounded || state === 'airborne' ? 'jump'
+            : running || state === 'advance' || state === 'backpedal' ? 'run'
+              : 'idle';
+    const frame = getHeroPoseFrame(pose);
+    const { col, row, size: drawSize, anchorX, anchorY } = frame;
+    const presentationClock = player.presentation?.clock ?? time;
+    const presentationEnabled = Boolean(player.combatPresentationEnabled);
+    const legacyOffsetX = pose === 'attack' || pose === 'run' ? -2 : 0;
+    const legacyOffsetY = pose === 'idle' ? 7
+      : pose === 'run' ? 4 - Math.abs(Math.sin(time * 15)) * 2
+        : pose === 'jump' ? 1
+          : pose === 'dig' ? 4
+            : pose === 'climb' ? 2
+              : 0;
+    const offsetY = presentationEnabled && pose === 'run'
+      ? -Math.abs(Math.sin(presentationClock * 15)) * 2
+      : 0;
+    const action = player.combatAction;
+    const actionShift = action?.phase === 'startup' ? -5 * action.phaseProgress
+      : action?.phase === 'active' ? 5 + 7 * action.phaseProgress
+        : action?.phase === 'recovery' ? 6 * (1 - action.phaseProgress)
+          : 0;
 
     const cellW = heroSheet.width / 3;
     const cellH = heroSheet.height / 2;
     ctx.save();
     ctx.translate(player.x + player.w / 2, player.y + player.h);
     ctx.scale(player.facing, 1);
+    if (actionShift) ctx.translate(actionShift, 0);
+    if (state === 'hit') {
+      ctx.translate(-6, 0);
+      ctx.rotate(.075);
+    } else if (state === 'guard') ctx.rotate(-.035);
     if (player.invuln > 0 && Math.floor(player.invuln * 12) % 2 === 0) ctx.globalAlpha = .34;
 
     ctx.fillStyle = 'rgba(0,0,0,.32)';
@@ -2181,8 +2310,8 @@ export function drawHero(ctx, player, time, heroSheet) {
       row * cellH,
       cellW,
       cellH,
-      -drawSize / 2 + offsetX,
-      -drawSize + offsetY,
+      presentationEnabled ? -drawSize * anchorX : -drawSize / 2 + legacyOffsetX,
+      presentationEnabled ? -drawSize * anchorY + offsetY : -drawSize + legacyOffsetY,
       drawSize,
       drawSize,
     );
@@ -2275,6 +2404,69 @@ export function drawHero(ctx, player, time, heroSheet) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+export function drawCombatEvents(ctx, events = [], time = 0, assets = {}) {
+  for (const event of events) {
+    const duration = Math.max(.001, event.expiresAt - event.createdAt);
+    const progress = Math.max(0, Math.min(1, (time - event.createdAt) / duration));
+    const fade = 1 - progress;
+    const direction = event.facing || 1;
+    if (event.type === 'defeat' && event.actorKind === 'veil-raider'
+      && assets.veilRaider && Number.isFinite(event.feetY)) {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, fade * .9);
+      ctx.translate(event.x || 0, event.feetY);
+      ctx.scale(direction, 1);
+      ctx.translate(progress * -10, progress * 5);
+      ctx.rotate(direction * progress * -.08);
+      ctx.shadowColor = '#8eeeff';
+      ctx.shadowBlur = 18 * fade;
+      drawSpriteFrame(
+        ctx,
+        assets.veilRaider,
+        VEIL_RAIDER_SHEET,
+        VEIL_RAIDER_SHEET.frames.defeat,
+      );
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.globalAlpha = fade * (event.type === 'anticipation' ? .55 : .82);
+    ctx.translate(event.x || 0, event.y || 0);
+    ctx.scale(direction, 1);
+    if (event.type === 'anticipation') {
+      ctx.strokeStyle = '#ef7958';
+      ctx.lineWidth = 2 + progress * 2;
+      ctx.setLineDash([7, 6]);
+      ctx.beginPath();
+      ctx.arc(5, 0, 23 + progress * 9, -1.1, 1.1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (event.type === 'contact-window') {
+      ctx.strokeStyle = '#ffe49a';
+      ctx.shadowColor = '#ef784f';
+      ctx.shadowBlur = 14;
+      ctx.lineWidth = 5 * fade + 2;
+      ctx.beginPath();
+      ctx.arc(10, 0, 24 + progress * 26, -.7, .7);
+      ctx.stroke();
+    } else if (event.type === 'guard' || event.type === 'parry' || event.type === 'guard-break') {
+      ctx.strokeStyle = event.type === 'guard-break' ? '#f29162' : '#91efff';
+      ctx.lineWidth = event.type === 'parry' ? 5 : 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 15 + progress * 27, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (event.type === 'hit' || event.type === 'hurt' || event.type === 'defeat') {
+      ctx.strokeStyle = event.type === 'hurt' ? '#ed765f' : event.type === 'defeat' ? '#efffff' : '#f4ce70';
+      ctx.lineWidth = event.type === 'defeat' ? 6 : 4;
+      const radius = 10 + progress * (event.type === 'defeat' ? 48 : 28);
+      ctx.beginPath();
+      ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0);
+      ctx.moveTo(0, -radius); ctx.lineTo(0, radius);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 }
 
 export function drawParticles(ctx, particles) {

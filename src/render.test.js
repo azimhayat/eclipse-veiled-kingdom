@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawLevelMechanics, drawVisibleChunks } from './render.js';
+import { drawCombatEvents, drawHero, drawLevelMechanics, drawSoldier, drawVisibleChunks } from './render.js';
 import { TILE } from './levels/constants.js';
 import { createPilgrimsClimb } from './levels/outerVeil/pilgrimsClimb.js';
 import { createParachuteChoir } from './levels/outerVeil/parachuteChoir.js';
@@ -49,6 +49,76 @@ describe('bounded level-chunk rendering', () => {
     expect(drawVisibleChunks(ctx, undefined, { x: 0, y: 0 })).toBe(false);
     expect(drawVisibleChunks(ctx, [], { x: 0, y: 0 })).toBe(false);
     expect(ctx.calls.some((call) => call[0] === 'drawImage')).toBe(false);
+  });
+});
+
+describe('deterministic combat rendering', () => {
+  it('uses the authored attack-pose anchor and does not advance a paused presentation from wall time', () => {
+    const player = {
+      x: 100, y: 200, w: 28, h: 44, vx: 0, facing: 1,
+      grounded: true, wallSide: 0, climbing: false, invuln: 0,
+      attackTimer: .2, digTimer: 0, guarding: false,
+      combatPresentationEnabled: true,
+      combatAction: { phase: 'active', phaseProgress: .5 },
+      presentation: { state: 'attack-active', clock: .12 },
+    };
+    const sheet = { width: 1536, height: 1024 };
+    const first = recordingContext();
+    const laterWallFrame = recordingContext();
+    drawHero(first, player, 12, sheet);
+    drawHero(laterWallFrame, player, 90, sheet);
+    const firstImage = first.calls.find((call) => call[0] === 'drawImage');
+    const laterImage = laterWallFrame.calls.find((call) => call[0] === 'drawImage');
+    expect(firstImage).toEqual(laterImage);
+    expect(firstImage.slice(1)).toEqual([
+      sheet, 0, 512, 512, 512,
+      -126 * .53, -126 * .82, 126, 126,
+    ]);
+  });
+
+  it('derives contact flashes only from simulation timestamps', () => {
+    const event = {
+      id: 1, type: 'hit', createdAt: 8, expiresAt: 8.4,
+      x: 120, y: 220, facing: -1,
+    };
+    const first = recordingContext();
+    const second = recordingContext();
+    drawCombatEvents(first, [event], 8.2);
+    drawCombatEvents(second, [event], 8.2);
+    expect(first.calls).toEqual(second.calls);
+  });
+
+  it('holds the Level 8 defeat pose briefly after gameplay removes the raider', () => {
+    const event = {
+      id: 2, type: 'defeat', actorKind: 'veil-raider',
+      createdAt: 8, expiresAt: 8.52,
+      x: 120, y: 220, feetY: 244, facing: -1,
+    };
+    const sheet = { width: 1536, height: 1024 };
+    const context = recordingContext();
+    drawCombatEvents(context, [event], 8.26, { veilRaider: sheet });
+    expect(context.calls).toContainEqual([
+      'drawImage', sheet, 1152, 512, 384, 512,
+      -44.25, -113.28, 88.5, 118,
+    ]);
+  });
+
+  it('uses the Level 8 production sheet when present and preserves the primitive fallback', () => {
+    const soldier = {
+      id: 'raider-1', x: 100, y: 200, w: 24, h: 44, facing: 1,
+      hp: 2, maxHp: 2, mode: 'walk', kind: 'spear', raidMember: true,
+      attackPhase: 'active', presentation: { state: 'contact', clock: .08 },
+    };
+    const sheet = { width: 1536, height: 1024 };
+    const production = recordingContext();
+    const fallback = recordingContext();
+    drawSoldier(production, soldier, 8, sheet);
+    drawSoldier(fallback, soldier, 8);
+    expect(production.calls).toContainEqual([
+      'drawImage', sheet, 0, 512, 384, 512,
+      -44.25, -113.28, 88.5, 118,
+    ]);
+    expect(fallback.calls.some((call) => call[0] === 'drawImage')).toBe(false);
   });
 });
 
@@ -142,6 +212,22 @@ describe('Parachute Choir skyboard rendering', () => {
 });
 
 describe('Warden duel rendering', () => {
+  it('selects the production contact frame when the optional Warden sheet is ready', () => {
+    const level = createWardenOfDust();
+    level.objective.phase = 'duel';
+    level.objective.duel.active = true;
+    level.objective.duel.boss.action = 'active';
+    const sheet = { width: 1536, height: 1024 };
+    const ctx = recordingContext();
+
+    drawLevelMechanics(ctx, level, 8, false, { warden: sheet });
+
+    expect(ctx.calls).toContainEqual([
+      'drawImage', sheet, 1152, 0, 384, 512,
+      -79.5, -203.51999999999998, 159, 212,
+    ]);
+  });
+
   it('draws a grounded moving fighter, phase pips, and an authored sand special', () => {
     const level = createWardenOfDust();
     level.objective.phase = 'duel';

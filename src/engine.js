@@ -1,5 +1,11 @@
 import { AudioManager } from './audio.js';
 import {
+  advanceCombatTimeline,
+  consumeCombatTimelineContact,
+  createPlayerCombatTimeline,
+  setActorPresentation,
+} from './combat-presentation.js';
+import {
   TILE,
   Tile,
   VIEW_H,
@@ -16,6 +22,7 @@ import {
   drawBackdrop,
   drawBlockAndPlate,
   drawBoss,
+  drawCombatEvents,
   drawDoor,
   drawHero,
   drawLevelMechanics,
@@ -136,8 +143,13 @@ export class GameEngine {
     this.particles = [];
     this.soldiers = [];
     this.projectiles = [];
+    this.combatEvents = [];
+    this.combatEventSequence = 0;
+    this.combatActionSequence = 0;
+    this.meleeAttackToken = null;
     this.crumble = new Map();
     this.player = this.makePlayer(this.level.spawn);
+    this.player.combatPresentationEnabled = GameEngine.prototype.usesBenchmarkCombatPresentation.call(this);
     this.checkpoint = { kind: 'spawn', id: null, ...this.level.spawn, facing: 1 };
     this.gateOpen = false;
     this.spawnClock = 0;
@@ -191,6 +203,12 @@ export class GameEngine {
       attackTimer: 0, attackBuffer: 0, attackBufferKind: null, attackKind: null,
       attackDamage: 1, comboStep: 0, comboClock: 0, guarding: false,
       digTimer: 0, attackHits: new Set(), inWater: false,
+      attackSequenceStep: 0,
+      combatAction: null,
+      combatMove: 'idle',
+      reactionClock: 0,
+      presentation: { state: 'idle', clock: 0 },
+      combatPresentationEnabled: false,
     };
   }
 
@@ -640,11 +658,16 @@ export class GameEngine {
     this.levelDeaths = 0;
     this.levelCompletionEmitted = false;
     this.player = this.makePlayer(this.level.spawn);
+    this.player.combatPresentationEnabled = GameEngine.prototype.usesBenchmarkCombatPresentation.call(this);
     this.checkpoint = { kind: 'spawn', id: null, ...this.level.spawn, facing: 1 };
     this.camera.x = clamp(this.player.x - VIEW_W * .4, 0, WORLD_W - VIEW_W);
     this.camera.y = WORLD_H - VIEW_H;
     this.soldiers = [];
     this.projectiles = [];
+    this.combatEvents = [];
+    this.combatEventSequence = 0;
+    this.combatActionSequence = 0;
+    this.meleeAttackToken = null;
     this.particles = [];
     this.crumble.clear();
     this.gateOpen = !this.level.map.some((row) => row[this.level.gateColumn] === Tile.GATE);
@@ -684,8 +707,13 @@ export class GameEngine {
     objective.warden.state = 'commanded';
     this.cancelLevelTransition();
     this.player = this.makePlayer(this.checkpoint);
+    this.player.combatPresentationEnabled = true;
     this.soldiers = [];
     this.projectiles = [];
+    this.combatEvents = [];
+    this.combatEventSequence = 0;
+    this.combatActionSequence = 0;
+    this.meleeAttackToken = null;
     this.particles = [];
     this.crumble.clear();
     this.mode = 'play';
@@ -954,6 +982,7 @@ export class GameEngine {
   update(dt) {
     this.totalTime += dt;
     this.levelTime += dt;
+    this.updateCombatEvents();
     if (this.demo) this.updateBot(dt);
     this.updateLevelMechanics(dt);
     this.updatePlayer(dt);
@@ -961,6 +990,7 @@ export class GameEngine {
     this.updateCrumble(dt);
     this.updateSoldiers(dt);
     this.updateBoss(dt);
+    this.syncCombatPresentationActors(dt);
     this.updateParticles(dt);
     this.updateRelicsAndFlow();
     this.updateCamera(dt);
@@ -976,7 +1006,11 @@ export class GameEngine {
 
   updatePlayer(dt) {
     const p = this.player;
+    if (GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) {
+      GameEngine.prototype.advancePlayerCombatPresentation.call(this, dt);
+    }
     p.invuln = Math.max(0, p.invuln - dt);
+    p.reactionClock = Math.max(0, (p.reactionClock || 0) - dt);
     p.dropTimer = Math.max(0, p.dropTimer - dt);
     p.attackTimer = Math.max(0, p.attackTimer - dt);
     p.attackBuffer = Math.max(0, (p.attackBuffer || 0) - dt);
@@ -1005,16 +1039,22 @@ export class GameEngine {
       p.attackBufferKind = null;
       if (p.attackKind === 'normal') {
         const nextStep = p.comboClock > 0 ? p.comboStep + 1 : 1;
+        p.attackSequenceStep = Math.min(3, nextStep);
         p.attackDamage = nextStep >= 3 ? 2 : 1;
         p.comboStep = nextStep >= 3 ? 0 : nextStep;
         p.comboClock = nextStep >= 3 ? 0 : .85;
       } else {
+        p.attackSequenceStep = 1;
         p.attackDamage = 2;
         p.comboStep = 0;
         p.comboClock = 0;
       }
       p.attackHits.clear();
-      this.audio.play('attack');
+      if (GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) {
+        GameEngine.prototype.startPlayerCombatPresentation.call(this, p.attackKind, p.attackSequenceStep);
+      } else this.audio.play('attack');
+      // Puzzle strikes intentionally resolve on input. Only combat damage waits
+      // for the presentation timeline's contact phase.
       this.strikePilgrimBell();
       this.strikeParachuteTether?.();
       this.strikeVeilSunstone?.();
@@ -1025,7 +1065,16 @@ export class GameEngine {
 
     p.inWater = this.level.water.some((zone) => overlaps(p, zone));
     const move = (this.input.right ? 1 : 0) - (this.input.left ? 1 : 0);
-    if (move) p.facing = move;
+    const wardenTarget = this.level.objective?.type === 'warden-restoration'
+      && this.level.objective.phase === 'duel'
+      && this.level.objective.duel?.active
+      ? this.level.objective.duel.boss?.target
+      : null;
+    if (wardenTarget) {
+      const targetDirection = Math.sign(wardenTarget.x - (p.x + p.w / 2));
+      if (targetDirection) p.facing = targetDirection;
+    } else if (move) p.facing = move;
+    p.combatMove = move === 0 ? 'idle' : move === p.facing ? 'forward' : 'backward';
     const touchingLeft = this.solidProbe(p.x - 3, p.y + 4, 3, p.h - 7);
     const touchingRight = this.solidProbe(p.x + p.w, p.y + 4, 3, p.h - 7);
     p.wallSide = touchingRight ? 1 : touchingLeft ? -1 : 0;
@@ -1738,6 +1787,14 @@ export class GameEngine {
     p.hp = Math.max(0, p.hp - amount);
     if (this.demo && amount < PHYSICS.MAX_HP && p.hp <= 0) p.hp = PHYSICS.MAX_HP;
     const actualDamage = Math.max(0, previousHp - p.hp);
+    if (actualDamage > 0 && GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) {
+      p.reactionClock = .18;
+      GameEngine.prototype.emitCombatEvent.call(this, p.hp <= 0 ? 'defeat' : 'hurt', {
+        x: p.x + p.w / 2,
+        y: p.y + p.h * .42,
+        facing: p.facing,
+      });
+    }
     const duel = this.level.objective?.type === 'warden-restoration'
       ? this.level.objective.duel
       : null;
@@ -1764,6 +1821,138 @@ export class GameEngine {
         } : null,
         demo: this.demo,
       });
+    }
+  }
+
+  usesBenchmarkCombatPresentation() {
+    return ['parachute-choir-restoration', 'warden-restoration']
+      .includes(this.level.objective?.type);
+  }
+
+  emitCombatEvent(type, payload = {}, ttl = .32) {
+    if (!GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) return null;
+    if (!Array.isArray(this.combatEvents)) this.combatEvents = [];
+    this.combatEventSequence = Number.isInteger(this.combatEventSequence) ? this.combatEventSequence : 0;
+    const event = {
+      id: ++this.combatEventSequence,
+      type,
+      createdAt: this.totalTime,
+      expiresAt: this.totalTime + Math.max(0, ttl),
+      ...payload,
+    };
+    this.combatEvents.push(event);
+    if (this.combatEvents.length > 48) this.combatEvents.splice(0, this.combatEvents.length - 48);
+    return event;
+  }
+
+  updateCombatEvents() {
+    if (!this.combatEvents?.length) return;
+    this.combatEvents = this.combatEvents.filter((event) => event.expiresAt > this.totalTime);
+  }
+
+  startPlayerCombatPresentation(kind, comboStep = 1) {
+    this.combatActionSequence = Number.isInteger(this.combatActionSequence) ? this.combatActionSequence : 0;
+    const id = `player-${++this.combatActionSequence}`;
+    this.player.combatAction = createPlayerCombatTimeline({ id, kind, comboStep });
+    GameEngine.prototype.emitCombatEvent.call(this, 'anticipation', {
+      actorId: 'player',
+      x: this.player.x + this.player.w / 2,
+      y: this.player.y + this.player.h * .45,
+      facing: this.player.facing,
+      actionId: id,
+    }, this.player.combatAction.startupSeconds);
+    return this.player.combatAction;
+  }
+
+  advancePlayerCombatPresentation(dt) {
+    const action = this.player.combatAction;
+    if (!action) return null;
+    const transition = advanceCombatTimeline(action, dt);
+    if (transition.enteredActive) {
+      this.audio.play('attack');
+      GameEngine.prototype.emitCombatEvent.call(this, 'contact-window', {
+        actorId: 'player',
+        x: this.player.x + this.player.w / 2,
+        y: this.player.y + this.player.h * .45,
+        facing: this.player.facing,
+        actionId: action.id,
+      }, action.activeSeconds);
+    }
+    if (transition.enteredRecovery) {
+      GameEngine.prototype.emitCombatEvent.call(this, 'recovery', {
+        actorId: 'player',
+        x: this.player.x + this.player.w / 2,
+        y: this.player.y + this.player.h * .45,
+        facing: this.player.facing,
+        actionId: action.id,
+      }, .18);
+    }
+    if (transition.complete && !action.contactPending) this.player.combatAction = null;
+    return transition;
+  }
+
+  syncCombatPresentationActors(dt) {
+    if (!GameEngine.prototype.usesBenchmarkCombatPresentation.call(this)) return;
+    const p = this.player;
+    const playerState = p.reactionClock > 0 ? 'hit'
+      : p.combatAction ? `attack-${p.combatAction.phase}`
+        : p.guarding ? 'guard'
+          : p.climbing ? 'climb'
+            : !p.grounded ? 'airborne'
+              : Math.abs(p.vx) > 25
+                ? (p.combatMove === 'backward' ? 'backpedal' : 'advance')
+                : 'idle';
+    setActorPresentation(p, playerState, dt);
+    for (const soldier of this.soldiers) {
+      const state = soldier.mode === 'para' ? 'descent'
+        : soldier.attackPhase === 'windup' ? 'anticipation'
+          : soldier.attackPhase === 'active' ? 'contact'
+            : soldier.attackPhase === 'guard' ? 'guard'
+              : soldier.attackPhase === 'stun' ? 'hit'
+                : soldier.attackPhase === 'landing' ? 'landing'
+                  : soldier.attackPhase === 'recovery' ? 'recovery'
+                    : Math.abs(soldier.vx) > 12
+                      ? (Math.sign(soldier.vx) === soldier.facing ? 'advance' : 'backpedal')
+                      : 'idle';
+      setActorPresentation(soldier, state, dt);
+    }
+  }
+
+  claimMeleeAttackToken(soldier) {
+    if (this.level.objective?.type !== 'parachute-choir-restoration') return true;
+    if (!this.meleeAttackToken || this.meleeAttackToken === soldier.id) {
+      this.meleeAttackToken = soldier.id;
+      return true;
+    }
+    return false;
+  }
+
+  releaseMeleeAttackToken(soldierOrId) {
+    const id = typeof soldierOrId === 'string' ? soldierOrId : soldierOrId?.id;
+    if (!id || this.meleeAttackToken !== id) return false;
+    this.meleeAttackToken = null;
+    return true;
+  }
+
+  separateParachuteRaiders(dt) {
+    const grounded = this.soldiers.filter((soldier) => soldier.raidMember && soldier.mode !== 'para' && soldier.hp > 0);
+    const minimumGap = 31;
+    const maximumCorrection = 90 * dt;
+    for (let leftIndex = 0; leftIndex < grounded.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < grounded.length; rightIndex += 1) {
+        const first = grounded[leftIndex];
+        const second = grounded[rightIndex];
+        const firstCenter = first.x + first.w / 2;
+        const secondCenter = second.x + second.w / 2;
+        const distance = Math.abs(secondCenter - firstCenter);
+        if (distance >= minimumGap) continue;
+        const direction = secondCenter === firstCenter
+          ? (String(first.id).localeCompare(String(second.id)) <= 0 ? 1 : -1)
+          : Math.sign(secondCenter - firstCenter);
+        const correction = Math.min(maximumCorrection, (minimumGap - distance) / 2);
+        first.x = clamp(first.x - direction * correction, first.minX, first.maxX - first.w);
+        second.x = clamp(second.x + direction * correction, second.minX, second.maxX - second.w);
+      }
     }
   }
 
@@ -1806,12 +1995,27 @@ export class GameEngine {
       soldier.attackClock = Math.max(.52, soldier.recoverySeconds || .52);
       soldier.attackConsumed = true;
       soldier.vx = 0;
+      GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
       this.audio.play('block');
+      GameEngine.prototype.emitCombatEvent.call(this, 'guard', {
+        actorId: 'player',
+        sourceId: soldier.id,
+        x: this.player.x + this.player.w / 2,
+        y: this.player.y + 22,
+        facing: this.player.facing,
+      });
       this.burst(this.player.x + this.player.w / 2, this.player.y + 22, '#8ce8ff', 9, 100);
       this.setHint('BLOCK · hold your ground, then counter during the blue recovery.', 1.8);
       return 'blocked';
     }
     this.damagePlayer(1, -430);
+    GameEngine.prototype.emitCombatEvent.call(this, 'hit', {
+      actorId: 'player',
+      sourceId: soldier.id,
+      x: this.player.x + this.player.w / 2,
+      y: this.player.y + 22,
+      facing: this.player.facing,
+    });
     return 'hit';
   }
 
@@ -1828,7 +2032,10 @@ export class GameEngine {
 
   resolveAttackHits() {
     const p = this.player;
-    if (p.attackTimer <= .05) return;
+    const benchmarkPresentation = GameEngine.prototype.usesBenchmarkCombatPresentation.call(this);
+    const pendingContact = Boolean(benchmarkPresentation && p.combatAction?.contactPending);
+    if (p.attackTimer <= .05 && !pendingContact) return;
+    if (benchmarkPresentation && !consumeCombatTimelineContact(p.combatAction)) return;
     const dawnstroke = this.level.objective?.type === 'parachute-choir-restoration';
     const reach = dawnstroke ? 68 : 50;
     const hitbox = {
@@ -1848,6 +2055,14 @@ export class GameEngine {
         soldier.attackClock = .24;
         soldier.attackConsumed = true;
         soldier.vx = 0;
+        GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
+        GameEngine.prototype.emitCombatEvent.call(this, 'guard', {
+          actorId: soldier.id,
+          sourceId: 'player',
+          x: soldier.x + soldier.w / 2,
+          y: soldier.y + 22,
+          facing: soldier.facing,
+        });
         this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#8ce8ff', 8, 90);
         this.audio.play('block');
         this.setHint('SHIELD HOLDS · press DOWN + STRIKE to break it.', 2.4);
@@ -1860,6 +2075,14 @@ export class GameEngine {
         soldier.attackClock = Math.max(.75, soldier.recoverySeconds * .8);
         soldier.attackConsumed = true;
         soldier.vx = 0;
+        GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
+        GameEngine.prototype.emitCombatEvent.call(this, 'guard-break', {
+          actorId: soldier.id,
+          sourceId: 'player',
+          x: soldier.x + soldier.w / 2,
+          y: soldier.y + 22,
+          facing: soldier.facing,
+        });
         this.burst(soldier.x + soldier.w / 2, soldier.y + 22, '#718499', 7, 90);
         this.audio.play('dig');
         this.setHint('GUARD BROKEN · the Keeper is blue and exposed. STRIKE again.', 2.8);
@@ -1874,6 +2097,18 @@ export class GameEngine {
         soldier.attackClock = heavy ? .5 : .24;
         soldier.attackConsumed = true;
       }
+      GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
+      GameEngine.prototype.emitCombatEvent.call(this, soldier.hp <= 0 ? 'defeat' : 'hit', {
+        actorId: soldier.id,
+        sourceId: 'player',
+        x: soldier.x + soldier.w / 2,
+        y: soldier.y + 20,
+        facing: soldier.facing,
+        ...(soldier.hp <= 0 && soldier.raidMember ? {
+          actorKind: 'veil-raider',
+          feetY: soldier.y + soldier.h,
+        } : {}),
+      }, soldier.hp <= 0 ? .52 : .32);
       this.burst(soldier.x + soldier.w / 2, soldier.y + 20, '#f1bf57', 11, 180);
       this.audio.play(heavy ? 'heavy' : 'hit');
       if (soldier.hp <= 0) {
@@ -1899,6 +2134,7 @@ export class GameEngine {
       }
       this.pushHud(true);
     }
+    if (p.combatAction?.phase === 'complete' && !p.combatAction.contactPending) p.combatAction = null;
   }
 
   activateParachuteStage(stage) {
@@ -1952,6 +2188,7 @@ export class GameEngine {
       activeSeconds: entry.kind === 'shield' ? .2 : entry.kind === 'spear' ? .18 : .16,
       minX: minTx * TILE,
       maxX: maxTx * TILE,
+      presentation: { state: 'descent', clock: 0 },
     });
     this.pushHud(true);
     return true;
@@ -2401,6 +2638,13 @@ export class GameEngine {
     boss.attackConsumed = true;
     boss.guarding = false;
     boss.invulnerable = false;
+    GameEngine.prototype.emitCombatEvent.call(this, 'anticipation', {
+      actorId: 'warden',
+      x: boss.target.x,
+      y: boss.target.y,
+      facing: boss.facing,
+      attackKind: boss.attackKind,
+    }, boss.actionClock);
     const warning = {
       'sun-blade': 'SUN-BLADE · guard, interrupt, or step outside its reach.',
       'dust-sweep': 'DUST SWEEP · crouch-guard or jump over the blade.',
@@ -2469,12 +2713,21 @@ export class GameEngine {
       attackBuffer: 0,
       attackBufferKind: null,
       attackKind: null,
+      combatAction: null,
+      combatMove: 'idle',
+      reactionClock: 0,
+      presentation: { state: 'idle', clock: 0 },
+      combatPresentationEnabled: true,
     });
     this.clearInputs();
     this.player.attackHits.add('warden-duel');
     this.camera.x = clamp(this.player.x - VIEW_W * .32, 0, WORLD_W - VIEW_W);
     this.camera.y = clamp(this.player.y - VIEW_H * .58, 0, WORLD_H - VIEW_H);
     this.projectiles = [];
+    this.combatEvents = [];
+    this.combatEventSequence = 0;
+    this.combatActionSequence = 0;
+    this.meleeAttackToken = null;
     this.audio.play('gate');
     this.setHint('THE SEVERED COURT · move to control distance. STRIKE chains three blows; DOWN guards; DOWN + STRIKE breaks guard; JUMP + STRIKE attacks from above.', 6.2);
     this.pushHud(true);
@@ -2588,6 +2841,13 @@ export class GameEngine {
         boss.action = 'active';
         boss.actionClock = attack.active;
         boss.attackConsumed = false;
+        GameEngine.prototype.emitCombatEvent.call(this, 'contact-window', {
+          actorId: 'warden',
+          x: boss.target.x,
+          y: boss.target.y,
+          facing: boss.facing,
+          attackKind: boss.attackKind,
+        }, attack.active);
       }
       return true;
     }
@@ -2607,6 +2867,11 @@ export class GameEngine {
             boss.velocityX = 0;
             if (perfectGuard) {
               this.audio.play('parry');
+              GameEngine.prototype.emitCombatEvent.call(this, 'parry', {
+                actorId: 'player', sourceId: 'warden',
+                x: this.player.x + this.player.w / 2, y: this.player.y + 22,
+                facing: this.player.facing,
+              });
               this.setHint('PERFECT GUARD · no guard lost. Take your turn and counter.', 1.35);
             } else {
               const guardCost = boss.attackKind === 'sand-wave' ? 2 : 1;
@@ -2619,6 +2884,11 @@ export class GameEngine {
                 this.setHint('AREN’S GUARD BREAKS · move, jump, or time a late parry instead of holding DOWN.', 1.8);
               } else {
                 this.audio.play('block');
+                GameEngine.prototype.emitCombatEvent.call(this, 'guard', {
+                  actorId: 'player', sourceId: 'warden',
+                  x: this.player.x + this.player.w / 2, y: this.player.y + 22,
+                  facing: this.player.facing,
+                });
                 this.setHint(`BLOCK · Aren guard ${Math.ceil(player.guardMeter)}/${player.guardMax}. Counter or create space.`, 1.35);
               }
             }
@@ -2640,6 +2910,10 @@ export class GameEngine {
         boss.action = 'recovery';
         boss.actionClock = attack.recovery;
         boss.velocityX = 0;
+        GameEngine.prototype.emitCombatEvent.call(this, 'recovery', {
+          actorId: 'warden', x: boss.target.x, y: boss.target.y,
+          facing: boss.facing, attackKind: boss.attackKind,
+        }, attack.recovery);
       }
       return true;
     }
@@ -2676,6 +2950,10 @@ export class GameEngine {
     if (duel.phase === 'finale' && duel.finale.ready) {
       if (!completeWardenDuel(duel)) return false;
       objective.phase = 'finale';
+      GameEngine.prototype.emitCombatEvent.call(this, 'defeat', {
+        actorId: 'warden', sourceId: 'player', x: target.x, y: target.y,
+        facing: boss.facing,
+      }, .72);
       this.burst(target.x, target.y, '#e9fbff', 64, 310);
       this.audio.play('win');
       return this.completeWarden();
@@ -2683,6 +2961,10 @@ export class GameEngine {
 
     if (boss.invulnerable || ['intro', 'backstep', 'staggered'].includes(boss.action)) {
       this.audio.play('block');
+      GameEngine.prototype.emitCombatEvent.call(this, 'guard', {
+        actorId: 'warden', sourceId: 'player', x: target.x, y: target.y,
+        facing: boss.facing,
+      });
       this.setHint('BREAKAWAY · close the distance when the Warden lands.', 1.1);
       return false;
     }
@@ -2696,6 +2978,10 @@ export class GameEngine {
         boss.guarding = boss.guardMeter > 0;
         boss.velocityX = this.player.facing * (boss.guardMeter > 0 ? 55 : 125);
         this.audio.play(boss.guardMeter > 0 ? 'block' : 'parry');
+        GameEngine.prototype.emitCombatEvent.call(this, boss.guardMeter > 0 ? 'guard' : 'guard-break', {
+          actorId: 'warden', sourceId: 'player', x: target.x, y: target.y,
+          facing: boss.facing,
+        });
         this.setHint(boss.guardMeter > 0
           ? `GUARD ${Math.ceil(boss.guardMeter)}/${boss.guardMax} · keep pressure or use DOWN + STRIKE.`
           : 'GUARD SHATTERED · finish your three-hit chain.', 1.35);
@@ -2709,6 +2995,10 @@ export class GameEngine {
       boss.hitstun = .58;
       boss.velocityX = this.player.facing * 175;
       this.audio.play('heavy');
+      GameEngine.prototype.emitCombatEvent.call(this, 'guard-break', {
+        actorId: 'warden', sourceId: 'player', x: target.x, y: target.y,
+        facing: boss.facing,
+      });
       this.setHint('HEAVY GUARD BREAK · the Warden is open.', 1.35);
       this.pushHud(true);
       return true;
@@ -2740,6 +3030,10 @@ export class GameEngine {
     boss.hitFlash = .14;
     this.burst(target.x, target.y, duel.phase === 'finale' ? '#dffcff' : '#f3d47d', 18 + damage * 5, 190);
     this.audio.play('hit');
+    GameEngine.prototype.emitCombatEvent.call(this, duel.finale.ready ? 'defeat' : 'hit', {
+      actorId: 'warden', sourceId: 'player', x: target.x, y: target.y,
+      facing: boss.facing,
+    }, duel.finale.ready ? .55 : .32);
     if (duel.finale.ready) {
       objective.phase = 'finale';
       objective.warden.state = 'staggered';
@@ -2989,11 +3283,13 @@ export class GameEngine {
 
     soldier.attackClock = Math.max(0, (soldier.attackClock || 0) - dt);
     if (soldier.attackPhase === 'guard') {
+      GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
       soldier.vx = approach(soldier.vx, 0, 900 * dt);
       if (soldier.attackClock <= 0) soldier.attackPhase = 'pursue';
       return;
     }
     if (soldier.attackPhase === 'stun') {
+      GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
       soldier.vx = approach(soldier.vx, 0, 820 * dt);
       if (soldier.attackClock <= 0) {
         soldier.attackPhase = 'recovery';
@@ -3003,7 +3299,10 @@ export class GameEngine {
     }
     if (soldier.attackPhase === 'landing' || soldier.attackPhase === 'recovery') {
       soldier.vx = approach(soldier.vx, 0, 760 * dt);
-      if (soldier.attackClock <= 0) soldier.attackPhase = 'pursue';
+      if (soldier.attackClock <= 0) {
+        soldier.attackPhase = 'pursue';
+        GameEngine.prototype.releaseMeleeAttackToken.call(this, soldier);
+      }
       return;
     }
     if (soldier.attackPhase === 'windup') {
@@ -3013,6 +3312,13 @@ export class GameEngine {
         soldier.attackClock = soldier.activeSeconds;
         soldier.attackConsumed = false;
         soldier.vx = soldier.facing * (soldier.kind === 'spear' ? 135 : 95);
+        this.audio.play('enemy');
+        GameEngine.prototype.emitCombatEvent.call(this, 'contact-window', {
+          actorId: soldier.id,
+          x: soldier.x + soldier.w / 2,
+          y: soldier.y + 22,
+          facing: soldier.facing,
+        }, soldier.activeSeconds);
       }
       return;
     }
@@ -3033,10 +3339,25 @@ export class GameEngine {
     soldier.facing = this.player.x + this.player.w / 2 >= soldier.x + soldier.w / 2 ? 1 : -1;
     const attackRange = soldier.kind === 'spear' ? 92 : soldier.kind === 'shield' ? 68 : 62;
     if (distance <= attackRange) {
+      if (!GameEngine.prototype.claimMeleeAttackToken.call(this, soldier)) {
+        const owner = this.soldiers.find((candidate) => candidate.id === this.meleeAttackToken);
+        const ownerDistance = owner
+          ? Math.abs((owner.x + owner.w / 2) - (soldier.x + soldier.w / 2))
+          : Infinity;
+        const retreat = owner && ownerDistance < 72 ? -soldier.facing * 46 : 0;
+        soldier.vx = approach(soldier.vx, retreat, 420 * dt);
+        return;
+      }
       soldier.attackPhase = 'windup';
       soldier.attackClock = soldier.telegraphSeconds;
       soldier.attackConsumed = true;
       soldier.vx = 0;
+      GameEngine.prototype.emitCombatEvent.call(this, 'anticipation', {
+        actorId: soldier.id,
+        x: soldier.x + soldier.w / 2,
+        y: soldier.y + 22,
+        facing: soldier.facing,
+      }, soldier.telegraphSeconds);
       return;
     }
     const speed = soldier.kind === 'spear' ? 88 : soldier.kind === 'shield' ? 46 : 64;
@@ -3234,6 +3555,11 @@ export class GameEngine {
       } else soldier.y = nextY;
     }
     this.soldiers = this.soldiers.filter((soldier) => soldier.hp > 0);
+    GameEngine.prototype.separateParachuteRaiders.call(this, dt);
+    if (this.meleeAttackToken && !this.soldiers.some((soldier) => soldier.id === this.meleeAttackToken
+      && ['windup', 'active', 'recovery'].includes(soldier.attackPhase))) {
+      this.meleeAttackToken = null;
+    }
   }
 
   updateSoldiers(dt) {
@@ -4234,6 +4560,8 @@ export class GameEngine {
 
   render(time) {
     const ctx = this.ctx;
+    const benchmarkPresentation = GameEngine.prototype.usesBenchmarkCombatPresentation.call(this);
+    const combatActorTime = benchmarkPresentation ? this.totalTime : time;
     const backdrop = this.assets[this.level.backgroundKey] || this.assets.background;
     drawBackdrop(ctx, backdrop, this.camera, time, this.level);
     drawVisibleChunks(ctx, this.bank.get(levelCacheKey(this.level)), this.camera);
@@ -4243,18 +4571,22 @@ export class GameEngine {
     // Objective restoration timestamps use simulation time, so mechanics must
     // render on the same clock. Backdrop, relic, and hero ambience remain on
     // the RAF clock below.
-    drawLevelMechanics(ctx, this.level, this.totalTime, this.gateOpen);
+    drawLevelMechanics(ctx, this.level, this.totalTime, this.gateOpen, this.assets);
     if (!this.level.block?.disabled) {
       drawBlockAndPlate(ctx, this.level.block, this.level.plate, this.gateOpen);
     }
     for (const relic of this.level.relics) drawRelic(ctx, relic, time);
     for (const ship of this.level.ships) drawShip(ctx, ship, time);
-    for (const soldier of this.soldiers) drawSoldier(ctx, soldier, time);
+    const veilRaiderSheet = this.level.objective?.type === 'parachute-choir-restoration'
+      ? this.assets.veilRaider
+      : null;
+    for (const soldier of this.soldiers) drawSoldier(ctx, soldier, combatActorTime, veilRaiderSheet);
     for (const projectile of this.projectiles) drawProjectile(ctx, projectile);
     drawBoss(ctx, this.level.boss, time);
     drawDoor(ctx, this.level.door, this.isExitReady(), time);
+    if (benchmarkPresentation) drawCombatEvents(ctx, this.combatEvents, this.totalTime, this.assets);
     drawParticles(ctx, this.particles);
-    drawHero(ctx, this.player, time, this.assets.hero);
+    drawHero(ctx, this.player, combatActorTime, this.assets.hero);
     ctx.restore();
 
     const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * .2, VIEW_W / 2, VIEW_H / 2, VIEW_W * .72);

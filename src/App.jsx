@@ -52,6 +52,9 @@ import {
   shouldPersistProductionProgress,
   shouldPersistV4Progress,
 } from './campaign/sessionRoute.js';
+import { getCinematicSequence } from './cinematics/catalog.js';
+import { CinematicPlayer } from './cinematics/CinematicPlayer.jsx';
+import { isolateGameForCinematic } from './cinematics/runtime.js';
 
 const ASSET_URLS = {
   title: `${import.meta.env.BASE_URL}assets/title-still.png`,
@@ -59,6 +62,16 @@ const ASSET_URLS = {
   outerVeilBackground: `${import.meta.env.BASE_URL}assets/outer-veil-buried-dawn-v1.png`,
   hero: `${import.meta.env.BASE_URL}assets/hero-sheet-v2.png`,
 };
+
+const OPTIONAL_COMBAT_ASSET_URLS = Object.freeze({
+  'outer-veil-08-parachute-choir': Object.freeze({
+    veilRaider: `${import.meta.env.BASE_URL}assets/veil-raider-combat-v1.png`,
+  }),
+  'outer-veil-10-warden-of-dust': Object.freeze({
+    warden: `${import.meta.env.BASE_URL}assets/warden-of-dust-combat-v1.png`,
+  }),
+});
+const optionalAssetLoads = new Map();
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -68,6 +81,24 @@ function loadImage(src) {
     image.onerror = reject;
     image.src = src;
   });
+}
+
+async function ensureCombatVisualAssets(assets, levelKey) {
+  const entries = Object.entries(OPTIONAL_COMBAT_ASSET_URLS[levelKey] || {});
+  await Promise.all(entries.map(async ([assetKey, url]) => {
+    if (assets[assetKey]) return assets[assetKey];
+    if (!optionalAssetLoads.has(url)) {
+      optionalAssetLoads.set(url, loadImage(url).catch((error) => {
+        optionalAssetLoads.delete(url);
+        console.warn(`Optional combat artwork could not be loaded: ${assetKey}`, error);
+        return null;
+      }));
+    }
+    const image = await optionalAssetLoads.get(url);
+    if (image) assets[assetKey] = image;
+    return image;
+  }));
+  return assets;
 }
 
 function formatTime(seconds) {
@@ -222,7 +253,15 @@ export default function App() {
   const [presentationCard, setPresentationCard] = useState(null);
   const presentationTimerRef = useRef(null);
   const presentationGenerationRef = useRef(0);
+  const cinematicSessionRef = useRef(null);
+  const cinematicGenerationRef = useRef(0);
+  const [cinematicSession, setCinematicSession] = useState(null);
   const [hud, setHud] = useState({ hp: 4, maxHp: 4, relics: 0, objectiveLabel: 'RELICS', objectiveCurrent: 0, objectiveTarget: 3, objectiveProgressText: null, time: 0, level: 1, levelName: 'The Outer Veil', demo: false, bossHp: null, bossMaxHp: null, bossLabel: 'VEILED GUARDIAN', wardenFightActive: false, bossPhase: null, bossAction: null, bossGuard: null, bossGuardMax: null, playerCombo: 0, playerGuard: null, playerGuardMax: null });
+
+  useEffect(() => () => {
+    cinematicSessionRef.current?.isolation.restore();
+    cinematicSessionRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (screen === 'win') chronicleHeadingRef.current?.focus({ preventScroll: true });
@@ -293,6 +332,7 @@ export default function App() {
       await repository.loadTemplate(0);
       if (cancelled) return;
       const firstLevel = repository.createRuntime(0);
+      if (preview) await ensureCombatVisualAssets(loaded, firstLevel.levelKey);
       const initialBank = await bakeAllLevels([firstLevel], (value) => {
         if (!cancelled) setProgress(.58 + value * .42);
       }, { isCancelled: () => cancelled });
@@ -332,6 +372,11 @@ export default function App() {
       if (hide) setPresentationCard(null);
     };
     const announceLevel = (entry) => {
+      void ensureCombatVisualAssets(assets, entry.levelKey);
+      const entryIndex = Number.isInteger(entry.level) ? entry.level - 1 : -1;
+      if (entryIndex >= 0 && entryIndex + 1 < repository.length) {
+        void ensureCombatVisualAssets(assets, repository.keyAt(entryIndex + 1));
+      }
       clearPresentation();
       const cards = buildLevelPresentation(entry, {
         productionCampaign: activeSessionKind === 'production-campaign' || activeSessionKind === 'v4-campaign',
@@ -528,6 +573,23 @@ export default function App() {
     const prepareRequestedSession = async () => {
       if (activeSessionKind === 'production-preview') {
         engine.start(false);
+        const localProductionBenchmark = !import.meta.env.DEV
+          && ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+        if (localProductionBenchmark && params.get('benchmarkFight') === '1'
+          && engine.level.objective?.type === 'warden-restoration') {
+          const objective = engine.level.objective;
+          objective.phase = 'unbind';
+          objective.breath.firstBreathComplete = true;
+          objective.memorySeam.revealed = true;
+          objective.heartstone.bound = true;
+          objective.heartstone.locked = true;
+          objective.rememberedHand.raised = true;
+          objective.rememberedHand.reached = true;
+          objective.bridle.exposed = true;
+          objective.bridle.struck = true;
+          engine.level.block.bound = true;
+          if (engine.beginWardenDuel()) clearPresentation();
+        }
         setScreen('play');
       } else if (import.meta.env.DEV) {
         if (params.get('demoBoss') === '1') {
@@ -545,6 +607,7 @@ export default function App() {
           demoLevel >= 1 &&
           demoLevel <= (activeSessionKind === 'v4-campaign' ? repository.length : 10)
         ) {
+          await ensureCombatVisualAssets(assets, repository.keyAt(demoLevel - 1));
           await engine.startAt(demoLevel - 1, { demo: !manualLevelDemo });
           if (engine.running) setScreen('play');
         }
@@ -592,6 +655,10 @@ export default function App() {
       }
     }
     setScreen(index === 0 ? 'play' : 'loading');
+    const activeResources = resourcesRef.current;
+    if (activeResources?.repository && activeResources?.assets) {
+      await ensureCombatVisualAssets(activeResources.assets, activeResources.repository.keyAt(index));
+    }
     const opened = await engineRef.current?.startAt(index, { demo: false });
     if (opened) {
       const levelKey = engineRef.current?.level?.levelKey;
@@ -731,6 +798,55 @@ export default function App() {
   const v4ChapterOneTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 1) : null;
   const v4ChapterTwoTarget = v4Campaign ? getV4ChapterTarget(saveRef.current, 2) : null;
 
+  const completeCinematicSession = (detail) => {
+    const session = cinematicSessionRef.current;
+    if (!session || session.finished) return false;
+    session.finished = true;
+    cinematicSessionRef.current = null;
+    session.isolation.restore();
+    setCinematicSession(null);
+    if (session.after) {
+      void Promise.resolve(session.after(detail)).catch((error) => {
+        console.error('Could not continue after cinematic', error);
+        setScreen(session.returnScreen);
+      });
+    } else setScreen(session.returnScreen);
+    return true;
+  };
+
+  const openCinematicSequence = (sequenceId, { returnScreen = screen, after = null } = {}) => {
+    const sequence = getCinematicSequence(sequenceId, { baseUrl: import.meta.env.BASE_URL });
+    if (!sequence?.length || cinematicSessionRef.current) return false;
+    if (engineRef.current?.mode === 'play') runCheckpointRef.current();
+    presentationGenerationRef.current += 1;
+    window.clearTimeout(presentationTimerRef.current);
+    presentationTimerRef.current = null;
+    setPresentationCard(null);
+    const session = {
+      id: `${sequenceId}-${++cinematicGenerationRef.current}`,
+      sequenceId,
+      sequence,
+      returnScreen,
+      after,
+      finished: false,
+      isolation: isolateGameForCinematic(engineRef.current),
+    };
+    cinematicSessionRef.current = session;
+    setCinematicSession({ id: session.id, sequenceId, sequence });
+    setScreen('cinematic');
+    return true;
+  };
+
+  const beginChapterOne = () => {
+    const startChapter = () => startOuterVeilAt(
+      v4ChapterOneTarget.campaignOrder - 1,
+      { restartCompletedV4: false },
+    );
+    if (!openCinematicSequence('chapter-one-opening', { returnScreen: 'title', after: startChapter })) {
+      void startChapter();
+    }
+  };
+
   return (
     <main
       className="app"
@@ -769,7 +885,7 @@ export default function App() {
                       ref={titlePrimaryRef}
                       className={(v4Progress?.completedLevelKeys?.length || 0) < 10 ? 'primary' : 'secondary'}
                       disabled={progress < 1}
-                      onClick={() => { void startOuterVeilAt(v4ChapterOneTarget.campaignOrder - 1, { restartCompletedV4: false }); }}
+                      onClick={beginChapterOne}
                     >
                       Chapter I
                     </button>
@@ -783,6 +899,7 @@ export default function App() {
                       Chapter II
                     </button>
                     <button className="secondary" onClick={() => { void openV4Leaderboard(); }}>Top 10</button>
+                    <button className="secondary" onClick={() => openCinematicSequence('chapter-one-opening', { returnScreen: 'title' })}>Replay story films</button>
                     <button className="secondary" onClick={() => setScreen('help')}>How to play</button>
                   </>
                 ) : authoredCampaign ? (
@@ -825,6 +942,16 @@ export default function App() {
             </div>
           </div>
         </section>
+      )}
+
+      {screen === 'cinematic' && cinematicSession && (
+        <CinematicPlayer
+          key={cinematicSession.id}
+          sequence={cinematicSession.sequence}
+          audioSettings={audioSettings}
+          onBeforePlay={() => cinematicSessionRef.current?.isolation.refresh()}
+          onComplete={completeCinematicSession}
+        />
       )}
 
       {(screen === 'play' || screen === 'pause' || screen === 'dead' || screen === 'win' || screen === 'loading' || screen === 'load-error') && (
@@ -1082,6 +1209,8 @@ export default function App() {
                   </div>
                   <div className="overlay-actions">
                     <button className="primary" onClick={() => { void openV4Leaderboard(); }}>View Top 10</button>
+                    <button className="secondary" onClick={() => openCinematicSequence('opening-prologue', { returnScreen: 'win' })}>Replay prologue</button>
+                    <button className="secondary" onClick={() => openCinematicSequence('chapter-one-introduction', { returnScreen: 'win' })}>Replay Chapter I introduction</button>
                     <button className="secondary" onClick={() => { void startOuterVeilAt(0); }}>New journey</button>
                     <button className="secondary" onClick={returnToTitle}>Title screen</button>
                   </div>
@@ -1218,6 +1347,8 @@ export default function App() {
             </div>
             <div className="overlay-actions">
               <button className="primary" onClick={outerContinueTarget?.kind === 'complete' ? () => { void startOuterVeilAt(0); } : continueOuterVeil}>{outerContinueTarget?.kind === 'complete' ? 'Replay completed journey' : `Continue · Level ${String(outerContinueTarget?.campaignOrder || 1).padStart(2, '0')}`}</button>
+              <button className="secondary" onClick={() => openCinematicSequence('opening-prologue', { returnScreen: 'leaderboard' })}>Replay prologue</button>
+              <button className="secondary" onClick={() => openCinematicSequence('chapter-one-introduction', { returnScreen: 'leaderboard' })}>Replay Chapter I introduction</button>
               <button className="secondary" onClick={returnToTitle}>Title screen</button>
             </div>
           </div>

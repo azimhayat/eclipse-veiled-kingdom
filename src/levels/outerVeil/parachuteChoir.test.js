@@ -6,6 +6,7 @@ import {
 } from '../../campaign/productionPreview.js';
 import { assertValidAuthoredLevel, validateAuthoredLevel } from '../../campaign/levelSchema.js';
 import { GameEngine } from '../../engine.js';
+import { advanceCombatTimeline, createPlayerCombatTimeline } from '../../combat-presentation.js';
 import { createLevels } from '../../levels.js';
 import { cloneLevel } from '../cloneLevel.js';
 import { TILE, Tile, VIEW_H, WORLD_H } from '../constants.js';
@@ -55,6 +56,7 @@ function engineHarness(level) {
     gateOpen: false,
     particles: [], soldiers: [], projectiles: [], crumble: new Map(),
     mode: 'play', totalTime: 0, deaths: 0,
+    combatEvents: [], combatEventSequence: 0, meleeAttackToken: null,
     audio: { play: vi.fn() },
     callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), death: vi.fn(), mode: vi.fn() },
     setHint: vi.fn(), pushHud: vi.fn(), burst: vi.fn(),
@@ -99,6 +101,8 @@ function attackSoldier(engine, id) {
   engine.player.y = soldier.y;
   engine.player.facing = 1;
   engine.player.attackTimer = .2;
+  engine.player.combatAction = createPlayerCombatTimeline({ id: 'test-strike', kind: 'normal', comboStep: 1 });
+  engine.player.combatAction.phase = 'active';
   engine.player.attackHits.clear();
   GameEngine.prototype.resolveAttackHits.call(engine);
 }
@@ -221,6 +225,78 @@ describe('Outer Veil Level 8 production preview', () => {
     engine.player.invuln = 0;
     GameEngine.prototype.updateRaidSoldier.call(engine, soldier, .2);
     expect(engine.player.hp).toBe(3);
+  });
+
+  it('arbitrates one melee attacker, releases the token on interruption, separates the pair, and hits once per strike', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    engine.player.x = 20 * TILE;
+    engine.player.y = 23 * TILE - engine.player.h;
+    GameEngine.prototype.spawnParachuteRaider.call(engine, level.objective.roster[0]);
+    GameEngine.prototype.spawnParachuteRaider.call(engine, level.objective.roster[1]);
+    const [first, second] = engine.soldiers;
+    for (const soldier of engine.soldiers) {
+      soldier.x = engine.player.x + 48;
+      soldier.y = engine.player.y;
+      soldier.mode = 'walk';
+      soldier.attackPhase = 'pursue';
+    }
+
+    GameEngine.prototype.updateRaidSoldier.call(engine, first, 1 / 60);
+    GameEngine.prototype.updateRaidSoldier.call(engine, second, 1 / 60);
+    expect(first.attackPhase).toBe('windup');
+    expect(second.attackPhase).toBe('pursue');
+    expect(engine.meleeAttackToken).toBe(first.id);
+
+    first.attackPhase = 'stun';
+    first.attackClock = .2;
+    GameEngine.prototype.updateRaidSoldier.call(engine, first, 1 / 60);
+    expect(engine.meleeAttackToken).toBeNull();
+    GameEngine.prototype.updateRaidSoldier.call(engine, second, 1 / 60);
+    expect(second.attackPhase).toBe('windup');
+    expect(engine.meleeAttackToken).toBe(second.id);
+
+    const sharedX = first.x;
+    second.x = sharedX;
+    GameEngine.prototype.separateParachuteRaiders.call(engine, 1 / 60);
+    expect(first.x).not.toBe(second.x);
+
+    second.x = engine.player.x + engine.player.w - 8;
+    second.y = engine.player.y;
+    second.hp = 2;
+    engine.player.facing = 1;
+    engine.player.attackTimer = .2;
+    engine.player.attackHits.clear();
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'single-hit', kind: 'normal', comboStep: 1 });
+    engine.player.combatAction.phase = 'active';
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(second.hp).toBe(1);
+    expect(engine.combatEvents.filter((event) => event.type === 'hit' && event.actorId === second.id)).toHaveLength(1);
+  });
+
+  it('resolves exactly one player contact after a stalled step crosses the whole active window', () => {
+    const level = cloneLevel(assertValidAuthoredLevel(createParachuteChoir(), identity));
+    const engine = engineHarness(level);
+    engine.player.x = 20 * TILE;
+    engine.player.y = 23 * TILE - engine.player.h;
+    GameEngine.prototype.spawnParachuteRaider.call(engine, level.objective.roster[0]);
+    const soldier = engine.soldiers[0];
+    soldier.x = engine.player.x + engine.player.w - 8;
+    soldier.y = engine.player.y;
+    soldier.mode = 'walk';
+    engine.player.facing = 1;
+    engine.player.attackTimer = 0;
+    engine.player.attackHits.clear();
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'stalled-engine-strike', kind: 'heavy' });
+    advanceCombatTimeline(engine.player.combatAction, .4);
+
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    const hpAfterContact = soldier.hp;
+    GameEngine.prototype.resolveAttackHits.call(engine);
+    expect(hpAfterContact).toBe(soldier.maxHp - 1);
+    expect(soldier.hp).toBe(hpAfterContact);
+    expect(engine.player.combatAction).toBeNull();
   });
 
   it('counts a stable defeat once, unfurls its sail, and enters a quiet Grip flank', () => {
@@ -494,6 +570,8 @@ describe('Outer Veil Level 8 production preview', () => {
     engine.player.facing = 1;
 
     engine.player.attackTimer = .2;
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'moving-strike-1', kind: 'normal', comboStep: 1 });
+    engine.player.combatAction.phase = 'active';
     GameEngine.prototype.resolveAttackHits.call(engine);
     expect(answer.hp).toBe(1);
     for (let frame = 0; frame < 24; frame += 1) {
@@ -502,6 +580,8 @@ describe('Outer Veil Level 8 production preview', () => {
     }
 
     engine.player.attackTimer = .2;
+    engine.player.combatAction = createPlayerCombatTimeline({ id: 'moving-strike-2', kind: 'normal', comboStep: 2 });
+    engine.player.combatAction.phase = 'active';
     engine.player.attackHits.clear();
     GameEngine.prototype.resolveAttackHits.call(engine);
     expect(engine.soldiers).toEqual([]);

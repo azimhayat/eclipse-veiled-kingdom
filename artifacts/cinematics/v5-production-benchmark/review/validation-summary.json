@@ -1,0 +1,30 @@
+{
+  "subtitles": {
+    "opening": {
+      "file": "opening-prologue-v1.en.vtt",
+      "cues": 8,
+      "last_cue_end_seconds": 65.2,
+      "max_words_per_second": 1.6,
+      "max_lines": 1,
+      "status": "PASS"
+    },
+    "chapter-one": {
+      "file": "chapter-one-introduction-v1.en.vtt",
+      "cues": 6,
+      "last_cue_end_seconds": 39.7,
+      "max_words_per_second": 1.84,
+      "max_lines": 1,
+      "status": "PASS"
+    }
+  },
+  "files": {
+    "opening-prologue-contact-sheet.png": {
+      "bytes": 2260577,
+      "sha256": "cb10c9e46e3822a0de19a70d98611e4734ad887d42263641956c2fa76b80c21f"
+    },
+    "chapter-one-introduction-contact-sheet.png": {
+      "bytes": 1313675,
+      "sha256": "a8f52ba0ef8f3130e082791705fe7b493c79a364a963dd6df2f5c0e32cd61142"
+    }
+  }
+}

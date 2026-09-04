@@ -57,6 +57,7 @@ function engineHarness(level) {
     gateOpen: false,
     particles: [], soldiers: [], projectiles: [], crumble: new Map(),
     mode: 'play', totalTime: 0, levelTime: 0, deaths: 0, levelDeaths: 0, demo: false,
+    combatEvents: [], combatEventSequence: 0, meleeAttackToken: null,
     audio: { play: vi.fn() },
     callbacks: { hint: vi.fn(), hud: vi.fn(), gate: vi.fn(), win: vi.fn(), levelComplete: vi.fn(), death: vi.fn(), mode: vi.fn() },
     setHint: vi.fn(), pushHud: vi.fn(), burst: vi.fn(),
@@ -379,6 +380,29 @@ describe('Outer Veil Level 10 production preview', () => {
     expect(engine.player.facing).toBe(1);
   });
 
+  it('keeps the Warden in view while forward and backward duel movement retain opponent-facing', () => {
+    const { engine, duel } = beginDuelHarness();
+    Object.assign(duel.boss, { action: 'neutral', decisionClock: 1, invulnerable: false });
+    duel.boss.target.x = 56 * TILE;
+    Object.assign(engine.player, {
+      x: 52 * TILE,
+      y: duel.arena.feetTy * TILE - engine.player.h,
+      grounded: true,
+      facing: 1,
+    });
+
+    engine.input.left = true;
+    engine.updatePlayer(1 / 60);
+    expect(engine.player.facing).toBe(1);
+    expect(engine.player.combatMove).toBe('backward');
+
+    engine.input.left = false;
+    engine.input.right = true;
+    engine.updatePlayer(1 / 60);
+    expect(engine.player.facing).toBe(1);
+    expect(engine.player.combatMove).toBe('forward');
+  });
+
   it('frames the midpoint of both fighters instead of cropping the Warden with the platforming camera', () => {
     const { engine, duel } = beginDuelHarness();
     engine.player.x = duel.arena.minTx * TILE + 20;
@@ -420,6 +444,14 @@ describe('Outer Veil Level 10 production preview', () => {
       engine.input.released.clear();
     }
     expect(engine.player.attackKind).toBe('heavy');
+    expect(engine.player.combatAction).toMatchObject({ phase: 'startup' });
+    expect(boss.hp).toBe(60);
+    for (let frame = 0; frame < 5; frame += 1) {
+      engine.updateWardenDuel(1 / 60);
+      engine.updatePlayer(1 / 60);
+      engine.input.pressed.clear();
+      engine.input.released.clear();
+    }
     expect(boss).toMatchObject({ hp: 57, action: 'hitstun', invulnerable: false });
   });
 
@@ -505,6 +537,9 @@ describe('Outer Veil Level 10 production preview', () => {
 
   it('keeps the arena sealed until Dawnstroke, then restarts only the duel after a fatal attempt', () => {
     const { level, engine, objective, duel } = beginDuelHarness();
+    engine.player.combatAction = { id: 'interrupted', phase: 'active' };
+    engine.combatEvents.push({ id: 1, type: 'contact-window', createdAt: 0, expiresAt: 1 });
+    engine.meleeAttackToken = 'stale-owner';
     engine.player.invuln = 0;
     GameEngine.prototype.damagePlayer.call(engine, 4, -390);
     expect(engine).toMatchObject({ mode: 'dead', deaths: 1, gateOpen: false });
@@ -530,6 +565,9 @@ describe('Outer Veil Level 10 production preview', () => {
       },
     });
     expect(level.map[objective.restorationTiles[0].ty][objective.restorationTiles[0].tx]).toBe(Tile.GLOW);
+    expect(engine.player.combatAction).toBeNull();
+    expect(engine.combatEvents).toEqual([]);
+    expect(engine.meleeAttackToken).toBeNull();
 
     const target = duel.boss.target;
     Object.assign(engine.player, {
